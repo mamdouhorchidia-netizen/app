@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Vorath</string>
+    <string name="channel_alarms">Alarms</string>
+    <string name="channel_alarms_about">When something in the business starts needing you</string>
+    <string name="signed_out_title">Sign in to Vorath again</string>
+    <string name="signed_out_text">Your session ended, so alarms are not being checked.</string>
+</resources>
