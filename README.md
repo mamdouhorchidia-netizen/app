@@ -39,3 +39,20 @@ app/src/main/java/com/vorath/mobile/
   work/   AlarmWorker (hourly check), Notifier
   ui/     SignInScreen, TodayScreen, WebScreen, Theme (Vorath's own colours)
 ```
+
+## A Vorath to develop against
+
+`tools/vorath_devserver.py` starts a Vorath with sign-in on 127.0.0.1:8790 over Vorath's own test data, with an owner
+whose 2-step code is already set up, and writes that sign-in to `$VORATH_HOME/config/dev-login.json` for the live test:
+
+```
+pip install -r ../vorath/requirements.txt
+VORATH_HOME=/tmp/vhome VORATH_SECRET_KEY=dev-only python tools/vorath_devserver.py ../vorath
+./gradlew :app:testDebugUnitTest -Dvorath.url=http://127.0.0.1:8790 -Dvorath.login=/tmp/vhome/config/dev-login.json
+```
+
+## Not done yet
+
+- Never run on a real phone or emulator: notifications, the encrypted session and the in-app pages are unproven.
+- The APK in `release/` is a debug build signed with a throwaway key; a permanent signing key is needed for updates.
+- Alarms are checked hourly; instant push needs a change in Vorath. English only. File downloads inside the in-app pages are not handled.
