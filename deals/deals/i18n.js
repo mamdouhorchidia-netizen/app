@@ -86,7 +86,10 @@
   const RX = [
     [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|store) app ↗$/, (m, a) => `افتح في تطبيق ${APP[a]} ↗`],
     [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|store) ↗$/, (m, a) => `افتح في ${APP[a]} ↗`],
-    [/^changed (.+)$/, "نزل $1"], [/^usually (.+)$/, "عادة $1"], [/^save (.+)$/, "وفّر $1"], [/^saves (.+) against.*$/, "بتوفر $1"],
+    [/^changed (.+)$/, "اتغير $1"], [/^dropped (.+)$/, "نزل $1"], [/^went up (.+)$/, "زاد $1"],
+    [/^was ([\d,.]+) lately$/, "كان بـ $1 قريب"],
+    [/^It was ([\d.,]+) EGP lately: it's (\d+)% dearer now\.$/, "كان بـ $1 ج.م قريب: دلوقتي أغلى بـ $2%."],
+    [/^it was ([\d.,]+) EGP lately: (\d+)% dearer now$/, "كان بـ $1 ج.م قريب: دلوقتي أغلى بـ $2%"], [/^usually (.+)$/, "عادة $1"], [/^save (.+)$/, "وفّر $1"], [/^saves (.+) against.*$/, "بتوفر $1"],
     [/^([\d,.]+) at (.+)$/, (m, p, s) => `${p} في ${STORE[s] || s}`],
     [/^In basket \((\d+)\)$/, "في السلة ($1)"], [/^🧺 In basket \((\d+)\)$/, "🧺 في السلة ($1)"],
     [/^tracked since (.+)$/, "متابَع من $1"], [/^up to (\d+)% off$/, "خصومات لحد $1%"], [/^until (.+)$/, "لحد $1"],

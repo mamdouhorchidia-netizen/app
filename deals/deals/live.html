@@ -495,7 +495,9 @@ function tagsFor(d) {
     t.push(`<span class="tag vd-${d.verdict.tone}" title="${esc(d.verdict.why)}">${esc(d.verdict.label)}</span>`);
   if (d.deal_label) t.push(`<span class="tag hot">${esc(d.deal_label)}</span>`);
   if (d.flags.includes("lowest")) t.push('<span class="tag good">lowest in 90 days</span>');
-  if (d.flags.includes("new")) t.push(`<span class="tag">changed ${ago(d.since)}</span>`);
+  if (d.flags.includes("new")) t.push(d.prev_price != null && d.price > d.prev_price
+    ? `<span class="tag warn">went up ${ago(d.since)}</span>` : `<span class="tag">dropped ${ago(d.since)}</span>`);
+  if (d.flags.includes("rose")) t.push(`<span class="tag warn">was ${fmt(d.recent_low)} lately</span>`);
   if (d.flags.includes("back")) t.push('<span class="tag good">back in stock</span>');
   if (d.cheapest && d.matches.length) t.push('<span class="tag good">cheapest of all stores</span>');
   else if (d.matches.length) { const m = d.matches.find(x => x.in_stock && x.price < d.price);

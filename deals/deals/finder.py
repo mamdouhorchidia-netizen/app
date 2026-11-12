@@ -42,7 +42,7 @@ def analyse(rows: list[dict], first_seen: int, now: int) -> dict:
     since_change = now - current["at"]
     out = {"usual": None, "low90": None, "high90": None, "tracked_days": round((now - first_seen) / DAY, 1),
            "days_at_price": round(since_change / DAY, 1), "changed_recently": since_change < DAY and len(rows) > 1,
-           "back_in_stock": False}
+           "back_in_stock": False, "recent_low": None, "recent_low_at": None}
     seg30, low90, high90 = [], None, None
     for i, r in enumerate(rows):
         start, end = r["at"], rows[i + 1]["at"] if i + 1 < len(rows) else now
@@ -56,6 +56,10 @@ def analyse(rows: list[dict], first_seen: int, now: int) -> dict:
         out["usual"] = weighted_median(seg30)
     if out["tracked_days"] >= 7:
         out["low90"], out["high90"] = low90, high90
+    # the lowest in-stock price of the last 30 days before this one, however short the history
+    for r in rows[:-1]:
+        if r["in_stock"] and r["at"] > now - 30 * DAY - DAY and (out["recent_low"] is None or r["price"] < out["recent_low"]):
+            out["recent_low"], out["recent_low_at"] = r["price"], r["at"]
     if current["in_stock"] and len(rows) > 1 and not rows[-2]["in_stock"] and since_change < 3 * DAY:
         out["back_in_stock"] = True
     return out
@@ -97,6 +101,9 @@ def _score(d: dict) -> tuple[int, list[str]]:
     if d.get("cheapest") and d.get("matches"):
         s += 5
         why.append("cheapest of the stores that sell it")
+    if "rose" in d["flags"]:
+        s -= 40
+        why.append(f"it was {d['recent_low']:g} EGP lately: {round(100 * (d['price'] / d['recent_low'] - 1)):g}% dearer now")
     if "inflated" in d["flags"]:
         s -= 35
         why.append(f"the 'was' price ({d['original_price']:g} EGP) has never been charged here: likely inflated")
@@ -147,6 +154,9 @@ def catalog(con, now: int = None) -> list[dict]:
             flags.append("back")
         if extra.get("deal_label"):
             flags.append("label")
+        # dearer than it was lately: a struck-through price doesn't make that a deal
+        if a["recent_low"] and price > a["recent_low"] * 1.05:
+            flags.append("rose")
         # a "was" price more than 70 % above, never seen charged here: an inflated reference, not a discount
         if store_pct >= 70 and orig and max((r["price"] for r in rows if r["in_stock"]), default=0) < orig * 0.9:
             flags.append("inflated")
@@ -160,7 +170,8 @@ def catalog(con, now: int = None) -> list[dict]:
             "discount_pct": pct, "store_discount_pct": store_pct, "drop_pct": drop_pct, "kind": kind,
             "saving": round(reference - price, 2) if reference else 0.0,
             "flags": flags, "deal_label": extra.get("deal_label"), "rank": extra.get("rank"),
-            "since": rows[-1]["at"], "first_seen": p["first_seen"], "last_seen": p["last_seen"],
+            "since": rows[-1]["at"], "prev_price": rows[-2]["price"] if len(rows) > 1 else None,
+            "recent_low": a["recent_low"], "recent_low_at": a["recent_low_at"], "first_seen": p["first_seen"], "last_seen": p["last_seen"],
             "tracked_days": a["tracked_days"], "days_at_price": a["days_at_price"],
             "unit_price": up[0] if up else None, "unit": up[1] if up else None,
             "unit_text": unit_text(price, p["name"]),
@@ -204,6 +215,9 @@ def verdict(d: dict) -> dict:
         return {"label": "Out of stock", "tone": "muted", "why": "Watch it to hear when it's back."}
     if rival is not None and rival < price * 0.97:
         return {"label": "Cheaper elsewhere", "tone": "warn", "why": f"{rival:g} EGP in another store."}
+    if "rose" in d["flags"]:
+        return {"label": "Wait", "tone": "warn",
+                "why": f"It was {d['recent_low']:g} EGP lately: it's {round(100 * (price / d['recent_low'] - 1)):g}% dearer now."}
     if "steady" in d["flags"]:
         return {"label": "Fair price", "tone": "muted", "why": "The 'discount' never moves: it's the normal price."}
     if "inflated" in d["flags"]:
@@ -272,7 +286,7 @@ def query(items: list[dict], deals_only: bool = True, stores: list[str] = None, 
             return False
         if best and not d["cheapest"]:
             return False
-        if "real" in status and ("steady" in d["flags"] or "inflated" in d["flags"]):
+        if "real" in status and {"steady", "inflated", "rose"} & set(d["flags"]):
             return False
         for f in ("new", "lowest", "label", "back"):
             if f in status and f not in d["flags"]:
@@ -318,8 +332,8 @@ def brief(items: list[dict], now: int = None) -> dict:
     """Today in 30 seconds: what moved, the record lows, the fake discounts caught, what's about to go on sale."""
     now = int(now or time.time())
     live = [d for d in items if d["in_stock"]]
-    deals = [d for d in live if d["kind"] and d["discount_pct"] > 0 and "steady" not in d["flags"]
-             and "inflated" not in d["flags"]]
+    deals = [d for d in live if d["kind"] and d["discount_pct"] > 0
+             and not {"steady", "inflated", "rose"} & set(d["flags"])]
     dropped = [d for d in deals if "new" in d["flags"]]
     lows = [d for d in deals if "lowest" in d["flags"]]
     fake = [d for d in live if "steady" in d["flags"] or "inflated" in d["flags"]]

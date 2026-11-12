@@ -1200,3 +1200,22 @@ class InflatedWasPrice(unittest.TestCase):
         self.assertEqual([d["sku"] for d in r["items"]], ["j"])
         self.assertEqual(finder.brief(list(by.values()), t0 + 2 * DAY + 60)["fake"], 1)
         con.close()
+
+
+class PriceWentUp(unittest.TestCase):
+    def test_a_struck_through_price_after_a_rise_is_not_buy_now(self):
+        # seen on the live site: Amazon showed 6,999, then 13,998.01 "30 % off 19,998.01" nine hours later
+        con = db.connect(":memory:")
+        t0 = 1_794_490_654
+        db.save_offers(con, [Offer("amazon_eg", "B0FN7FVX8N", "Nespresso Inissia", 6999)], t0)
+        for t in (t0 + 30000, t0 + 30859):  # a jump this big counts when seen twice
+            db.save_offers(con, [Offer("amazon_eg", "B0FN7FVX8N", "B0FN7FVX8N", 13998.01, 19998.01)], t)
+        d = finder.catalog(con, t0 + 33000)[0]
+        self.assertEqual(d["name"], "Nespresso Inissia")  # a bare code never replaces the name
+        self.assertIn("rose", d["flags"])
+        self.assertEqual((d["verdict"]["label"], d["prev_price"], d["recent_low"]), ("Wait", 6999, 6999))
+        self.assertIn("100% dearer", d["verdict"]["why"])
+        self.assertLess(d["score"], 20)
+        self.assertEqual(finder.query([d], status=["real"])["total"], 0)
+        self.assertEqual(finder.brief([d])["deals"], 0)
+        con.close()

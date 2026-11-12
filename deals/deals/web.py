@@ -329,7 +329,7 @@ def make_handler(db_path: str, requests_file: str = None):
                         deals = finder.query(items, deals_only=True, limit=0)["facets"]["store"]
                         best = {}
                         for d in items:
-                            if d["in_stock"] and d["discount_pct"] and not {"steady", "inflated"} & set(d["flags"]):
+                            if d["in_stock"] and d["discount_pct"] and not {"steady", "inflated", "rose"} & set(d["flags"]):
                                 best[d["store"]] = max(best.get(d["store"], 0), d["discount_pct"])
                         return pages.stores_page(status(con), {}, deals, best)
                     self.send(200, cached("stores", build_stores), "text/html; charset=utf-8")
@@ -344,7 +344,7 @@ def make_handler(db_path: str, requests_file: str = None):
                         r = finder.query(items, deals_only=True, limit=0)["facets"]["category"]
                         top = {}
                         for d in items:
-                            if d["in_stock"] and d["discount_pct"] and not {"steady", "inflated"} & set(d["flags"]):
+                            if d["in_stock"] and d["discount_pct"] and not {"steady", "inflated", "rose"} & set(d["flags"]):
                                 top[d["top_category"]] = max(top.get(d["top_category"], 0), d["discount_pct"])
                         rows = sorted(((c, n, top.get(c, 0)) for c, n in r.items() if n), key=lambda x: -x[1])
                         return pages.cats_page(rows)

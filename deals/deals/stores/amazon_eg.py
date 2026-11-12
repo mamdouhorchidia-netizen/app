@@ -225,7 +225,7 @@ def parse_deals(page: str) -> list[Offer]:
         price, original = _egp(new.group(1)), _egp(old.group(1)) if old else None
         if not price:
             continue
-        title = re.search(r'dcl-product-label[^>]*>\s*<span>([^<]+)<', block)
+        title = re.search(r'dcl-product-label[^>]*>\s*<span>([^<]+)<', block) or re.search(r'<img [^>]*alt="([^"]{8,})"', block)
         img = re.search(r'<img [^>]*src="([^"]+)"', block)
         pct = re.search(r"(\d{1,2})% off", block)
         label = re.search(r"_badgeMessage[^>]*>\s*<span[^>]*>([^<]+)<", block)
