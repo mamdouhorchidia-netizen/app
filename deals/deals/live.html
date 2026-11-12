@@ -195,6 +195,12 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
 .tag.vd-warn { background: var(--warn-bg); color: var(--warn); font-weight: 700; }
 .tag.vd-muted { font-weight: 600; }
 .foot { color: var(--faint); font-size: 12.5px; text-align: center; padding: 30px 0 10px; line-height: 1.8; }
+.hubbar { display: flex; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: none; padding: 12px 0 2px; }
+.hubbar .lbl { font-size: 13px; color: var(--muted); white-space: nowrap; font-weight: 650; }
+.hubbar button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 12px; white-space: nowrap;
+  cursor: pointer; font-size: 13.5px; color: var(--ink); }
+.hubbar button.on { background: var(--talabat); border-color: var(--talabat); color: #fff; font-weight: 650; }
+.hubbar button .c { opacity: .7; font-size: 12px; margin-inline-start: 4px; }
 .brief { margin: 14px 0 4px; padding: 16px; border-radius: var(--radius); color: #fff;
   background: linear-gradient(135deg, #2a1a17 0%, #5b1f14 55%, var(--accent) 140%); box-shadow: var(--shadow); }
 .brief h2 { margin: 0 0 2px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
@@ -305,6 +311,7 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
 
   <main>
     <section class="brief" id="brief" hidden></section>
+    <div class="hubbar" id="hubBar" hidden></div>
     <div class="bar">
       <span class="count" id="count">…</span>
       <div class="chips" id="activeChips"></div>
@@ -359,6 +366,7 @@ function readURL() {
   for (const k of ["deals", "kind", "stock", "category", "q", "pmin", "pmax", "sort"]) if (p.has(k)) F[k] = p.get(k);
   for (const k of ["min", "max"]) if (p.has(k)) F[k] = +p.get(k);
   for (const k of ["stores", "status", "hubs"]) if (p.get(k)) F[k] = p.get(k).split(",");
+  if (!p.get("hubs")) F.hubs = store.get("myHubs", []).map(String);  // the hubs this browser chose last time
   F.best = p.get("best") === "1"; F.watch = p.get("watch") === "1"; F.recent = p.get("recent") === "1";
 }
 function writeURL() {
@@ -433,12 +441,24 @@ function renderFacets(r) {
     <span class="dot" style="background:var(--${esc(s)},#888)"></span>${esc(r.labels?.[s] || LABELS[s] || s)}<span class="c">${fs[s] ?? 0}</span></label>`).join("");
   $("fStores").querySelectorAll("input").forEach(i => i.onchange = () => {
     F.stores = [...$("fStores").querySelectorAll("input:checked")].map(x => x.value); apply(); });
-  const fh = Object.entries(r.facets.hub || {});
+  // one entry per hub: products saved before the hub had a name carry its number instead
+  const hubMap = {};
+  for (const [k, n] of Object.entries(r.facets.hub || {})) { const [id, name] = k.split("|");
+    const h = hubMap[id] || (hubMap[id] = { name, n: 0 }); h.n += n; if (/^\d+$/.test(h.name) && !/^\d+$/.test(name)) h.name = name; }
+  const fh = Object.entries(hubMap).sort((a, b) => b[1].n - a[1].n).map(([id, h]) => [`${id}|${/^\d+$/.test(h.name) ? "Hub " + id : h.name}`, h.n]);
   $("hubGroup").hidden = fh.length < 2 && !F.hubs.length;
   $("fHubs").innerHTML = fh.map(([k, n]) => { const [id, name] = k.split("|");
     return `<label class="opt"><input type="checkbox" value="${esc(id)}" ${F.hubs.includes(id) ? "checked" : ""}> ${esc(name)}<span class="c">${n}</span></label>`; }).join("");
   $("fHubs").querySelectorAll("input").forEach(i => i.onchange = () => {
-    F.hubs = [...$("fHubs").querySelectorAll("input:checked")].map(x => x.value); apply(); });
+    setHubs([...$("fHubs").querySelectorAll("input:checked")].map(x => x.value)); });
+  // the same choice as a bar above the deals: which talabat hubs' stock and prices to show (remembered)
+  $("hubBar").hidden = fh.length < 2 && !F.hubs.length;
+  $("hubBar").innerHTML = `<span class="lbl">📍 talabat hubs:</span><button data-h="" class="${F.hubs.length ? "" : "on"}">All hubs</button>` +
+    fh.map(([k, n]) => { const [id, name] = k.split("|");
+      return `<button data-h="${esc(id)}" class="${F.hubs.includes(id) ? "on" : ""}" dir="auto">${esc(name)}<span class="c">${n}</span></button>`; }).join("");
+  $("hubBar").querySelectorAll("button").forEach(b => b.onclick = () => {
+    const id = b.dataset.h;
+    setHubs(!id ? [] : F.hubs.includes(id) ? F.hubs.filter(x => x !== id) : [...F.hubs, id]); });
   const fc = r.facets.category || {}, cats = Object.keys(fc);
   if (F.category && !cats.includes(F.category)) cats.unshift(F.category);
   $("fCat").innerHTML = `<option value="">All categories</option>` + cats.map(c =>
@@ -450,7 +470,7 @@ function activeChips() {
   const chips = [];
   if (F.deals === "0") chips.push(["All products", () => F.deals = "1"]);
   F.stores.forEach(s => chips.push([LABELS[s] || s, () => F.stores = F.stores.filter(x => x !== s)]));
-  if (F.hubs.length) chips.push([`${F.hubs.length} talabat hub${F.hubs.length > 1 ? "s" : ""}`, () => F.hubs = []]);
+  if (F.hubs.length) chips.push([`${F.hubs.length} talabat hub${F.hubs.length > 1 ? "s" : ""}`, () => { F.hubs = []; store.set("myHubs", []); }]);
   if (F.kind) chips.push([F.kind === "platform" ? "Platform discount" : "Price drop", () => F.kind = ""]);
   if (F.min || F.max < 90) chips.push([$("pctLabel").textContent + " off", () => { F.min = 0; F.max = 90; }]);
   if (F.stock !== "in") chips.push([F.stock === "out" ? "Out of stock" : "Any availability", () => F.stock = "in"]);
@@ -723,7 +743,8 @@ let priceT;
 $("sort").onchange = () => { F.sort = $("sort").value; apply(); };
 let typing;
 $("q").oninput = () => { clearTimeout(typing); typing = setTimeout(() => { F.q = $("q").value; showUnderstood(); apply(); }, 300); };
-$("reset").onclick = () => { F = { ...DEFAULTS, stores: [], hubs: [], status: [] }; syncControls(); apply(); };
+$("reset").onclick = () => { F = { ...DEFAULTS, stores: [], hubs: [], status: [] }; store.set("myHubs", []); syncControls(); apply(); };
+function setHubs(ids) { F.hubs = ids; store.set("myHubs", ids); apply(); }
 $("watchBtn").onclick = () => { F.watch = !F.watch; syncControls(); apply(); };
 const sheet = open => { $("filters").classList.toggle("open", open);
   document.querySelector(".scrim")?.remove();
@@ -937,7 +958,7 @@ async function showBasket() {
 $("basketBtn").onclick = showBasket;
 
 // ---------- today in 30 seconds (the home page, before any filter) ----------
-const isHome = () => !location.search || location.search === "?";
+const isHome = () => { const p = new URLSearchParams(location.search); p.delete("hubs"); return !p.toString(); };
 async function loadBrief() {
   if (!isHome()) { $("brief").hidden = true; return; }
   let b; try { b = await (await fetch("/api/brief")).json(); } catch { return; }

@@ -76,6 +76,7 @@
     "As an Amazon Associate we earn from qualifying purchases.": "كشريك في برنامج أمازون، بنكسب من عمليات الشراء المؤهلة.",
     "⚠️ \"was\" price looks inflated": "⚠️ السعر القديم شكله متضخم", "Check the price": "اتأكد من السعر",
     "The 'was' price looks inflated: compare with other stores before buying.": "السعر القديم شكله متضخم: قارن بمتاجر تانية قبل ما تشتري.",
+    "📍 talabat hubs:": "📍 فروع طلبات:", "All hubs": "كل الفروع",
     "About": "عن الموقع", "Privacy": "الخصوصية", "Contact": "تواصل معانا", "Appliances & electronics": "أجهزة وإلكترونيات", "Kenzz deals": "عروض كنز", "🎟️ Coupons": "🎟️ كوبونات", "🧺 Add to basket": "🧺 ضيف للسلة", "Product page": "صفحة المنتج",
     "★ Watch": "★ تابع السعر", "More deals like this": "عروض شبهه", "Lowest in 90 days": "أقل سعر في 90 يوم",
     "Highest in 90 days": "أعلى سعر في 90 يوم", "Usual price": "السعر المعتاد", "Price changes": "مرات تغيير السعر",
