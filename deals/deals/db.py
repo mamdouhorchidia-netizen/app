@@ -75,12 +75,26 @@ def connect(path: str) -> sqlite3.Connection:
         con.execute("ALTER TABLE products ADD COLUMN extra TEXT DEFAULT '{}'")
     if "pending_price" not in cols:
         con.execute("ALTER TABLE products ADD COLUMN pending_price REAL")
-    # talabat products from before hubs were all Maadi Old's: give them that hub (sku "<hub>:<sku>")
+    try:
+        _talabat_hubs_migration(con)
+    except sqlite3.Error as e:  # never let a tidy-up stop the site from starting
+        print(f"db: talabat hub migration skipped: {e}")
+    return con
+
+
+def _talabat_hubs_migration(con):
+    """talabat products from before hubs were all Maadi Old's: give them that hub (sku "<hub>:<sku>").
+    During an update the old and new versions can run side by side, so the same product may exist under
+    both names: then the old copy's price history moves to the hub copy and the old copy goes."""
     with con:
+        for old_id, new_id in con.execute("""SELECT o.id, n.id FROM products o JOIN products n
+                                             ON n.store = 'talabat' AND n.sku = '619848:' || o.sku
+                                             WHERE o.store = 'talabat' AND instr(o.sku, ':') = 0""").fetchall():
+            con.execute("UPDATE prices SET product_id = ? WHERE product_id = ?", (new_id, old_id))
+            con.execute("DELETE FROM products WHERE id = ?", (old_id,))
         con.execute("""UPDATE products SET sku = '619848:' || sku,
                          extra = json_set(COALESCE(NULLIF(extra, ''), '{}'), '$.hub', 619848, '$.hub_name', 'Maadi Old')
                        WHERE store = 'talabat' AND instr(sku, ':') = 0""")
-    return con
 
 
 JUMP = 0.6  # a price moving by more than 60% at once must be seen twice in a row before it's recorded
