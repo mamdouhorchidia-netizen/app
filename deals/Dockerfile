@@ -6,15 +6,17 @@
 #     TALABAT_AREA      talabat area id (default 9838, Maadi)
 #     TALABAT_DELAY / AMAZON_DELAY / BREADFAST_DELAY   seconds between requests (1.5 / 3 / 5)
 #     HOT_EVERY         recheck a shelf whose prices moved in the last 30 min every N seconds (60)
-#     AMAZON_ACCESS_KEY / AMAZON_SECRET_KEY / AMAZON_PARTNER_TAG   use Amazon's API instead of its best-seller lists
+#     AMAZON_ACCESS_KEY / AMAZON_SECRET_KEY / AMAZON_PARTNER_TAG   use Amazon's API instead of its public pages
+#     CHROME_BIN        another Chrome/Chromium (default: the image's chromium)
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=Africa/Cairo \
     DEALS_DB=/data/deals.sqlite3 BREADFAST_REQUESTS=/data/breadfast_requests.json HOST=0.0.0.0 PORT=8800
 
-# tini: reaps child processes · util-linux: setpriv (drops root). APT=0 skips them.
+# chromium: renders Amazon's Today's Deals (built by JavaScript) · tini: reaps child processes ·
+# util-linux: setpriv (drops root). APT=0 skips them; Amazon then uses its best-seller lists only.
 ARG APT=1
-RUN if [ "$APT" = "1" ]; then apt-get update && apt-get install -y --no-install-recommends tini util-linux ca-certificates \
+RUN if [ "$APT" = "1" ]; then apt-get update && apt-get install -y --no-install-recommends chromium tini util-linux ca-certificates \
     && rm -rf /var/lib/apt/lists/*; fi
 
 WORKDIR /app

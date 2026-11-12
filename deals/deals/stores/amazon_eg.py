@@ -1,5 +1,9 @@
 """Amazon.eg, from two sources:
 
+0. Today's Deals, rendered in headless Chrome (when Chrome is installed): Amazon's own deal price, list
+   price, "% off" and deal label. The page is built by JavaScript, so plain requests see nothing.
+   robots.txt allows the English page (only /ar/gp/goldbox is closed).
+
 1. Best-seller lists (default, no account needed). amazon.eg/gp/bestsellers/<department>[/<node>]
    is plain HTML that Amazon serves to ordinary requests, and robots.txt allows it. Each list shows
    ranks 1-30 on page 1 and 51-80 on page 2 with name, price and picture. They show no struck-through
@@ -21,7 +25,7 @@ import re
 from datetime import datetime, timezone
 from typing import Iterator, Optional
 
-from .. import sigv4
+from .. import browser, sigv4
 from ..http import Blocked, Fetcher
 from ..models import NotConfigured, Offer
 from ..tasks import Task, run_once
@@ -187,8 +191,64 @@ def parse_bestsellers(page: str, category: str = "") -> list[Offer]:
             image=html.unescape(img.group(1)) if img else "",
             category=category,
             extra={"rank": int(rank.group(1)) if rank else None, "from_sellers": from_sellers},
+            original_known=False,  # best-seller lists don't show list prices
         ))
     return offers
+
+
+# ---- Today's Deals (rendered in headless Chrome) -------------------------------------------------
+
+DEALS_PATHS = ["/-/en/gp/goldbox?language=en_AE"]
+_DEAL_SPLIT = re.compile(r'<div class="dcl-product-wrapper"')
+
+
+def _egp(text: str):
+    m = re.search(r"([\d,]+(?:\.\d+)?)", html.unescape(text).replace("\xa0", " "))
+    return round(float(m.group(1).replace(",", "")), 2) if m else None
+
+
+def parse_deals(page: str) -> list[Offer]:
+    """Deal cards from the rendered Today's Deals page: Amazon's own deal price, list price, % and label."""
+    offers = []
+    for block in _DEAL_SPLIT.split(page)[1:]:
+        block = block.split("</li>")[0]
+        asin = re.search(r"amzn1\.asin\.([A-Z0-9]{10})", block) or re.search(r"/dp/([A-Z0-9]{10})", block)
+        new = re.search(r'dcl-product-price-new[^>]*>\s*<span class="a-offscreen">([^<]+)<', block)
+        old = re.search(r'dcl-product-price-old[^>]*>\s*<span class="a-offscreen">([^<]+)<', block)
+        if not asin or not new:
+            continue
+        price, original = _egp(new.group(1)), _egp(old.group(1)) if old else None
+        if not price:
+            continue
+        title = re.search(r'dcl-product-label[^>]*>\s*<span>([^<]+)<', block)
+        img = re.search(r'<img [^>]*src="([^"]+)"', block)
+        pct = re.search(r"(\d{1,2})% off", block)
+        label = re.search(r"_badgeMessage[^>]*>\s*<span[^>]*>([^<]+)<", block)
+        label = html.unescape(label.group(1)).strip() if label else ""
+        offers.append(Offer(
+            store=STORE,
+            sku=asin.group(1),
+            name=html.unescape(title.group(1)).strip() if title else asin.group(1),
+            price=price,
+            original_price=original if original and original > price else None,
+            url=f"{SITE}/-/en/dp/{asin.group(1)}",
+            image=html.unescape(img.group(1)) if img else "",
+            extra={"deal_label": ("Limited time deal" if label.lower().startswith("ends in") else label) or None,
+                   "deal_pct": int(pct.group(1)) if pct else None},
+        ))
+    return offers
+
+
+def _deals_task(path: str, log) -> Task:
+    def run():
+        page = browser.render(SITE + path)
+        if _is_bot_check(200, page) or "validateCaptcha" in page:
+            raise Blocked("Amazon answered Today's Deals with a bot check")
+        offers = parse_deals(page)
+        log(f"amazon_eg: Today's Deals: {len(offers)} deals")
+        return offers, []
+
+    return Task("deals" + path, run)
 
 
 def parse_subcategories(page: str, department: str) -> list[tuple[str, str]]:
@@ -244,17 +304,25 @@ def _has_keys() -> bool:
     return all(os.environ.get(k) for k in ("AMAZON_ACCESS_KEY", "AMAZON_SECRET_KEY", "AMAZON_PARTNER_TAG"))
 
 
-def plan(fetcher: Fetcher, departments: list[str] = None, pages: int = 3, log=print) -> list[Task]:
+def plan(fetcher: Fetcher, departments: list[str] = None, pages: int = 3, use_browser: bool = True,
+         log=print) -> list[Task]:
     if _has_keys():
         return [Task("api", lambda: (list(collect_api(fetcher, pages=pages, log=log)), []))]
-    return plan_bestsellers(fetcher, departments, log=log)
+    tasks = []
+    if use_browser:
+        try:
+            browser.find_chrome()
+            tasks = [_deals_task(p, log) for p in DEALS_PATHS]
+        except browser.BrowserUnavailable:
+            log("amazon_eg: no Chrome here, so Today's Deals is skipped (best-seller lists only)")
+    return tasks + plan_bestsellers(fetcher, departments, log=log)
 
 
 def collect(fetcher: Fetcher, pages: int = 3, departments: list[str] = None, max_pages: int = None,
-            log=print) -> Iterator[Offer]:
+            use_browser: bool = True, log=print) -> Iterator[Offer]:
     """The API when its keys are set, the best-seller lists otherwise."""
     if _has_keys():
         log("amazon_eg: using the Product Advertising API")
         yield from collect_api(fetcher, pages=pages, log=log)
     else:
-        yield from collect_bestsellers(fetcher, departments, max_pages=max_pages, log=log)
+        yield from run_once(plan(fetcher, departments, pages, use_browser, log=log), max_pages)

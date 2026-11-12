@@ -24,7 +24,8 @@ class Offer:
     category: str = ""
     brand: str = ""
     in_stock: bool = True
-    extra: dict = field(default_factory=dict)
+    extra: dict = field(default_factory=dict)  # kept with the product: rank, deal label, app link, ...
+    original_known: bool = True  # False: this source can't see list prices (keep the one already known)
 
     @property
     def store_discount_pct(self) -> float:

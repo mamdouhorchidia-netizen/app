@@ -38,12 +38,17 @@ talabat and Amazon and your Breadfast account flagged within hours. The delays c
 | Store | Source | State |
 |---|---|---|
 | talabat mart | talabat.com's public grocery pages. Each page carries its data as JSON (`__NEXT_DATA__`): price, original price, stock. robots.txt allows it. | Works. ~10,400 products; a full run is ~550 pages, about 15 minutes. |
-| Amazon.eg | Its public **best-seller lists**: 7 everyday departments by default, each with ~20 sub-lists, 60 products per list. robots.txt allows them. With API keys set, the official Product Advertising API is used instead. | Works without keys. ~300 pages at 3 s apart, about 15 minutes. |
+| Amazon.eg | **Today's Deals**, rendered in headless Chrome: Amazon's own deal price, list price, "% off" and event label. Plus the public **best-seller lists**: 7 everyday departments by default, each with ~20 sub-lists, 60 products per list. robots.txt allows both. With API keys set, the official Product Advertising API is used instead. | Works without keys. ~70 live deals per render, and ~300 list pages at 3 s apart (about 15 minutes). |
 | Breadfast | A **capture of the app's own traffic** from your phone, imported once and then refreshed automatically. | Ready for your first capture (steps below). |
 
 ### Amazon.eg without the API
-- Best-seller lists show today's price but no struck-through price. So Amazon deals come from the price
-  history ("usually X EGP"), and start appearing about 3 days after the first run.
+- **Today's Deals** is built by JavaScript, so it's opened in headless Chrome (`deals/browser.py`) once per
+  sweep. Chrome runs as itself: its own headless identity, no disguise, TLS checks on. A bot check stops it
+  like any other page. The Docker image includes Chromium. Elsewhere, set `CHROME_BIN` or install Chrome;
+  without Chrome, this part is skipped.
+- Best-seller lists show today's price but no struck-through price. Their deals come from the price
+  history ("usually X EGP") and start about 3 days after the first run. A list price seen on Today's
+  Deals is kept while the price stays the same.
 - Some products show "N offers from EGP x". That's the lowest marketplace seller's price, marked
   `from_sellers` in the data.
 - Amazon's search pages answer automated requests with a bot check, so search isn't used. If any page
@@ -78,6 +83,38 @@ Notes:
   be fitted to it.
 - Breadfast's terms don't mention automated collection either way. Using your own capture is your call.
 
+## The page
+- **Every listing opens in its store's app, at that product.** On Android, the link names the app
+  (`com.talabat`, `com.amazon.mShop.android.shopping`, `com.breadfast`) and the product's address, and
+  falls back to the web page if the app isn't installed. On iPhone, the product's address opens in the app
+  when the app claims it (universal links). Breadfast uses the share or deep link from its own data when
+  the capture has one, and otherwise opens the app's home screen. Whether an app lands exactly on the
+  item is up to the app: Amazon's does; talabat's and Breadfast's depend on which links they handle.
+- **Filters:** deals or all products; platform (with counts); discount type (platform discount or
+  price drop); discount % range; availability (in stock, out, all); status (real deals only, changed in
+  24 h, lowest in 90 days, store event deals, back in stock, sold in other stores too, cheapest across
+  stores, my watchlist); category; price range; search (English or Arabic).
+- **Sort:** best deals (deal score), biggest %, biggest saving, just changed, biggest drop vs usual,
+  price either way, price per kg / L / piece, best sellers, name.
+- **Deal score (0–100)** on each card, and in the product view a plain list of *why*: "31% off the store's
+  own price", "lowest price in 90 days", "cheapest of the stores that sell it"… Discounts whose price
+  never moves are marked and scored down.
+- **Same product in other stores:** matched by pack size, brand and name (strict: a can isn't a bottle,
+  Zero isn't regular, Latte isn't Mocha). Cards say "39.99 at Amazon.eg" or "cheapest of all stores", and
+  the product view compares them side by side with an open button for each.
+- **Price per kg / litre / piece**, read from names like "250ml X 3 + 1 Free" or "6x300ml".
+- **Price history:** a sparkline on every card, and a full chart you can point at in the product view.
+- **Watchlist and price alerts:** ★ any product, optionally with a target price. The page checks every
+  minute, shows a toast, and sends a browser notification when the page is in the background. The
+  watchlist is kept in that browser.
+- **"Just dropped" ticker:** the latest price moves scroll under the header; tap one to open it.
+- **Live:** refreshes every 10 s, redraws only what changed, and highlights new cards. Each store's last
+  change and sweep time is in the header.
+- **Shareable:** every filter is in the address, and `/?p=ID` opens a product. There's a Share button
+  (the phone's share sheet, or copies the link).
+- **Installs like an app** (manifest and icon), works on phones (filters become a bottom sheet), has a
+  dark mode, and `/` jumps to search.
+
 ## How deals are decided (`deals/finder.py`)
 A product is a deal when it is in stock and at least N% (5 by default) under either:
 - the struck-through price the store shows, or
@@ -102,9 +139,14 @@ deals/
   db.py         SQLite storage and history
   finder.py     the deal rules
   sigv4.py      AWS request signing for the Amazon API
-  web.py        /, /api/deals, /api/product/ID, /api/status, /healthz
-  live.html     the page; refreshes every 10 s and highlights new deals
-tests/          saved real talabat and amazon pages, breadfast captures, deal rules, scheduler, signing
+  browser.py    headless Chrome for JavaScript-built pages (Amazon's Today's Deals)
+  applinks.py   links that open a product in its store's app
+  units.py      pack sizes from names, for price per kg / L / piece
+  matching.py   the same product in different stores
+  web.py        /, /api/deals (filters, sorts, counts), /api/changes, /api/product/ID, /api/status, /healthz
+  live.html     the page
+tests/          saved real talabat and amazon pages (best sellers and Today's Deals), breadfast captures,
+                deal rules, filters, matching, app links, scheduler, signing
 Dockerfile      the server image (port 8800, volume /data)
 deploy/         add_deals.sh, update.sh, import_breadfast.sh: the Vorath server scripts
 ```

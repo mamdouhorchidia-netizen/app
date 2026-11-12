@@ -45,6 +45,8 @@ ORIGINAL_KEYS = ("original_price", "originalprice", "old_price", "oldprice", "pr
 IMAGE_KEYS = ("image", "image_url", "imageurl", "thumbnail", "thumbnail_url", "img", "picture", "photo",
               "images", "image_urls")
 CATEGORY_KEYS = ("category_name", "categoryname", "category")
+LINK_KEYS = ("deep_link", "deeplink", "dynamic_link", "dynamiclink", "share_url", "shareurl", "share_link",
+             "sharelink", "app_link", "applink", "web_url", "weburl", "url", "link", "permalink")
 SKIP_URL = re.compile(r"cart|basket|order|checkout|payment|address|wallet|account|profile|user|login|auth"
                       r"|token|otp|notification", re.I)
 DROP_HEADERS = {"host", "content-length", "accept-encoding", "connection", "transfer-encoding", "te",
@@ -129,6 +131,9 @@ def to_offer(raw: dict, divisor: float = 1, category: str = "") -> Optional[Offe
             original = n
             break
     cat = _first(d, CATEGORY_KEYS)
+    link = _first(d, LINK_KEYS)
+    link = link if isinstance(link, str) and link.startswith(("http", "breadfast://")) \
+        and not re.search(r"\.(jpe?g|png|webp|gif|svg)(\?|$)", link, re.I) else None  # a picture is not a link
     return Offer(
         store=STORE,
         sku=str(pid),
@@ -139,6 +144,7 @@ def to_offer(raw: dict, divisor: float = 1, category: str = "") -> Optional[Offe
         category=_text(cat) if cat else category,
         brand=_text(_first(d, ("brand", "brand_name", "brandname", "manufacturer"))),
         in_stock=_in_stock(d),
+        extra={"app_link": link} if link else {},
     )
 
 

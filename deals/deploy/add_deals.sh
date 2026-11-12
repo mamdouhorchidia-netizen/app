@@ -53,7 +53,7 @@ print(json.dumps({
     "is_auto_deploy_enabled": False, "is_force_https_enabled": True,
     "health_check_enabled": True, "health_check_path": "/healthz", "health_check_port": "8800", "health_check_return_code": 200,
     "health_check_interval": 30, "health_check_timeout": 5, "health_check_retries": 3, "health_check_start_period": 30,
-    "limits_memory": "768m", "instant_deploy": False}))
+    "limits_memory": "1536m", "instant_deploy": False}))
 EOF
 )
 APP=$(api -X POST "$C/applications/private-deploy-key" -d "$REQ" | jget 'd["uuid"]')

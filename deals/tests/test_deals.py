@@ -153,8 +153,32 @@ class AmazonBestSellers(unittest.TestCase):
     def test_api_only_with_keys(self):
         f, asked = self.fake(lambda url: (200, self.page))
         with mock.patch.dict(os.environ, {"AMAZON_ACCESS_KEY": "", "AMAZON_SECRET_KEY": "", "AMAZON_PARTNER_TAG": ""}):
-            list(amazon_eg.collect(f, departments=["grocery"], max_pages=1, log=lambda *_: None))
+            list(amazon_eg.collect(f, departments=["grocery"], max_pages=1, use_browser=False, log=lambda *_: None))
         self.assertIn("/gp/bestsellers/", asked[0])
+
+
+class AmazonTodaysDeals(unittest.TestCase):
+    def test_parse_real_cards(self):
+        offers = amazon_eg.parse_deals((FIX / "amazon_deals.html").read_text())
+        self.assertEqual([(o.sku, o.price, o.original_price) for o in offers[:3]],
+                         [("B0DC5F7P3N", 273.98, 395.0), ("B0B3DQ2655", 348.98, 465.85), ("B0F1D312ML", 1365.0, 2184.0)])
+        self.assertEqual(offers[0].extra, {"deal_label": "11.11 Deal", "deal_pct": 31})
+        self.assertEqual(offers[2].extra["deal_label"], "Limited time deal")  # "Ends in ..." countdown
+        self.assertIsNone(offers[3].original_price)  # a card with no list price is not a discount
+        self.assertEqual(offers[0].name, "Capixy Lashes Treatment Serum 10Ml")
+
+    def test_list_price_survives_a_best_seller_sighting(self):
+        con = db.connect(":memory:")
+        deal = Offer("amazon_eg", "B0X", "x", 80, 100, extra={"deal_label": "Deal"})
+        best = Offer("amazon_eg", "B0X", "x", 80, None, extra={"rank": 3}, original_known=False)
+        self.assertEqual(db.save_offers(con, [deal], 1000), (1, 1))
+        self.assertEqual(db.save_offers(con, [best], 2000), (1, 0))  # same price: nothing moved
+        row = con.execute("SELECT original_price, extra FROM products").fetchone()
+        self.assertEqual(row["original_price"], 100)
+        self.assertEqual(json.loads(row["extra"]), {"deal_label": "Deal", "rank": 3})
+        db.save_offers(con, [Offer("amazon_eg", "B0X", "x", 95, None, original_known=False)], 3000)
+        self.assertIsNone(con.execute("SELECT original_price FROM products").fetchone()[0])  # price moved: deal over
+        con.close()
 
 
 # Breadfast's real JSON layout is only known once you capture the app. These shapes are invented to
@@ -331,6 +355,133 @@ class Scheduler(unittest.TestCase):
         loop.con = db.connect(":memory:")
         loop.step()
         self.assertGreater(loop.paused_until, clock.t)
+
+
+class AppLinks(unittest.TestCase):
+    def test_android_opens_the_app_at_the_item(self):
+        from deals.applinks import links
+        l = links("amazon_eg", "https://www.amazon.eg/-/en/dp/B0DC5F7P3N")
+        self.assertTrue(l["android"].startswith("intent://www.amazon.eg/-/en/dp/B0DC5F7P3N#Intent;scheme=https;"
+                                                "package=com.amazon.mShop.android.shopping;"))
+        self.assertIn("S.browser_fallback_url=https%3A%2F%2Fwww.amazon.eg%2F-%2Fen%2Fdp%2FB0DC5F7P3N", l["android"])
+        self.assertEqual(l["ios"], "https://www.amazon.eg/-/en/dp/B0DC5F7P3N")
+        self.assertIn("package=com.talabat;", links("talabat", "https://www.talabat.com/egypt/x/s/1?aid=9")["android"])
+
+    def test_breadfast_uses_the_apps_own_link(self):
+        from deals.applinks import links
+        raw = {"id": 7, "name": "Milk", "price": 40, "share_url": "https://app.breadfast.com/product/7",
+               "url": "https://cdn.example/7.jpg"}
+        o = breadfast.to_offer(raw)
+        self.assertEqual(o.extra, {"app_link": "https://app.breadfast.com/product/7"})
+        self.assertIn("intent://app.breadfast.com/product/7#Intent;scheme=https;package=com.breadfast;",
+                      links("breadfast", "", o.extra)["android"])
+        self.assertEqual(breadfast.to_offer({"id": 8, "name": "Tea", "price": 9, "url": "https://cdn.x/8.png"}).extra, {})
+        self.assertIn("package=com.breadfast;", links("breadfast", "", {})["android"])  # no link: the app's home
+
+
+TEA_URL = "https://www.talabat.com/egypt/grocery/1/talabat-mart/product/tea/s/T2?aid=1"
+
+
+class CatalogAndFilters(unittest.TestCase):
+    def setUp(self):
+        self.con = db.connect(":memory:")
+        t0 = 1_760_000_000
+        self.now = t0 + 10 * DAY
+        db.save_offers(self.con, [
+            Offer("talabat", "t1", "Juhayna Full Cream Milk 1L", 50, 60, category="Dairy & Eggs / Milk"),
+            Offer("amazon_eg", "a1", "Juhayna Full Cream Milk, 1 Liter", 45, category="Grocery",
+                  extra={"deal_label": "11.11 Deal"}),
+            Offer("talabat", "t2", "Lipton Black Tea, 500 gm", 100, category="Coffee & Tea / Tea", url=TEA_URL),
+            Offer("talabat", "t3", "Chipsy Salt 10 pcs", 30, 40, in_stock=False, category="Snacks"),
+            Offer("amazon_eg", "a2", "Steady Soap 125g", 90, 100, category="Beauty"),
+        ], t0)
+        db.save_offers(self.con, [Offer("talabat", "t2", "Lipton Black Tea, 500 gm", 80, category="Coffee & Tea / Tea",
+                                        url=TEA_URL)],
+                       self.now - 3600)  # a real price drop an hour ago
+        self.items = finder.catalog(self.con, self.now)
+        self.by = {d["sku"]: d for d in self.items}
+
+    def tearDown(self):
+        self.con.close()
+
+    def test_enriched_fields(self):
+        tea = self.by["t2"]
+        self.assertEqual((tea["kind"], tea["drop_pct"], tea["usual_price"]), ("drop", 20.0, 100))
+        self.assertIn("new", tea["flags"])
+        self.assertIn("lowest", tea["flags"])
+        self.assertEqual((tea["unit_price"], tea["unit"]), (160.0, "kg"))
+        self.assertTrue(tea["links"]["android"].startswith("intent://"))
+        self.assertTrue(len(tea["spark"]) >= 2)
+        self.assertIn("20% under its usual 100 EGP", tea["why"])
+        self.assertNotIn("steady", self.by["a2"]["flags"])  # 10 days unchanged: not yet 14
+        milk = self.by["a1"]
+        self.assertEqual(milk["deal_label"], "11.11 Deal")
+
+    def test_cross_store_match(self):
+        t1, a1 = self.by["t1"], self.by["a1"]
+        self.assertEqual([m["id"] for m in t1["matches"]], [a1["id"]])
+        self.assertTrue(a1["cheapest"])
+        self.assertFalse(t1["cheapest"])
+        self.assertEqual(self.by["t2"]["matches"], [])
+
+    def test_filters(self):
+        q = lambda **kw: [d["sku"] for d in finder.query(self.items, **kw)["items"]]
+        self.assertEqual(set(q()), {"t1", "t2", "a2"})  # deals in stock
+        self.assertEqual(set(q(stock="all")), {"t1", "t2", "a2", "t3"})
+        self.assertEqual(q(stock="out"), ["t3"])
+        self.assertEqual(set(q(kind="platform")), {"t1", "a2"})
+        self.assertEqual(q(kind="drop"), ["t2"])
+        self.assertEqual(q(min_pct=15), ["t2", "t1"])
+        self.assertEqual(q(max_pct=12), ["a2"])
+        self.assertEqual(q(stores=["amazon_eg"]), ["a2"])
+        self.assertEqual(q(status=["new"]), ["t2"])
+        self.assertEqual(q(q="juhayna milk", deals_only=False, sort="price"), ["a1", "t1"])
+        self.assertEqual(q(deals_only=False, best=True), ["a1"])
+        self.assertEqual(q(category="Coffee & Tea"), ["t2"])
+        self.assertEqual(q(price_max=60), ["t1"])
+        self.assertEqual(q(ids=[self.by["t3"]["id"]]), ["t3"])
+        self.assertEqual(q(sort="unit", deals_only=False, stock="all")[:2], ["a1", "t1"])
+
+    def test_facets_ignore_their_own_filter(self):
+        r = finder.query(self.items, stores=["amazon_eg"])
+        self.assertEqual(r["facets"]["store"], {"talabat": 2, "amazon_eg": 1})
+        self.assertEqual(r["total"], 1)
+
+    def test_steady_discount_scores_low(self):
+        later = finder.catalog(self.con, self.now + 10 * DAY)
+        soap = next(d for d in later if d["sku"] == "a2")
+        self.assertIn("steady", soap["flags"])
+        self.assertTrue(any("may never be charged" in w for w in soap["why"]))
+        self.assertEqual(finder.query(later, status=["real"], stores=["amazon_eg"])["items"], [])
+
+
+class Matching(unittest.TestCase):
+    def test_brand_and_size_must_agree(self):
+        from deals import matching
+        items = [{"id": 1, "store": "talabat", "name": "Pepsi Can 330ml"},
+                 {"id": 2, "store": "amazon_eg", "name": "Pepsi Soft Drink Can, 330 ml"},
+                 {"id": 3, "store": "amazon_eg", "name": "Pepsi Can 250ml"},       # other size
+                 {"id": 4, "store": "amazon_eg", "name": "Coca Cola Can 330ml"},   # other brand
+                 {"id": 5, "store": "talabat", "name": "Pepsi Diet Can 330ml"}]     # same store as 1
+        m = matching.match(items)
+        self.assertEqual(m[1], [2])
+        self.assertNotIn(3, m.get(2, []))
+        self.assertNotIn(4, m.get(1, []))
+
+
+class PackSizes(unittest.TestCase):
+    def test_real_names(self):
+        from deals.units import pack_size
+        cases = {"Coca Cola Soft Drink Pet Bottle, 1.45L x2": (2.9, "L"), "Suntop Mango Fruit Drink 250 ml X3": (0.75, "L"),
+                 "V7 Vitamin Sparkling Drinks New Artwork Pack, 6x300ml": (1.8, "L"), "Lipton Black Tea Soft , 500 gm": (0.5, "kg"),
+                 "جهينة لبن ١ لتر": (1.0, "L"), "Elano water 330ml - 20 Pieces": (6.6, "L"),
+                 "Nescafe Latte Iced Coffee, 220ml X 3 + 1 Free": (0.88, "L"),
+                 "Gorilla Ultimate Mango Coconut 250ml, 2 + 1 Free Ultimate Bundle": (0.75, "L"),
+                 "Pampers Baby Dry Size 4, 9-14kg, 64 Diapers": (64.0, "pc"), "Chipsy 10 pcs": (10.0, "pc")}
+        for name, want in cases.items():
+            got = pack_size(name)
+            self.assertEqual((round(got[0], 4), got[1]), want, name)
+        self.assertIsNone(pack_size("Granzia Pionizer Compressor Nebulizer"))
 
 
 def offer(sku, price, original=None, in_stock=True, store="talabat"):

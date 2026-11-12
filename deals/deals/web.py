@@ -1,9 +1,13 @@
 """The live deals page and its JSON API, on Python's built-in HTTP server.
 
   /                      the live page (refreshes itself every 10 seconds)
-  /api/deals             ?store= &q= &category= &min= &sort=discount|saving|newest|price &limit=
-  /api/product/ID        one product and its price history
+  /api/deals             filters: deals=1|0 stores=a,b kind=platform|drop min= max= stock=in|out|all
+                         status=new,lowest,real,label,back,compare category= q= pmin= pmax= ids=1,2 best=1
+                         sort=score|discount|saving|newest|drop|price|price_desc|unit|popular|name limit= offset=
+  /api/changes           the latest price moves (?limit=)
+  /api/product/ID        one product: history, links, matches in other stores, score and why
   /api/status            each store: products, last check, last change, cycle time, errors
+  /manifest.webmanifest, /icon.svg   so the page installs as an app
   /healthz               200 when the database answers (Coolify's health check)
 """
 
@@ -20,6 +24,15 @@ from .stores import LABELS
 
 PAGE = Path(__file__).with_name("live.html")
 CACHE_SECONDS = 5
+CATALOG_SECONDS = 15
+MANIFEST = json.dumps({
+    "name": "Live deals", "short_name": "Deals", "start_url": "/", "display": "standalone",
+    "background_color": "#f6f5f2", "theme_color": "#d6402b",
+    "icons": [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}],
+}).encode()
+ICON = (b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" '
+        b'fill="#d6402b"/><path d="M150 330 L250 230 L300 280 L390 180" stroke="#fff" stroke-width="44" fill="none" '
+        b'stroke-linecap="round" stroke-linejoin="round"/><circle cx="390" cy="180" r="34" fill="#fff"/></svg>')
 
 
 def status(con) -> list[dict]:
@@ -49,8 +62,32 @@ def changes_last_hour(con) -> int:
                           WHERE x.at > ? AND x.at > p.first_seen""", (int(time.time()) - 3600,)).fetchone()[0]
 
 
+def recent_changes(con, limit: int = 30) -> list[dict]:
+    rows = con.execute("""
+        SELECT x.at, x.price, x.in_stock, p.id, p.store, p.name, p.image,
+               (SELECT y.price FROM prices y WHERE y.product_id = x.product_id AND y.at < x.at
+                ORDER BY y.at DESC LIMIT 1) AS before
+        FROM prices x JOIN products p ON p.id = x.product_id
+        WHERE x.at > p.first_seen ORDER BY x.at DESC LIMIT ?""", (limit,))
+    out = []
+    for r in rows:
+        r = dict(r)
+        r["label"] = LABELS.get(r["store"], r["store"])
+        out.append(r)
+    return out
+
+
 def make_handler(db_path: str):
     cache, lock = {}, threading.Lock()
+    catalog_state = {"at": 0.0, "items": [], "by_id": {}}
+    catalog_lock = threading.Lock()
+
+    def catalog(con) -> list[dict]:
+        with catalog_lock:  # one rebuild at a time; everyone else gets the fresh copy
+            if time.monotonic() - catalog_state["at"] > CATALOG_SECONDS:
+                items = finder.catalog(con)
+                catalog_state.update(at=time.monotonic(), items=items, by_id={d["id"]: d for d in items})
+            return catalog_state["items"]
 
     def cached(key: str, build):
         now = time.monotonic()
@@ -94,18 +131,46 @@ def make_handler(db_path: str):
                     con.execute("SELECT 1").fetchone()
                     self.send(200, b"ok", "text/plain")
                 elif u.path == "/api/deals":
-                    args = dict(min_pct=float(q.get("min", 5)), store=q.get("store") or None, q=q.get("q") or None,
-                                category=q.get("category") or None, sort=q.get("sort", "discount"),
-                                limit=min(int(q.get("limit", 200)), 1000))
-                    self.json(cached("deals" + json.dumps(args, sort_keys=True), lambda: {
-                        "deals": finder.find_deals(con, **args), "labels": LABELS,
-                        "status": status(con), "changes_last_hour": changes_last_hour(con), "now": int(time.time())}))
+                    def nums(key):
+                        return [int(x) for x in q[key].split(",") if x.strip().isdigit()] if q.get(key) else None
+
+                    def num(key):
+                        return float(q[key]) if q.get(key) not in (None, "") else None
+
+                    args = dict(deals_only=q.get("deals", "1") != "0",
+                                stores=[x for x in q.get("stores", q.get("store", "")).split(",") if x] or None,
+                                kind=q.get("kind") or None, min_pct=num("min") or 0, max_pct=num("max"),
+                                stock=q.get("stock", "in"), status=[x for x in q.get("status", "").split(",") if x],
+                                category=q.get("category") or None, q=q.get("q") or None,
+                                price_min=num("pmin"), price_max=num("pmax"), ids=nums("ids"),
+                                best=q.get("best") == "1", sort=q.get("sort", "score"),
+                                limit=min(int(q.get("limit", 60)), 500), offset=int(q.get("offset", 0)))
+                    if args["ids"] is not None:
+                        args["ids"] = set(args["ids"])
+
+                    def build():
+                        r = finder.query(catalog(con), **args)
+                        r.update(labels=LABELS, status=status(con), changes_last_hour=changes_last_hour(con),
+                                 now=int(time.time()))
+                        return r
+                    self.json(cached("deals" + json.dumps(args, sort_keys=True, default=sorted), build))
+                elif u.path == "/api/changes":
+                    limit = min(int(q.get("limit", 30)), 100)
+                    self.json(cached(f"changes{limit}", lambda: {"changes": recent_changes(con, limit)}))
                 elif u.path.startswith("/api/product/"):
                     pid = int(u.path.rsplit("/", 1)[1])
                     p = con.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
                     if not p:
                         return self.json({"error": "not found"}, 404)
-                    self.json({"product": dict(p), "history": db.history(con, pid)})
+                    catalog(con)
+                    item = catalog_state["by_id"].get(pid, {})
+                    matches = [dict(catalog_state["by_id"][m["id"]], spark=None) for m in item.get("matches", [])
+                               if m["id"] in catalog_state["by_id"]]
+                    self.json({"product": dict(p), "item": item, "history": db.history(con, pid), "matches": matches})
+                elif u.path == "/manifest.webmanifest":
+                    self.send(200, MANIFEST, "application/manifest+json")
+                elif u.path == "/icon.svg":
+                    self.send(200, ICON, "image/svg+xml")
                 elif u.path == "/api/status":
                     self.json({"status": status(con), "changes_last_hour": changes_last_hour(con)})
                 else:
