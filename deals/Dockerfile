@@ -13,10 +13,12 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=Africa/Cairo \
     DEALS_DB=/data/deals.sqlite3 BREADFAST_REQUESTS=/data/breadfast_requests.json HOST=0.0.0.0 PORT=8800
 
-# chromium: renders Amazon's Today's Deals (built by JavaScript) · tini: reaps child processes ·
-# util-linux: setpriv (drops root). APT=0 skips them; Amazon then uses its best-seller lists only.
+# curl: Coolify's health check runs curl (or wget) inside the container; without it the app is marked unhealthy and
+#       the proxy answers "no available server" · chromium: renders Amazon's Today's Deals (built by JavaScript) ·
+# tzdata: Cairo time · tini: reaps child processes · util-linux: setpriv (drops root).
+# APT=0 skips them (only for a network that blocks Debian's mirror; Coolify's health check then fails).
 ARG APT=1
-RUN if [ "$APT" = "1" ]; then apt-get update && apt-get install -y --no-install-recommends chromium tini util-linux ca-certificates \
+RUN if [ "$APT" = "1" ]; then apt-get update && apt-get install -y --no-install-recommends curl chromium tzdata tini util-linux ca-certificates \
     && rm -rf /var/lib/apt/lists/*; fi
 
 WORKDIR /app
