@@ -8,6 +8,7 @@ Breadfast has no web pages: its link comes from the app's own data (a share or d
 when there is one, and otherwise opens the app at its home screen.
 """
 
+import os
 import re
 from urllib.parse import quote, urlsplit
 
@@ -18,9 +19,11 @@ PACKAGES = {
     "jumia": "com.jumia.android",
 }
 # Stores whose app can't open a product from its web address, so Android opens their web page in Chrome.
-# None now: talabat's app is com.6alabat.cuisineApp (the earlier com.talabat was wrong), and its links point
-# at the hub the user follows, which its app can show.
-WEB_FIRST = set()
+# talabat: its pages declare only "talabat://" for the app (al:android:url), so the app (com.6alabat.cuisineApp)
+# opens a product link at an error page ("We can't load this page"). Its product page on the web works, when the
+# link carries an area (aid) that the item's hub delivers to, which every link here does (checked on a phone
+# browser, Nov 2026).
+WEB_FIRST = {"talabat"}
 CHROME = "com.android.chrome"
 STORE_PAGES = {
     "breadfast": ("https://play.google.com/store/apps/details?id=com.breadfast",
@@ -42,6 +45,14 @@ def _amazon_app_url(url: str) -> str:
     return f"https://www.amazon.eg/dp/{m.group(1)}" if m else url
 
 
+def _tagged(url: str) -> str:
+    """Amazon links carry the owner's Amazon Associates tag when AMAZON_TAG is set (like 3rrood's ?tag=)."""
+    tag = os.environ.get("AMAZON_TAG", "").strip()
+    if not tag or not re.fullmatch(r"[A-Za-z0-9_-]{3,40}", tag) or "tag=" in url:
+        return url
+    return url + ("&" if "?" in url else "?") + "tag=" + tag
+
+
 def links(store: str, url: str, extra: dict = None) -> dict:
     """{"web", "android", "ios", "browser"}: where a tap should go on each kind of device; "browser" opens the
     store's web page in Chrome on Android (a way round an app that can't show the item)."""
@@ -59,9 +70,11 @@ def links(store: str, url: str, extra: dict = None) -> dict:
         return {"web": play, "android": home, "ios": "breadfast://", "browser": play}
     if not url:
         return {"web": "", "android": "", "ios": "", "browser": ""}
+    if store == "amazon_eg":
+        url = _tagged(url)
     in_chrome = _intent(url, CHROME, url)
     if store in WEB_FIRST:
         return {"web": url, "android": in_chrome, "ios": url, "browser": in_chrome}
-    app_url = _amazon_app_url(url) if store == "amazon_eg" else url
+    app_url = _tagged(_amazon_app_url(url)) if store == "amazon_eg" else url
     return {"web": url, "android": _intent(app_url, package, url) if package else url, "ios": app_url,
             "browser": in_chrome}

@@ -15,6 +15,9 @@
   POST /admin/breadfast  the capture itself (?divisor=1|100), with "Authorization: Bearer $DEALS_ADMIN_TOKEN";
                          off (403) until DEALS_ADMIN_TOKEN is set
   POST /admin/breadfast-request   {"curl": "...", "divisor": 1}: one product-list request copied as cURL
+  /p/ID                  a product's own page (history, verdict, other stores; a preview card on WhatsApp/Telegram)
+  /stores, /store/ID     every store, and one store's deals · /cats every category · /coupons the owner's codes
+  POST /admin/coupons    {"text": "store | CODE | what it gives | until | link" one per line}; GET /api/coupons
 """
 
 import hmac
@@ -29,7 +32,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import db, finder, settings
+from . import db, finder, pages, settings
 from .stores import LABELS, breadfast, talabat
 
 PAGE = Path(__file__).with_name("live.html")
@@ -63,13 +66,14 @@ _import_lock = threading.Lock()
 CACHE_SECONDS = 5
 CATALOG_SECONDS = 15
 MANIFEST = json.dumps({
-    "name": "Live deals", "short_name": "Deals", "start_url": "/", "scope": "/", "display": "standalone",
+    "name": "عروض لحظة بلحظة", "short_name": "العروض", "lang": "ar", "dir": "rtl", "start_url": "/", "scope": "/", "display": "standalone",
     "background_color": "#f6f5f2", "theme_color": "#d6402b", "description": "Live prices and real deals",
     "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
               {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
               {"src": "/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}],
 }).encode()
-STATIC = {"/sw.js": ("sw.js", "text/javascript"), "/icon-192.png": ("icon-192.png", "image/png"),
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://deals.vorath.cloud").rstrip("/")
+STATIC = {"/sw.js": ("sw.js", "text/javascript"), "/i18n.js": ("i18n.js", "text/javascript"), "/icon-192.png": ("icon-192.png", "image/png"),
           "/icon-512.png": ("icon-512.png", "image/png"), "/icon-maskable.png": ("icon-maskable.png", "image/png")}
 # the browser push services; the server sends pushes nowhere else
 PUSH_HOSTS = ("fcm.googleapis.com", "push.services.mozilla.com", "push.apple.com", "notify.windows.com")
@@ -122,6 +126,7 @@ def recent_changes(con, limit: int = 30) -> list[dict]:
 
 def make_handler(db_path: str, requests_file: str = None):
     requests_file = requests_file or breadfast.DEFAULT_REQUESTS_FILE
+    coupons_file = os.path.join(os.path.dirname(os.path.abspath(db_path)), "coupons.json")
     cache, lock = {}, threading.Lock()
     catalog_state = {"at": 0.0, "items": [], "by_id": {}}
     catalog_lock = threading.Lock()
@@ -260,6 +265,8 @@ def make_handler(db_path: str, requests_file: str = None):
                                  now=int(time.time()))
                         return r
                     self.json(cached("deals" + json.dumps(args, sort_keys=True, default=sorted), build))
+                elif u.path == "/api/brief":
+                    self.json(cached("brief", lambda: finder.brief(catalog(con))))
                 elif u.path == "/api/changes":
                     limit = min(int(q.get("limit", 30)), 100)
                     self.json(cached(f"changes{limit}", lambda: {"changes": recent_changes(con, limit)}))
@@ -299,6 +306,74 @@ def make_handler(db_path: str, requests_file: str = None):
                     self.send(200, MANIFEST, "application/manifest+json")
                 elif u.path == "/icon.svg":
                     self.send(200, ICON, "image/svg+xml")
+                elif re.fullmatch(r"/p/\d+", u.path):
+                    pid = int(u.path[3:])
+                    p = con.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
+                    if not p:
+                        return self.send(404, pages.layout("Not found", '<div class="empty">This product isn\'t'
+                                                           ' tracked (any more).</div>'), "text/html; charset=utf-8")
+                    catalog(con)
+                    by_id = catalog_state["by_id"]
+                    item = by_id.get(pid, {})
+                    matches = [by_id[m["id"]] for m in item.get("matches", []) if m["id"] in by_id]
+                    related = []
+                    if item:
+                        r = finder.query(catalog_state["items"], deals_only=True, category=item["top_category"],
+                                         stores=[item["store"]], sort="score", limit=13)
+                        related = [x for x in r["items"] if x["id"] != pid][:12]
+                    self.send(200, pages.product_page(dict(p), item, db.history(con, pid), matches, related, PUBLIC_URL),
+                              "text/html; charset=utf-8")
+                elif u.path == "/stores":
+                    def build_stores():
+                        items = catalog(con)
+                        deals = finder.query(items, deals_only=True, limit=0)["facets"]["store"]
+                        best = {}
+                        for d in items:
+                            if d["in_stock"] and d["discount_pct"] and not {"steady", "inflated"} & set(d["flags"]):
+                                best[d["store"]] = max(best.get(d["store"], 0), d["discount_pct"])
+                        return pages.stores_page(status(con), {}, deals, best)
+                    self.send(200, cached("stores", build_stores), "text/html; charset=utf-8")
+                elif re.fullmatch(r"/store/[a-z_]+", u.path):
+                    self.send_response(302)
+                    self.send_header("Location", "/?deals=1&stores=" + u.path.rsplit("/", 1)[1])
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                elif u.path == "/cats":
+                    def build_cats():
+                        items = catalog(con)
+                        r = finder.query(items, deals_only=True, limit=0)["facets"]["category"]
+                        top = {}
+                        for d in items:
+                            if d["in_stock"] and d["discount_pct"] and not {"steady", "inflated"} & set(d["flags"]):
+                                top[d["top_category"]] = max(top.get(d["top_category"], 0), d["discount_pct"])
+                        rows = sorted(((c, n, top.get(c, 0)) for c, n in r.items() if n), key=lambda x: -x[1])
+                        return pages.cats_page(rows)
+                    self.send(200, cached("cats", build_cats), "text/html; charset=utf-8")
+                elif u.path == "/coupons":
+                    def build_coupons():
+                        found = {}  # codes the stores show on their own products (Kenzz), with how many they cut
+                        for d in catalog(con):
+                            if d.get("promo_code") and d["in_stock"]:
+                                c = found.setdefault((d["store"], d["promo_code"]), {"n": 0, "best": 0.0})
+                                c["n"] += 1
+                                c["best"] = max(c["best"], d["price"] - (d["promo_price"] or d["price"]))
+                        auto = [{"store": st, "code": code, "auto": True, "url": f"{PUBLIC_URL}/?deals=0&status=promo&stores={st}",
+                                 "title": f"Extra off on {v['n']} products, up to {v['best']:,.0f} EGP"}
+                                for (st, code), v in sorted(found.items(), key=lambda kv: -kv[1]["n"])[:60]]
+                        return pages.coupons_page(pages.load_coupons(coupons_file) + auto)
+                    self.send(200, cached("coupons", build_coupons), "text/html; charset=utf-8")
+                elif u.path == "/about":
+                    self.send(200, pages.about_page([pages.AR_STORE.get(k, v) for k, v in LABELS.items()
+                                                     if k in {r["store"] for r in status(con)}]),
+                              "text/html; charset=utf-8")
+                elif u.path == "/privacy":
+                    self.send(200, pages.privacy_page(), "text/html; charset=utf-8")
+                elif u.path == "/contact":
+                    self.send(200, pages.contact_page(os.environ.get("CONTACT_EMAIL", "").strip(),
+                                                      os.environ.get("TELEGRAM_CHANNEL_URL", "").strip()),
+                              "text/html; charset=utf-8")
+                elif u.path == "/api/coupons":
+                    self.json({"coupons": pages.load_coupons(coupons_file)})
                 elif u.path == "/api/status":
                     self.json({"status": status(con), "changes_last_hour": changes_last_hour(con)})
                 else:
@@ -322,7 +397,7 @@ def make_handler(db_path: str, requests_file: str = None):
                 except (ValueError, TypeError, AttributeError):
                     code, out = 400, {"error": "Send JSON."}
                 return self.json(out, code)
-            if u.path not in ("/admin/breadfast", "/admin/breadfast-request", "/admin/settings"):
+            if u.path not in ("/admin/breadfast", "/admin/breadfast-request", "/admin/settings", "/admin/coupons"):
                 return self.json({"error": "not found"}, 404)
             token = os.environ.get("DEALS_ADMIN_TOKEN", "")
             if len(token) < 16:
@@ -370,6 +445,18 @@ def make_handler(db_path: str, requests_file: str = None):
                     return self.json({"error": "Send {\"talabat_hubs\": [ids]} or {\"hub_link\": \"…\"}."}, 400)
                 return self.json({"selected": [h["id"] for h in current["talabat_hubs"]],
                                   "hubs": current["talabat_hubs"]})
+            if u.path == "/admin/coupons":
+                if not 0 < size <= 1 << 18:
+                    return self.json({"error": "Send {\"text\": \"store | CODE | what it gives | until | link\"}."}, 413)
+                try:
+                    coupons = pages.parse_coupons(str(json.loads(self.rfile.read(size)).get("text") or ""))
+                except (ValueError, AttributeError):
+                    return self.json({"error": "Send {\"text\": \"...\"}."}, 400)
+                tmp = coupons_file + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(coupons, f, ensure_ascii=False, indent=1)
+                os.replace(tmp, coupons_file)
+                return self.json({"coupons": coupons})
             if u.path == "/admin/breadfast-request":
                 if not 0 < size <= 1 << 20:
                     return self.json({"error": "Paste one request (up to 1 MB)."}, 413)

@@ -41,6 +41,9 @@ talabat and Amazon and your Breadfast account flagged within hours. The delays c
 | Amazon.eg | **Today's Deals**, rendered in headless Chrome: Amazon's own deal price, list price, "% off" and event label. Plus the public **best-seller lists** at every level (department › list › sub-list…) in 17 departments (all but gift cards), 60 products per list. robots.txt allows both. With API keys set, the official Product Advertising API is used instead. | Works without keys. ~70 live deals per render, and a few thousand list pages at 3 s apart: a full sweep takes hours, while busy shelves are rechecked every minute. |
 | Jumia | Its public **Flash Sales** and main category pages (JSON in each page). Jumia's robots.txt allows bots that identify themselves with an owner address and stay under 200 requests a minute; this one sends 1 every 3 s (`JUMIA_DELAY`). Jumia sits behind Cloudflare: a "Just a moment…" check pauses it like Amazon's bot check. | Built; from this sandbox Cloudflare challenged it after a few pages, so whether it runs from the server shows on the site's status line. |
 | Breadfast | A **capture of the app's own traffic** from your phone, imported once and then refreshed automatically. | Ready for your first capture (steps below). |
+| Dream 2000 | Its public **Shopify catalogue** (`/products.json`, 250 products a page): price, compare-at ("was") price, stock, brand. robots.txt allows it. 1 request every 3 s (`DREAM_DELAY`). | Works. Thousands of appliances and electronics; a sweep is about 20 pages. |
+| Kenzz | Its public pages (`__NEXT_DATA__`): price, market price, stock, tags, and the **promo code** each product shows (e.g. KBF26), which feeds /coupons by itself. A category page lists its top 20, so it reads all ~1,080 category pages from Kenzz's sitemap plus the home page, 1 every 3 s (`KENZZ_DELAY`). robots.txt allows everything. | Works. A sweep takes about an hour. |
+| Others tried | Raya Shop, Spinneys and Seoudi answer but build their product lists in the browser (next: render them in headless Chrome, as for Amazon's deals); 2B and Hyper One block bots (Cloudflare / 403); Tawheed & Nour and Gourmet didn't answer. Noon, Carrefour and B.TECH block us: they need their affiliate programs. | Not added yet. |
 
 ### Amazon.eg without the API
 - **Today's Deals** is built by JavaScript, so it's opened in headless Chrome (`deals/browser.py`) once per
@@ -85,12 +88,23 @@ Notes:
 - Breadfast's terms don't mention automated collection either way. Using your own capture is your call.
 
 ## The page
-- **Every listing opens in its store's app, at that product.** On Android, the link names the app
-  (`com.talabat`, `com.amazon.mShop.android.shopping`, `com.breadfast`) and the product's address, and
-  falls back to the web page if the app isn't installed. On iPhone, the product's address opens in the app
-  when the app claims it (universal links). Breadfast uses the share or deep link from its own data when
-  the capture has one, and otherwise opens the app's home screen. Whether an app lands exactly on the
-  item is up to the app: Amazon's does; talabat's and Breadfast's depend on which links they handle.
+- **Arabic first, right to left** (Egyptian wording: "نزل دلوقتي", "🔥 أقل سعر", "من 4 د"), with English one tap
+  away (the ع / EN button, remembered per browser). `deals/i18n.js` translates what the pages show as it
+  appears; product names are left as the store wrote them.
+- **3rrood-style pages:** `/p/ID` is each product's own page (price history chart, lowest/highest in 90 days,
+  the verdict and why, the same product in other stores, more deals like it, and a store button); shared on
+  WhatsApp or Telegram it shows a preview card with the picture, price and discount in Arabic. `/stores`
+  (deals per store, "خصومات لحد X%"), `/store/ID`, `/cats` (categories with deal counts), `/coupons`
+  (tap a code to copy it; the owner keeps the list on /admin), and "كمّل من حيث وقفت" (recently viewed,
+  kept in the browser).
+- **Every listing opens at that product.** Amazon and Jumia: on Android the link names the app
+  (`com.amazon.mShop.android.shopping`, `com.jumia.android`) and the product's address, and falls back to the
+  web page if the app isn't installed; on iPhone the product's address opens in the app when the app claims
+  it. **talabat** opens its product page in Chrome: its app can't open a product from a link (its pages
+  declare only `talabat://`), so handing it one showed "We can't load this page". The web page works when
+  the link's area (`aid`) is one the item's hub delivers to, which is how every link here is built.
+  Breadfast uses the share or deep link from its own data when the capture has one, and otherwise opens
+  the app's home screen.
 - **Filters:** deals or all products; platform (with counts); discount type (platform discount or
   price drop); discount % range; availability (in stock, out, all); status (real deals only, changed in
   24 h, lowest in 90 days, store event deals, back in stock, sold in other stores too, cheapest across
@@ -146,6 +160,17 @@ talabat sweep; up to 10 can be chosen.
   other stores) and shows the total and the saving.
 - **Same-size pictures:** every product picture fills the same square, whatever size the store sent.
 - **Unit prices** per L / kg / piece, and per 100 ml / 100 g for small packs.
+
+## Signature features
+- **⚡ Today in 30 seconds** (the home page): price drops in the last 24 h, lowest prices in 90 days, fake discounts
+  caught, sales due within 3 days, extra codes, real deals now, and the biggest saving: each one tap away (`/api/brief`).
+- **🕵️ Fake-discount detector:** a "discount" whose price hasn't moved in 14+ days, or a "was" price more than 70 %
+  above that this site has never seen charged (Kenzz showed a washer at "80 % off" a 102,548 EGP market price). Neither
+  counts as a deal; both are flagged on the card and listed together under "Fake discounts caught".
+- **⏳ Sale rhythm** (`deals/forecast.py`): from each product's own history, how often it goes on sale, how far, how
+  long a sale lasts, and when the next is due. The advice turns to **Wait** when a sale at least 7 % cheaper is due
+  within 10 days. Shown only after two sales have actually been seen.
+- **🎟️ Codes the stores show** (Kenzz) appear on the cards ("KBF26: 543") and on /coupons, counted and ranked.
 
 ## How deals are decided (`deals/finder.py`)
 A product is a deal when it is in stock and at least N% (5 by default) under either:
@@ -221,7 +246,14 @@ release poller ignores it, because it only deploys apps built from the vorath re
 
 Settings, all optional, in Coolify › deals › Environment variables (redeploy after a change):
 `TALABAT_DELAY`, `AMAZON_DELAY`, `BREADFAST_DELAY`, `HOT_EVERY`, `DEALS_ADMIN_TOKEN` (turns on
-`/admin`), and the three `AMAZON_*` API keys.
+`/admin`), and the three `AMAZON_*` API keys. Also:
+- `PUBLIC_URL` the site's address, used in shared links and Telegram posts (`https://deals.vorath.cloud`).
+- `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`: post the big fresh deals to a Telegram channel, like 3rrood's.
+  Make a bot with @BotFather, add it to the channel as an admin, and use the channel's `@name`.
+  `TELEGRAM_MIN_PCT` (40) and `TELEGRAM_PER_HOUR` (10) tune it; a product is posted again only at a lower price.
+- `CONTACT_EMAIL` and `TELEGRAM_CHANNEL_URL`: shown on /contact (affiliate programs look for a way to reach you).
+- `DREAM_DELAY`, `KENZZ_DELAY`: seconds between requests to Dream 2000 and Kenzz (3).
+- `AMAZON_TAG`: your Amazon Associates tag, added to every Amazon link (`?tag=…`), as 3rrood does.
 
 Day to day: merge into the default branch and it's live within ~10 minutes (log: `/root/vorath/deals/log`). The
 container's logs are in Coolify. The data is in the `deals-data` volume.

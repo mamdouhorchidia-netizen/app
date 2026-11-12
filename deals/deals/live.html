@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Live Deals</title>
-<meta name="description" content="Live prices and real deals from talabat mart, Amazon.eg and Breadfast.">
+<meta name="description" content="عروض وأسعار لحظة بلحظة من طلبات مارت وأمازون مصر وجوميا وبريدفاست">
 <meta name="theme-color" content="#d6402b">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -14,7 +14,7 @@
   --bg: #f6f5f2; --panel: #ffffff; --ink: #1b1a17; --muted: #6d6a63; --faint: #a6a29a; --line: #e4e1da;
   --accent: #d6402b; --accent-ink: #ffffff; --good: #1f7a4d; --good-bg: #e3f3ea; --warn: #9a6a00; --warn-bg: #fbf0d4;
   --chip: #efede8; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04); --drop: #1f7a4d;
-  --talabat: #ff5a00; --amazon_eg: #232f3e; --breadfast: #a80080; --jumia: #f68b1e; --radius: 14px;
+  --talabat: #ff5a00; --amazon_eg: #232f3e; --breadfast: #a80080; --jumia: #f68b1e; --dream2000: #0b4ea2; --kenzz: #7b2cbf; --radius: 14px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -45,24 +45,35 @@ h1 { font-size: 19px; margin: 0; letter-spacing: -.01em; white-space: nowrap; di
 @keyframes pulse { 50% { opacity: .25; } }
 .search { flex: 1; min-width: 0; position: relative; }
 .search input { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  padding: 9px 12px 9px 34px; font-size: 15px; }
-.search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--faint); }
+  padding-block: 9px; padding-inline: 34px 12px; font-size: 15px; }
+.search svg { position: absolute; inset-inline-start: 11px; top: 50%; transform: translateY(-50%); color: var(--faint); }
 .iconbtn { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; height: 40px; min-width: 40px;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; cursor: pointer; flex: none; }
 .iconbtn .n { background: var(--accent); color: var(--accent-ink); border-radius: 999px; font-size: 11px; padding: 0 6px; font-weight: 700; }
 .status { color: var(--muted); font-size: 12.5px; padding: 0 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ticker { overflow: hidden; border-top: 1px solid var(--line); height: 30px; position: relative; font-size: 13px; }
-.ticker-track { display: inline-flex; gap: 28px; white-space: nowrap; padding-left: 100%; line-height: 30px;
+.ticker-track { display: inline-flex; gap: 28px; white-space: nowrap; padding-left: 100%; line-height: 30px; direction: ltr;
   animation: scroll linear infinite; }
 .ticker:hover .ticker-track { animation-play-state: paused; }
 @keyframes scroll { to { transform: translateX(-100%); } }
 .tick { cursor: pointer; color: var(--muted); }
+[dir=rtl] .tick { direction: rtl; unicode-bidi: isolate; }
+.slider { direction: ltr; }
+.badge, .score { direction: ltr; unicode-bidi: isolate; }
+.dlg-head { padding-inline-end: 40px; }
+.unit { direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
+svg.chart { direction: ltr; }
+[dir=rtl] body { font-family: system-ui, "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif; }
+.nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 0 0 8px; font-size: 13.5px; }
+.nav a { color: var(--muted); text-decoration: none; padding: 5px 11px; border-radius: 999px; white-space: nowrap; border: 1px solid transparent; }
+.nav a:hover { color: var(--ink); border-color: var(--line); }
+.nav a.on { background: var(--chip); color: var(--ink); font-weight: 650; }
 .tick b { color: var(--ink); font-weight: 600; }
 .tick .down { color: var(--drop); font-weight: 600; } .tick .up { color: var(--accent); font-weight: 600; }
 
 /* layout */
 .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 20px; padding-top: 16px; padding-bottom: 60px; }
-aside { position: sticky; top: 130px; align-self: start; max-height: calc(100vh - 140px); overflow: auto; padding-right: 4px; }
+aside { position: sticky; top: 130px; align-self: start; max-height: calc(100vh - 140px); overflow: auto; padding-inline-end: 4px; }
 .fgroup { padding: 12px 0; border-bottom: 1px solid var(--line); }
 .fgroup:first-child { padding-top: 0; }
 .fgroup h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; font-weight: 650; }
@@ -73,7 +84,7 @@ aside { position: sticky; top: 130px; align-self: start; max-height: calc(100vh 
 .opt { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 7px; cursor: pointer; font-size: 14px; }
 .opt:hover { background: var(--chip); }
 .opt input { accent-color: var(--accent); margin: 0; width: 16px; height: 16px; }
-.opt .c { margin-left: auto; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.opt .c { margin-inline-start: auto; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
 .opt .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .range label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
@@ -110,13 +121,13 @@ aside { position: sticky; top: 130px; align-self: start; max-height: calc(100vh 
 /* every picture fills the same square, whatever size the store sent: small ones grow, big ones shrink */
 .pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 14% 12% 18%; box-sizing: border-box; }
 .pic .ph { font-size: 34px; font-weight: 700; color: #d9d5cc; }
-.badge { position: absolute; top: 8px; left: 8px; color: #fff; font-weight: 750; font-size: 13px; padding: 3px 8px; border-radius: 7px; background: #d6402b; letter-spacing: .01em; }
+.badge { position: absolute; top: 8px; inset-inline-start: 8px; color: #fff; font-weight: 750; font-size: 13px; padding: 3px 8px; border-radius: 7px; background: #d6402b; letter-spacing: .01em; }
 .badge.drop { background: #1f7a4d; }
-.score { position: absolute; top: 6px; right: 6px; width: 38px; height: 38px; }
+.score { position: absolute; top: 6px; inset-inline-end: 6px; width: 38px; height: 38px; }
 .score text { font-size: 12px; font-weight: 750; fill: #1b1a17; }
 .why .score { position: static; flex: none; width: 52px; height: 52px; }
-.store { position: absolute; bottom: 8px; left: 8px; color: #fff; font-size: 11px; font-weight: 650; padding: 2px 7px; border-radius: 5px; }
-.watch { position: absolute; bottom: 6px; right: 6px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(255,255,255,.92);
+.store { position: absolute; bottom: 8px; inset-inline-start: 8px; color: #fff; font-size: 11px; font-weight: 650; padding: 2px 7px; border-radius: 5px; }
+.watch { position: absolute; bottom: 6px; inset-inline-end: 6px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(255,255,255,.92);
   display: grid; place-items: center; cursor: pointer; color: #a6a29a; box-shadow: 0 1px 3px rgba(0,0,0,.15); font-size: 16px; }
 .watch[aria-pressed="true"] { color: #e0a100; }
 .body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
@@ -124,7 +135,7 @@ aside { position: sticky; top: 130px; align-self: start; max-height: calc(100vh 
 .priceline { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: auto; }
 .now { font-size: 19px; font-weight: 750; letter-spacing: -.01em; white-space: nowrap; }
 .now small { font-size: 12px; font-weight: 600; color: var(--muted); }
-.was { color: var(--muted); text-decoration: line-through; font-size: 13px; margin-left: 4px; }
+.was { color: var(--muted); text-decoration: line-through; font-size: 13px; margin-inline-start: 4px; }
 .spark { width: 72px; height: 26px; flex: none; }
 .meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
 .tags { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -148,10 +159,10 @@ dialog::backdrop { background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
 .dlg-head .img { width: 110px; height: 110px; background: #fff; border-radius: 12px; display: grid; place-items: center; border: 1px solid var(--line); }
 .dlg-head img { max-width: 90%; max-height: 90%; }
 .dlg h2 { font-size: 17px; margin: 0 30px 6px 0; line-height: 1.3; }
-.x { position: absolute; top: 12px; right: 14px; background: var(--chip); border: 0; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; color: var(--muted); }
+.x { position: absolute; top: 12px; inset-inline-end: 14px; background: var(--chip); border: 0; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; color: var(--muted); }
 .bigprice { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
 .why { margin: 14px 0; padding: 12px 14px; background: var(--chip); border-radius: 12px; display: flex; gap: 14px; align-items: center; }
-.why ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.why ul { margin: 0; padding-inline-start: 18px; font-size: 14px; }
 .chart { width: 100%; height: 200px; display: block; touch-action: pan-y; }
 .chart .ln { fill: none; stroke: var(--accent); stroke-width: 2.2; vector-effect: non-scaling-stroke; }
 .chart .ar { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
@@ -162,7 +173,7 @@ dialog::backdrop { background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
 .tip { font-size: 13px; color: var(--muted); min-height: 18px; }
 table.cmp { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 6px; }
 table.cmp td { padding: 8px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
-table.cmp td:last-child { text-align: right; }
+table.cmp td:last-child { text-align: end; }
 table.cmp .best { color: var(--good); font-weight: 700; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 9px 14px; cursor: pointer; text-decoration: none; font-size: 14px; display: inline-flex; gap: 6px; align-items: center; }
@@ -175,14 +186,28 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
 .toast { background: var(--ink); color: var(--bg); padding: 11px 14px; border-radius: 12px; font-size: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.25); cursor: pointer; animation: up .25s ease-out; }
 @keyframes up { from { transform: translateY(10px); opacity: 0; } }
 
-.search .mic { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; font-size: 17px; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+.search .mic { position: absolute; inset-inline-end: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; font-size: 17px; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
 .search .mic.on { background: color-mix(in srgb, var(--accent) 18%, transparent); animation: pulse 1s infinite; }
-.search:has(.mic:not([hidden])) input { padding-right: 38px; }
+.search:has(.mic:not([hidden])) input { padding-inline-end: 38px; }
 .interp { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 0 6px; font-size: 12.5px; color: var(--muted); align-items: center; }
 .interp b { color: var(--ink); font-weight: 600; background: var(--chip); padding: 2px 8px; border-radius: 999px; }
 .tag.vd-good { background: var(--good-bg); color: var(--good); font-weight: 700; }
 .tag.vd-warn { background: var(--warn-bg); color: var(--warn); font-weight: 700; }
 .tag.vd-muted { font-weight: 600; }
+.foot { color: var(--faint); font-size: 12.5px; text-align: center; padding: 30px 0 10px; line-height: 1.8; }
+.brief { margin: 14px 0 4px; padding: 16px; border-radius: var(--radius); color: #fff;
+  background: linear-gradient(135deg, #2a1a17 0%, #5b1f14 55%, var(--accent) 140%); box-shadow: var(--shadow); }
+.brief h2 { margin: 0 0 2px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.brief .sub { opacity: .75; font-size: 13px; margin-bottom: 12px; }
+.brief .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.brief .st { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 10px 12px;
+  text-align: start; color: #fff; cursor: pointer; font: inherit; }
+.brief .st:hover { background: rgba(255,255,255,.18); }
+.brief .st b { display: block; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.brief .st span { font-size: 12.5px; opacity: .85; }
+.brief .best { margin-top: 10px; font-size: 13.5px; opacity: .92; cursor: pointer; }
+.brief .best b { color: #ffd2c8; }
+.rhythm { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line); font-size: 14px; }
 .verdict { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 12px; margin: 14px 0 0; }
 .verdict.good { background: var(--good-bg); color: var(--good); } .verdict.warn { background: var(--warn-bg); color: var(--warn); } .verdict.muted { background: var(--chip); }
 .verdict b { font-size: 18px; } .verdict span { color: var(--ink); font-size: 14px; }
@@ -205,7 +230,7 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
   h1 .t { display: none; }
   /* phones: title and buttons on the first row, the search on its own full-width row */
   .top { flex-wrap: wrap; row-gap: 8px; gap: 8px; }
-  .top h1 { margin-right: auto; }
+  .top h1 { margin-inline-end: auto; }
   .top .search { order: 10; flex: 1 0 100%; }
   .iconbtn { height: 38px; min-width: 38px; padding: 0 9px; }
   .hide-sm { display: none; }
@@ -218,6 +243,7 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
 .sheet-done { display: none; }
 @media (prefers-reduced-motion: reduce) { .pulse, .card.fresh, .ticker-track, .skel { animation: none; } }
 </style>
+<script src="/i18n.js"></script>
 </head>
 <body>
 <header>
@@ -227,12 +253,14 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
       <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input type="search" id="q" placeholder="Try: milk under 50 at talabat · حفاضات أرخص للكيلو" aria-label="Search" autocomplete="off">
         <button type="button" class="mic" id="mic" title="Search by voice" aria-label="Search by voice" hidden>🎤</button></label>
+      <button class="iconbtn" id="langBtn" title="العربية" aria-label="Language">ع</button>
       <button class="iconbtn" id="watchBtn" title="Watchlist" aria-label="Watchlist">★ <span class="n" id="watchN" hidden>0</span></button>
       <button class="iconbtn" id="basketBtn" title="Basket" aria-label="Basket">🧺 <span class="n" id="basketN" hidden>0</span></button>
       <button class="iconbtn" id="alertsBtn" title="Price-drop alerts" aria-label="Price-drop alerts">🔔</button>
       <button class="iconbtn" id="installBtn" title="Install the app" aria-label="Install the app" hidden>⬇︎ <span class="hide-sm">Install</span></button>
       <button class="iconbtn filterbtn" id="filterBtn" aria-label="Filters">Filters <span class="n" id="filterN" hidden>0</span></button>
     </div>
+    <nav class="nav" id="nav"><a href="/">Home</a><a href="/?deals=1&amp;sort=newest&amp;status=new">Just dropped</a><a href="/cats">Categories</a><a href="/stores">Stores</a><a href="/coupons">🎟️ Coupons</a><a href="/?recent=1">Recently viewed</a></nav>
     <div class="interp" id="interp" hidden></div>
     <div class="status" id="status">connecting…</div>
   </div>
@@ -261,6 +289,9 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
       <label class="opt"><input type="checkbox" value="label"> Store event deals</label>
       <label class="opt"><input type="checkbox" value="back"> Back in stock</label>
       <label class="opt"><input type="checkbox" value="compare"> Sold in other stores too</label>
+      <label class="opt" title="A 'discount' whose price never moves: probably the normal price"><input type="checkbox" value="fake"> 🕵️ Fake discounts caught</label>
+      <label class="opt"><input type="checkbox" value="promo"> 🎟️ Extra off with a code</label>
+      <label class="opt"><input type="checkbox" value="soon"> ⏳ Sale due within 3 days</label>
       <label class="opt"><input type="checkbox" id="fBest"> Cheapest across stores</label>
       <label class="opt"><input type="checkbox" id="fWatch"> My watchlist</label>
     </div></div>
@@ -273,6 +304,7 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
   </aside>
 
   <main>
+    <section class="brief" id="brief" hidden></section>
     <div class="bar">
       <span class="count" id="count">…</span>
       <div class="chips" id="activeChips"></div>
@@ -292,6 +324,8 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
     </div>
     <div class="grid" id="grid"></div>
     <div id="more"></div>
+    <footer class="foot"><div><a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/contact">Contact</a></div>
+      <div>Some links earn us a small commission from the store, at no extra cost to you. As an Amazon Associate we earn from qualifying purchases.</div></footer>
   </main>
 </div>
 
@@ -310,11 +344,13 @@ const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? 
                 set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
 const isAndroid = /Android/i.test(navigator.userAgent), isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const appHref = d => (isAndroid ? d.links?.android : isIOS ? d.links?.ios : d.links?.web) || d.links?.web || d.url || "#";
-const appLabel = { talabat: "talabat", amazon_eg: "Amazon", breadfast: "Breadfast", jumia: "Jumia" };
-const LABELS = { talabat: "talabat mart", amazon_eg: "Amazon.eg", breadfast: "Breadfast", jumia: "Jumia" };
+const appLabel = { talabat: "talabat", amazon_eg: "Amazon", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz" };
+const LABELS = { talabat: "talabat mart", amazon_eg: "Amazon.eg", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz" };
 
 // ---------- state, mirrored in the address so any view can be shared ----------
-const DEFAULTS = { deals: "1", stores: [], hubs: [], kind: "", min: 0, max: 90, stock: "in", status: [], best: false, watch: false,
+document.querySelectorAll("#nav a").forEach(a => { const u = new URL(a.href);
+  if (u.pathname === location.pathname && u.search === location.search) a.classList.add("on"); });
+const DEFAULTS = { deals: "1", stores: [], hubs: [], kind: "", min: 0, max: 90, stock: "in", status: [], best: false, watch: false, recent: false,
                    category: "", q: "", pmin: "", pmax: "", sort: "score" };
 let F = { ...DEFAULTS };
 function readURL() {
@@ -323,7 +359,7 @@ function readURL() {
   for (const k of ["deals", "kind", "stock", "category", "q", "pmin", "pmax", "sort"]) if (p.has(k)) F[k] = p.get(k);
   for (const k of ["min", "max"]) if (p.has(k)) F[k] = +p.get(k);
   for (const k of ["stores", "status", "hubs"]) if (p.get(k)) F[k] = p.get(k).split(",");
-  F.best = p.get("best") === "1"; F.watch = p.get("watch") === "1";
+  F.best = p.get("best") === "1"; F.watch = p.get("watch") === "1"; F.recent = p.get("recent") === "1";
 }
 function writeURL() {
   const p = new URLSearchParams();
@@ -418,10 +454,12 @@ function activeChips() {
   if (F.kind) chips.push([F.kind === "platform" ? "Platform discount" : "Price drop", () => F.kind = ""]);
   if (F.min || F.max < 90) chips.push([$("pctLabel").textContent + " off", () => { F.min = 0; F.max = 90; }]);
   if (F.stock !== "in") chips.push([F.stock === "out" ? "Out of stock" : "Any availability", () => F.stock = "in"]);
-  const names = { real: "Real deals", new: "Changed 24 h", lowest: "Lowest 90 d", label: "Event deals", back: "Back in stock", compare: "In other stores" };
+  const names = { real: "Real deals", new: "Changed 24 h", lowest: "Lowest 90 d", label: "Event deals", back: "Back in stock", compare: "In other stores",
+                  fake: "🕵️ Fake discounts caught", promo: "🎟️ Extra off with a code", soon: "⏳ Sale due within 3 days" };
   F.status.forEach(s => chips.push([names[s] || s, () => F.status = F.status.filter(x => x !== s)]));
   if (F.best) chips.push(["Cheapest across stores", () => F.best = false]);
   if (F.watch) chips.push(["Watchlist", () => F.watch = false]);
+  if (F.recent) chips.push(["Recently viewed", () => F.recent = false]);
   if (F.category) chips.push([F.category, () => F.category = ""]);
   if (F.q) chips.push([`“${F.q}”`, () => F.q = ""]);
   if (F.pmin || F.pmax) chips.push([`${F.pmin || 0}–${F.pmax || "∞"} EGP`, () => { F.pmin = ""; F.pmax = ""; }]);
@@ -463,6 +501,9 @@ function tagsFor(d) {
   else if (d.matches.length) { const m = d.matches.find(x => x.in_stock && x.price < d.price);
     if (m) t.push(`<span class="tag warn">${fmt(m.price)} at ${esc(LABELS[m.store] || m.store)}</span>`); }
   if (d.flags.includes("steady")) t.push('<span class="tag warn">discount never moves</span>');
+  if (d.flags.includes("inflated")) t.push('<span class="tag warn">⚠️ "was" price looks inflated</span>');
+  if (d.promo_code) t.push(`<span class="tag hot" title="Code">🎟️ ${esc(d.promo_code)}: ${fmt(d.promo_price)}</span>`);
+  if (d.rhythm && d.rhythm.next_in_days != null && d.rhythm.next_in_days <= 3) t.push(`<span class="tag warn">⏳ sale due soon</span>`);
   if (!d.in_stock) t.push('<span class="tag">out of stock</span>');
   return t.join("");
 }
@@ -479,7 +520,7 @@ function card(d, fresh) {
     <div class="body"><div class="name" dir="auto">${esc(d.name)}</div>
       <div class="tags">${tagsFor(d)}</div>
       <div class="priceline"><div><span class="now">${fmt(d.price)} <small>EGP</small></span>${was}</div>${sparkSVG(d.spark)}</div>
-      <div class="meta">${d.hub_name ? `<span title="talabat hub">📍 ${esc(d.hub_name)}</span>` : ""}${d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : ""}${d.saving > 0 ? `<span>save ${fmt(d.saving)}</span>` : ""}${unit ? `<span>${unit}</span>` : ""}</div>
+      <div class="meta">${d.hub_name ? `<span title="talabat hub">📍 ${esc(d.hub_name)}</span>` : ""}${d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : ""}${d.saving > 0 ? `<span>save ${fmt(d.saving)}</span>` : ""}${unit ? `<span class="unit">${unit}</span>` : ""}</div>
       <div class="cta"><a href="${esc(appHref(d))}" target="_blank" rel="noopener" data-open>Open in ${esc(appLabel[d.store] || "store")} ↗</a></div>
     </div></article>`;
 }
@@ -507,6 +548,7 @@ function params(offset, limit) {
   if (F.pmin !== "") p.set("pmin", F.pmin);
   if (F.pmax !== "") p.set("pmax", F.pmax);
   if (F.watch) { p.set("ids", Object.keys(watch).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); }
+  else if (F.recent) { p.set("ids", store.get("recent", []).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); p.set("sort", "newest"); }
   return p;
 }
 async function load({ append = false, quiet = false } = {}) {
@@ -536,7 +578,7 @@ async function load({ append = false, quiet = false } = {}) {
   loading = false;
   clearTimeout(timer); timer = setTimeout(() => load({ quiet: true }), document.hidden ? 60000 : 10000);
 }
-function apply() { writeURL(); activeChips(); load(); }
+function apply() { writeURL(); activeChips(); load(); loadBrief(); }
 
 function renderStatus() {
   const parts = lastStatus.map(s => {
@@ -571,6 +613,7 @@ async function showProduct(id) {
   try { r = await (await fetch("/api/product/" + id)).json(); } catch { return; }
   if (r.error) return;
   const p = r.product, d = r.item && r.item.id ? r.item : null, h = r.history;
+  store.set("recent", [id, ...store.get("recent", []).filter(x => x !== id)].slice(0, 60));
   const u = new URLSearchParams(location.search); u.set("p", id); history.replaceState(null, "", "?" + u);
   const w = watch[id];
   const rows = d ? [d, ...(r.matches || [])].sort((a, b) => a.price - b.price) : [];
@@ -581,9 +624,11 @@ async function showProduct(id) {
         <div class="meta"><span style="color:var(--${esc(p.store)});font-weight:650">${esc(LABELS[p.store] || p.store)}</span><span>${esc(p.category || "")}</span><span>tracked ${ago(p.first_seen).replace(" ago", "")}</span></div>
         <div style="margin-top:8px"><span class="bigprice">${fmt(p.price)} EGP</span>
           ${d && d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : ""}
-          ${d && d.unit_text ? `<span class="meta" style="display:inline;margin-left:8px">${esc(d.unit_text)}</span>` : ""}</div>
+          ${d && d.unit_text ? `<span class="meta unit" style="display:inline;margin-inline-start:8px">${esc(d.unit_text)}</span>` : ""}</div>
         <div class="tags" style="margin-top:6px">${d ? tagsFor(d) : ""}</div></div></div>
     ${d && d.verdict ? `<div class="verdict ${d.verdict.tone}"><b>${esc(d.verdict.label)}</b><span>${esc(d.verdict.why)}</span></div>` : ""}
+    ${d && d.rhythm ? `<div class="rhythm">⏳ <b>Sale rhythm</b><br>${esc(d.rhythm.text)}</div>` : ""}
+    ${d && d.promo_code ? `<div class="rhythm">🎟️ With the code <b data-noi18n>${esc(d.promo_code)}</b> at checkout: ${fmt(d.promo_price)} EGP</div>` : ""}
     ${d && d.why && d.why.length ? `<div class="why">${scoreSVG(d.score)}<ul>${d.why.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
     <h4>Price history</h4>
     <svg class="chart" id="chart" viewBox="0 0 640 200" preserveAspectRatio="none" role="img" aria-label="Price history"></svg>
@@ -596,11 +641,12 @@ async function showProduct(id) {
       <input id="target" type="number" inputmode="decimal" min="0" step="0.5" placeholder="${Math.floor(p.price * 0.9)}" value="${w && w.target ? w.target : ""}"> EGP
       <button class="btn" id="setTarget">${w ? "Update alert" : "Watch"}</button></div>
     <div class="row">
-      <a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener">Open in ${esc(appLabel[p.store] || "store")} app ↗</a>
+      <a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener">Open in ${esc(appLabel[p.store] || "store")}${p.store === "talabat" ? "" : " app"} ↗</a>
       ${d && (isAndroid ? d.links.browser : d.links.web) && (isAndroid ? d.links.browser : d.links.web) !== link
         ? `<a class="btn" href="${esc(isAndroid ? d.links.browser : d.links.web)}" target="_blank" rel="noopener">Open in browser</a>` : ""}
       <button class="btn" id="toBasket">🧺 ${basket[id] ? "In basket (" + basket[id] + ")" : "Add to basket"}</button>
       <button class="btn" id="share">Share</button>
+      <a class="btn" href="/p/${id}">Product page</a>
     </div>`;
   if (!$("dlg").open) $("dlg").showModal();
   drawChart(h, p.price);
@@ -615,7 +661,7 @@ async function showProduct(id) {
   $("toBasket").onclick = () => { basket[id] = (basket[id] || 0) + 1; saveBasket(); $("toBasket").textContent = `🧺 In basket (${basket[id]})`;
     toast("Added to your basket. 🧺 shows where it's cheapest."); };
   $("share").onclick = async () => {
-    const url = location.origin + "/?p=" + id, text = `${p.name}: ${fmt(p.price)} EGP`;
+    const url = location.origin + "/p/" + id, text = `${p.name}: ${fmt(p.price)} EGP`;
     try { if (navigator.share) await navigator.share({ title: text, text, url });
           else { await navigator.clipboard.writeText(url); toast("Link copied."); } } catch {}
   };
@@ -888,7 +934,27 @@ async function showBasket() {
 }
 $("basketBtn").onclick = showBasket;
 
-readURL(); syncControls(); saveWatch(); saveBasket(); activeChips(); showUnderstood(); load(); loadTicker();
+// ---------- today in 30 seconds (the home page, before any filter) ----------
+const isHome = () => !location.search || location.search === "?";
+async function loadBrief() {
+  if (!isHome()) { $("brief").hidden = true; return; }
+  let b; try { b = await (await fetch("/api/brief")).json(); } catch { return; }
+  if (!b.deals) return;
+  const st = (n, label, act) => `<button class="st" data-act="${act}"><b>${n.toLocaleString()}</b><span>${label}</span></button>`;
+  const best = b.biggest_saving;
+  $("brief").innerHTML = `<h2>⚡ Today in 30 seconds</h2><div class="sub">What the stores changed while you weren't looking</div>
+    <div class="stats">${st(b.dropped_24h, "price drops in 24 h", "new")}${b.record_lows ? st(b.record_lows, "lowest price in 90 days", "lowest") : ""}
+      ${b.fake ? st(b.fake, "fake discounts caught", "fake") : ""}${b.soon ? st(b.soon, "sales due within 3 days", "soon") : ""}
+      ${b.promo ? st(b.promo, "extra off with a code", "promo") : ""}${st(b.deals, "real deals right now", "real")}</div>
+    ${best ? `<div class="best" data-id="${best.id}">💰 Biggest saving now: <b dir="auto">${esc(best.name.slice(0, 60))}</b> · save ${fmt(best.saving)} EGP</div>` : ""}`;
+  $("brief").hidden = false;
+  $("brief").querySelectorAll(".st").forEach(x => x.onclick = () => {
+    F.status = [x.dataset.act]; if (x.dataset.act === "soon") F.deals = "0";
+    F.sort = x.dataset.act === "new" ? "newest" : "score"; syncControls(); apply(); $("brief").hidden = true; });
+  const bs = $("brief").querySelector(".best"); if (bs) bs.onclick = () => showProduct(+bs.dataset.id);
+}
+readURL(); syncControls(); saveWatch(); saveBasket(); activeChips(); showUnderstood(); load(); loadTicker(); loadBrief();
+setInterval(loadBrief, 60000);
 setInterval(loadTicker, 15000); setInterval(checkWatch, 60000); checkWatch();
 const pid = new URLSearchParams(location.search).get("p"); if (pid) showProduct(+pid);
 </script>

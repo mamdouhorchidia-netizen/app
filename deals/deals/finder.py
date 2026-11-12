@@ -17,7 +17,7 @@ import math
 import time
 from collections import Counter, defaultdict
 
-from . import applinks, matching
+from . import applinks, forecast, matching
 from .units import unit_price, unit_text
 
 DAY = 86400
@@ -97,6 +97,9 @@ def _score(d: dict) -> tuple[int, list[str]]:
     if d.get("cheapest") and d.get("matches"):
         s += 5
         why.append("cheapest of the stores that sell it")
+    if "inflated" in d["flags"]:
+        s -= 35
+        why.append(f"the 'was' price ({d['original_price']:g} EGP) has never been charged here: likely inflated")
     if "steady" in d["flags"]:
         s -= 25
         why.append(f"same 'discounted' price for {d['days_at_price']:g} days: the old price may never be charged")
@@ -144,6 +147,9 @@ def catalog(con, now: int = None) -> list[dict]:
             flags.append("back")
         if extra.get("deal_label"):
             flags.append("label")
+        # a "was" price more than 70 % above, never seen charged here: an inflated reference, not a discount
+        if store_pct >= 70 and orig and max((r["price"] for r in rows if r["in_stock"]), default=0) < orig * 0.9:
+            flags.append("inflated")
         up = unit_price(price, p["name"])
         items.append({
             "id": p["id"], "store": p["store"], "sku": p["sku"], "name": p["name"], "brand": p["brand"],
@@ -160,6 +166,8 @@ def catalog(con, now: int = None) -> list[dict]:
             "unit_text": unit_text(price, p["name"]),
             "spark": _spark(rows, now), "links": applinks.links(p["store"], p["url"], extra),
             "hub": extra.get("hub"), "hub_name": extra.get("hub_name"),
+            "promo_code": extra.get("promo_code"), "promo_price": extra.get("promo_price"),
+            "rhythm": forecast.rhythm(rows, now) if len(rows) >= 3 else None,
         })
 
     by_id = {it["id"]: it for it in items}
@@ -198,9 +206,16 @@ def verdict(d: dict) -> dict:
         return {"label": "Cheaper elsewhere", "tone": "warn", "why": f"{rival:g} EGP in another store."}
     if "steady" in d["flags"]:
         return {"label": "Fair price", "tone": "muted", "why": "The 'discount' never moves: it's the normal price."}
+    if "inflated" in d["flags"]:
+        return {"label": "Check the price", "tone": "warn",
+                "why": "The 'was' price looks inflated: compare with other stores before buying."}
     if "lowest" in d["flags"] or (d["discount_pct"] >= 25 and d["kind"]):
         return {"label": "Buy now", "tone": "good",
                 "why": "Lowest price in 90 days." if "lowest" in d["flags"] else f"{d['discount_pct']:g}% off."}
+    r = d.get("rhythm")
+    if r and not r["on_sale"] and r["next_in_days"] is not None and r["next_in_days"] <= 10 \
+            and r["typical_sale"] <= price * 0.93:
+        return {"label": "Wait", "tone": "warn", "why": r["text"]}
     if usual and price > usual * 1.05:
         return {"label": "Wait", "tone": "warn", "why": f"Usually {usual:g} EGP: it's above its normal price now."}
     if d["discount_pct"] >= 10:
@@ -257,12 +272,19 @@ def query(items: list[dict], deals_only: bool = True, stores: list[str] = None, 
             return False
         if best and not d["cheapest"]:
             return False
-        if "real" in status and "steady" in d["flags"]:
+        if "real" in status and ("steady" in d["flags"] or "inflated" in d["flags"]):
             return False
         for f in ("new", "lowest", "label", "back"):
             if f in status and f not in d["flags"]:
                 return False
         if "compare" in status and not d["matches"]:
+            return False
+        if "fake" in status and "steady" not in d["flags"] and "inflated" not in d["flags"]:  # the discounts that never move
+            return False
+        if "promo" in status and not d.get("promo_code"):
+            return False
+        if "soon" in status and not (d.get("rhythm") and d["rhythm"]["next_in_days"] is not None
+                                     and d["rhythm"]["next_in_days"] <= 3):
             return False
         if words:
             text = (d["name"] + " " + (d["brand"] or "") + " " + (d["category"] or "")).lower()
@@ -290,3 +312,25 @@ def find_deals(con, min_pct: float = 5, store: str = None, q: str = None, catego
     if category:
         items = [d for d in items if (d["category"] or "").startswith(category)]
     return query(items, min_pct=min_pct, stores=[store] if store else None, q=q, sort=sort, limit=limit)["items"]
+
+
+def brief(items: list[dict], now: int = None) -> dict:
+    """Today in 30 seconds: what moved, the record lows, the fake discounts caught, what's about to go on sale."""
+    now = int(now or time.time())
+    live = [d for d in items if d["in_stock"]]
+    deals = [d for d in live if d["kind"] and d["discount_pct"] > 0 and "steady" not in d["flags"]
+             and "inflated" not in d["flags"]]
+    dropped = [d for d in deals if "new" in d["flags"]]
+    lows = [d for d in deals if "lowest" in d["flags"]]
+    fake = [d for d in live if "steady" in d["flags"] or "inflated" in d["flags"]]
+    soon = [d for d in live if d.get("rhythm") and d["rhythm"]["next_in_days"] is not None
+            and d["rhythm"]["next_in_days"] <= 3]
+    promo = [d for d in live if d.get("promo_code")]
+    pick = lambda d: {k: d[k] for k in ("id", "name", "store", "price", "original_price", "usual_price", "image",
+                                          "discount_pct", "saving", "kind", "flags", "score", "since")}
+    best = max(deals, key=lambda d: d["saving"], default=None)
+    return {"deals": len(deals), "dropped_24h": len(dropped), "record_lows": len(lows), "fake": len(fake),
+            "soon": len(soon), "promo": len(promo),
+            "saving_today": round(sum(d["saving"] for d in dropped), 2),
+            "top": [pick(d) for d in sorted(dropped or deals, key=lambda d: (-d["score"], -d["discount_pct"]))[:10]],
+            "biggest_saving": pick(best) if best else None}
