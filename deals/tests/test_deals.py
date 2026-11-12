@@ -774,6 +774,23 @@ class Hubs(unittest.TestCase):
             self.assertEqual(known[776372]["name"], "El Obour Industrial Area")
             self.assertIn(known[776372]["aid"], {a["id"] for a in hub["areas"]})
 
+    def test_migration_survives_both_names(self):
+        # an old and a new version ran side by side: the same product exists as "SKU" and "619848:SKU"
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "d.sqlite3")
+            con = db.connect(path)
+            con.execute("INSERT INTO products (id, store, sku, name, first_seen, last_seen, price) VALUES"
+                        " (1, 'talabat', '619848:S6WENO', 'cola', 1, 5, 108), (2, 'talabat', 'S6WENO', 'cola', 3, 9, 100),"
+                        " (3, 'talabat', 'ONLYOLD', 'tea', 1, 1, 20)")
+            con.executemany("INSERT INTO prices (product_id, at, price, in_stock) VALUES (?,?,?,1)",
+                            [(1, 1, 108), (2, 3, 100), (3, 1, 20)])
+            con.commit(); con.close()
+            con = db.connect(path)  # must not crash
+            rows = con.execute("SELECT id, sku FROM products WHERE store='talabat' ORDER BY id").fetchall()
+            self.assertEqual([tuple(r) for r in rows], [(1, "619848:S6WENO"), (3, "619848:ONLYOLD")])
+            self.assertEqual([r["price"] for r in db.history(con, 1)], [108, 100])  # the old copy's history kept
+            con.close()
+
     def test_settings(self):
         from deals import settings
         with tempfile.TemporaryDirectory() as d:
