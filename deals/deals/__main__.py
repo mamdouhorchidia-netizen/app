@@ -1,16 +1,18 @@
 """python -m deals run | collect | serve | import-har FILE   (python -m deals -h for the options)"""
 
 import argparse
+import json
 import os
 import sys
 import threading
+import time
 import traceback
 
-from . import db, web
+from . import db, settings, web
 from .http import Blocked, Fetcher
 from .models import NotConfigured
 from .scheduler import StoreLoop
-from .stores import STORES, amazon_eg, breadfast, talabat
+from .stores import LABELS, STORES, amazon_eg, breadfast, talabat
 
 
 def collect_store(db_path: str, store: str, args) -> tuple[int, int]:
@@ -22,7 +24,8 @@ def collect_store(db_path: str, store: str, args) -> tuple[int, int]:
     try:
         mod = STORES[store]
         if store == "talabat":
-            gen = mod.collect(fetcher, area_id=args.area, max_pages=args.max_pages, categories=args.category)
+            gen = mod.collect(fetcher, hubs=settings.load(settings.path_for(db_path))["talabat_hubs"],
+                              max_pages=args.max_pages, categories=args.category)
         elif store == "amazon_eg":
             gen = mod.collect(fetcher, pages=args.amazon_pages, departments=args.amazon_department,
                               max_pages=args.max_pages)
@@ -73,18 +76,38 @@ def import_har(args):
 def live(args, stores):
     """Every store checked continuously on its own thread, and the page served."""
     def plans(store):
-        if store == "talabat":
-            return lambda f: talabat.plan(f, args.area, args.category)
+        if store == "talabat":  # the hubs chosen on /admin, read again whenever the settings change
+            return lambda f: talabat.plan(f, settings.load(settings_file)["talabat_hubs"], args.category)
         if store == "amazon_eg":
             return lambda f: amazon_eg.plan(f, args.amazon_department, args.amazon_pages)
         return lambda f: breadfast.plan(f, args.breadfast_requests)
 
+    settings_file = settings.path_for(args.db)
     delays = {"talabat": args.talabat_delay, "amazon_eg": args.amazon_delay, "breadfast": args.breadfast_delay}
     db.connect(args.db).close()
     for store in stores:
         loop = StoreLoop(store, plans(store), args.db, delay=delays[store], hot_every=args.hot_every,
-                         watch_file=_requests_file(args) if store == "breadfast" else None)
+                         watch_file=_requests_file(args) if store == "breadfast" else None,
+                         replan_file=settings_file if store == "talabat" else None)
         threading.Thread(target=loop.run_forever, name=store, daemon=True).start()
+    if "talabat" in stores:  # which hub serves which area: looked up slowly, once a week
+        def hubs_job():
+            path = os.path.join(os.path.dirname(os.path.abspath(args.db)), "talabat_hubs.json")
+            while True:
+                try:
+                    if os.path.exists(path) and time.time() - os.path.getmtime(path) > 7 * 86400:
+                        os.replace(path, path + ".old")  # a week old: look every area up again
+                    if not os.path.exists(path) or len(json.load(open(path, encoding="utf-8")).get("done") or []) < 1500:
+                        talabat.discover_hubs(Fetcher(delay=3), path)
+                except Exception as e:
+                    print(f"talabat hubs: {type(e).__name__}: {e}")
+                time.sleep(6 * 3600)
+        threading.Thread(target=hubs_job, name="talabat-hubs", daemon=True).start()
+    try:
+        from . import push
+        push.start(args.db, LABELS)  # price-drop notifications, checked every minute
+    except ImportError:
+        print("push notifications off: the cryptography package isn't installed")
     web.serve(args.db, args.host, args.port, args.breadfast_requests)
 
 
@@ -100,8 +123,6 @@ def main(argv=None):
     p.add_argument("har", nargs="?", help="import-har: the .har file exported from your capture tool")
     p.add_argument("--db", default=os.environ.get("DEALS_DB", "deals.sqlite3"))
     p.add_argument("--store", action="append", choices=sorted(STORES), help="default: all stores")
-    p.add_argument("--area", type=int, default=int(os.environ.get("TALABAT_AREA", 9838)),
-                   help="talabat area id (picks the talabat mart branch)")
     p.add_argument("--category", action="append", help="talabat: only these top-level categories")
     p.add_argument("--max-pages", type=int, help="collect: stop after this many pages (for trying it out)")
     p.add_argument("--amazon-department", action="append",

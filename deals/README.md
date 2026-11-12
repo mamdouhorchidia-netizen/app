@@ -14,7 +14,7 @@ python -m unittest discover -s tests     # tests, from saved pages; no network
 
 Useful options: `--area ID` (talabat area, which picks the branch), `--category Beverages` and
 `--max-pages 20` (to try it out on a small part), `--db PATH`, `--host 0.0.0.0 --port 80`. Each also reads
-an environment variable (`DEALS_DB`, `TALABAT_AREA`, `HOST`, `PORT`, …); the Dockerfile lists them.
+an environment variable (`DEALS_DB`, `HOST`, `PORT`, …); the Dockerfile lists them.
 
 ## How "live" works
 Each store is checked **continuously** on its own thread, one request at a time at its own pace:
@@ -115,6 +115,37 @@ Notes:
 - **Installs like an app** (manifest and icon), works on phones (filters become a bottom sheet), has a
   dark mode, and `/` jumps to search.
 
+## talabat hubs
+talabat mart is many small stores ("hubs"), each serving nearby areas, and **each stocks different products**:
+on one shelf only 3 of the Obour hub's 20 products were also in Maadi's. talabat's website always shows the
+Maadi Old hub, so the site follows the hubs chosen on **/admin › talabat mart hubs** (search by hub, area or
+city, e.g. *Obour*). Each hub is tracked separately, and its name shows on the cards and in a "talabat hub"
+filter. A hub that isn't listed can be added by pasting any talabat mart link from a browser where your
+address is set (`talabat.com/egypt/grocery/<hub>/…`).
+The list of hubs comes from talabat's own per-area pages (`/egypt/groceries/<area>/<slug>` names the hub
+serving it). A list is shipped with the app, and the server looks every area up again once a week, slowly
+(1 page every 3 s), saving `talabat_hubs.json` next to the database. Each hub adds about 15 minutes to a
+talabat sweep; up to 10 can be chosen.
+
+## Alerts, install and the smart parts
+- **Install:** Android Chrome shows **⬇︎ Install** (or ⋮ › Install app). On iPhone: Safari › Share ›
+  **Add to Home Screen**. The site has a manifest, icons and a service worker (`sw.js`).
+- **Price-drop alerts (🔔):** real Web Push, so they arrive with the site closed. Choose what to hear about:
+  your ★ watchlist (with target prices), and/or any drop of at least N %, optionally only some stores,
+  hubs, categories or words. At most one bundle every 5 minutes. Notifications buzz in their own pattern.
+  The custom **chime** plays while the site is open; browsers don't allow custom sounds on closed-site
+  notifications. iPhone needs the installed app (iOS 16.4+). The signing key is `vapid.json` next to the
+  database: keep it, or every device has to turn alerts on again.
+- **Plain-language and voice search:** "milk under 50 at talabat", "cheapest pepsi per liter",
+  "حفاضات أقل من ٣٠٠ من طلبات", "nescafe deals 30% off on amazon". What was understood shows under the box;
+  🎤 searches by voice (Arabic or English, from the phone's language).
+- **Buy now / Good price / Wait / Cheaper elsewhere:** a verdict on every product from its history and the
+  other stores, with the reason in the product view.
+- **Basket (🧺):** add products; it picks the cheapest store for each one (using the same product found in
+  other stores) and shows the total and the saving.
+- **Same-size pictures:** every product picture fills the same square, whatever size the store sent.
+- **Unit prices** per L / kg / piece, and per 100 ml / 100 g for small packs.
+
 ## How deals are decided (`deals/finder.py`)
 A product is a deal when it is in stock and at least N% (5 by default) under either:
 - the struck-through price the store shows, or
@@ -143,7 +174,10 @@ deals/
   applinks.py   links that open a product in its store's app
   units.py      pack sizes from names, for price per kg / L / piece
   matching.py   the same product in different stores
-  web.py        /, /api/deals (filters, sorts, counts), /api/changes, /api/product/ID, /api/status, /healthz
+  web.py        /, /api/deals (filters, sorts, counts), /api/changes, /api/product/ID, /api/status, /healthz,
+                /admin (hubs, Breadfast), /api/push/* (alerts), /sw.js, icons
+  push.py       Web Push: VAPID keys, RFC 8291 encryption, the minute-by-minute alert sender
+  settings.py   the owner's settings (talabat hubs), kept next to the database
   live.html     the page
 tests/          saved real talabat and amazon pages (best sellers and Today's Deals), breadfast captures,
                 deal rules, filters, matching, app links, scheduler, signing
@@ -185,7 +219,7 @@ release poller ignores it, because it only deploys apps built from the vorath re
    From the server console instead: `bash /root/vorath/deals-src/deals/deploy/import_breadfast.sh /root/capture.har`.
 
 Settings, all optional, in Coolify › deals › Environment variables (redeploy after a change):
-`TALABAT_AREA`, `TALABAT_DELAY`, `AMAZON_DELAY`, `BREADFAST_DELAY`, `HOT_EVERY`, `DEALS_ADMIN_TOKEN` (turns on
+`TALABAT_DELAY`, `AMAZON_DELAY`, `BREADFAST_DELAY`, `HOT_EVERY`, `DEALS_ADMIN_TOKEN` (turns on
 `/admin`), and the three `AMAZON_*` API keys.
 
 Day to day: merge into the default branch and it's live within ~10 minutes (log: `/root/vorath/deals/log`). The
