@@ -3,7 +3,7 @@
 #   port 8800   the page and its API; GET /healthz
 #
 #   Settings (Coolify environment, all optional):
-#     TALABAT_DELAY / AMAZON_DELAY / BREADFAST_DELAY   seconds between requests (1.5 / 8 / 5)
+#     TALABAT_DELAY / AMAZON_DELAY / BREADFAST_DELAY / JUMIA_DELAY   seconds between requests (1.5 / 8 / 5 / 3)
 #     HOT_EVERY         recheck a shelf whose prices moved in the last 30 min every N seconds (60)
 #     AMAZON_ACCESS_KEY / AMAZON_SECRET_KEY / AMAZON_PARTNER_TAG   use Amazon's API instead of its public pages
 #     CHROME_BIN        another Chrome/Chromium (default: the image's chromium)

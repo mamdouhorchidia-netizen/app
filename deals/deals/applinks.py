@@ -12,14 +12,15 @@ import re
 from urllib.parse import quote, urlsplit
 
 PACKAGES = {
-    "talabat": "com.talabat",
+    "talabat": "com.6alabat.cuisineApp",  # talabat's real Android app (its pages' al:android:package)
     "amazon_eg": "com.amazon.mShop.android.shopping",
     "breadfast": "com.breadfast",
+    "jumia": "com.jumia.android",
 }
-# Stores whose app can't open a product from its web address. On Android the talabat app claims every
-# talabat.com link and then shows "We can't load this page" for grocery products, so on Android these open
-# in Chrome explicitly (the page shows the exact item and has talabat's own "OPEN in app" button).
-WEB_FIRST = {"talabat"}
+# Stores whose app can't open a product from its web address, so Android opens their web page in Chrome.
+# None now: talabat's app is com.6alabat.cuisineApp (the earlier com.talabat was wrong), and its links point
+# at the hub the user follows, which its app can show.
+WEB_FIRST = set()
 CHROME = "com.android.chrome"
 STORE_PAGES = {
     "breadfast": ("https://play.google.com/store/apps/details?id=com.breadfast",

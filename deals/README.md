@@ -39,6 +39,7 @@ talabat and Amazon and your Breadfast account flagged within hours. The delays c
 |---|---|---|
 | talabat mart | talabat.com's public grocery pages. Each page carries its data as JSON (`__NEXT_DATA__`): price, original price, stock. robots.txt allows it. | Works. ~10,400 products; a full run is ~550 pages, about 15 minutes. |
 | Amazon.eg | **Today's Deals**, rendered in headless Chrome: Amazon's own deal price, list price, "% off" and event label. Plus the public **best-seller lists** at every level (department › list › sub-list…) in 17 departments (all but gift cards), 60 products per list. robots.txt allows both. With API keys set, the official Product Advertising API is used instead. | Works without keys. ~70 live deals per render, and a few thousand list pages at 3 s apart: a full sweep takes hours, while busy shelves are rechecked every minute. |
+| Jumia | Its public **Flash Sales** and main category pages (JSON in each page). Jumia's robots.txt allows bots that identify themselves with an owner address and stay under 200 requests a minute; this one sends 1 every 3 s (`JUMIA_DELAY`). Jumia sits behind Cloudflare: a "Just a moment…" check pauses it like Amazon's bot check. | Built; from this sandbox Cloudflare challenged it after a few pages, so whether it runs from the server shows on the site's status line. |
 | Breadfast | A **capture of the app's own traffic** from your phone, imported once and then refreshed automatically. | Ready for your first capture (steps below). |
 
 ### Amazon.eg without the API

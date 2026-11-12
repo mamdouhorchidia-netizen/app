@@ -5,7 +5,7 @@ import time
 import urllib.error
 import urllib.request
 
-USER_AGENT = "deals-tracker/0.1 (price comparison)"
+USER_AGENT = "deals-tracker/0.1 (+https://deals.vorath.cloud; price comparison)"  # who we are, as Jumia asks
 
 
 class Blocked(Exception):
