@@ -12,7 +12,7 @@ from . import db, settings, web
 from .http import Blocked, Fetcher
 from .models import NotConfigured
 from .scheduler import StoreLoop
-from .stores import LABELS, STORES, amazon_eg, breadfast, talabat
+from .stores import LABELS, STORES, amazon_eg, breadfast, jumia, talabat
 
 
 def collect_store(db_path: str, store: str, args) -> tuple[int, int]:
@@ -29,6 +29,8 @@ def collect_store(db_path: str, store: str, args) -> tuple[int, int]:
         elif store == "amazon_eg":
             gen = mod.collect(fetcher, pages=args.amazon_pages, departments=args.amazon_department,
                               max_pages=args.max_pages)
+        elif store == "jumia":
+            gen = mod.collect(fetcher, max_pages=args.max_pages)
         else:
             gen = mod.collect(fetcher, requests_file=args.breadfast_requests)
         for offer in gen:
@@ -80,10 +82,13 @@ def live(args, stores):
             return lambda f: talabat.plan(f, settings.load(settings_file)["talabat_hubs"], args.category)
         if store == "amazon_eg":
             return lambda f: amazon_eg.plan(f, args.amazon_department, args.amazon_pages)
+        if store == "jumia":
+            return lambda f: jumia.plan(f)
         return lambda f: breadfast.plan(f, args.breadfast_requests)
 
     settings_file = settings.path_for(args.db)
-    delays = {"talabat": args.talabat_delay, "amazon_eg": args.amazon_delay, "breadfast": args.breadfast_delay}
+    delays = {"talabat": args.talabat_delay, "amazon_eg": args.amazon_delay, "breadfast": args.breadfast_delay,
+              "jumia": float(os.environ.get("JUMIA_DELAY", 3))}
     db.connect(args.db).close()
     for store in stores:
         loop = StoreLoop(store, plans(store), args.db, delay=delays[store], hot_every=args.hot_every,

@@ -219,6 +219,44 @@ class AmazonTodaysDeals(unittest.TestCase):
         con.close()
 
 
+class Jumia(unittest.TestCase):
+    page = (FIX / "jumia_flash_sales.html").read_text()
+
+    def test_parse_real_page(self):
+        from deals.stores import jumia
+        offers = jumia.parse_page(self.page, "Flash Sales")
+        self.assertEqual(len(offers), 2)
+        o = offers[0]
+        self.assertEqual((o.sku, o.price, o.original_price), ("SO316HA240M0PNAFAMZ", 1789.0, 2100.0))
+        self.assertEqual(o.url, "https://www.jumia.com.eg/sokany-blender-2.5-liters-5000-watts-sk-666-135397672.html")
+        self.assertEqual(o.brand, "Sokany")
+        self.assertTrue(o.category.startswith("Home & Office / Home & Kitchen"))
+        self.assertEqual(o.extra, {"deal_label": "Flash sale", "stock_text": "3 items left"})
+        self.assertEqual(jumia.parse_page("<html>no data</html>"), [])
+
+    def test_paging_and_cloudflare(self):
+        from deals.stores import jumia
+        asked = []
+
+        class Fake(Fetcher):
+            def get(self, url, headers=None):
+                asked.append(url)
+                return 200, self_page if "page=3" not in url else "<html></html>"
+        self_page = self.page
+        offers = list(jumia.collect(Fake(delay=0), max_pages=6, log=lambda *_: None))
+        # page 2 repeats page 1, so Flash Sales stops there (Jumia repeats its last page) and Groceries is next
+        self.assertEqual(asked[:3], ["https://www.jumia.com.eg/flash-sales/", "https://www.jumia.com.eg/flash-sales/?page=2",
+                                     "https://www.jumia.com.eg/groceries/"])
+        self.assertNotIn("https://www.jumia.com.eg/flash-sales/?page=3", asked)
+        self.assertEqual(len(offers), 2)
+
+        class Challenge(Fetcher):
+            def get(self, url, headers=None):
+                return 403, "<title>Just a moment...</title>"
+        with self.assertRaises(Blocked):
+            list(jumia.collect(Challenge(delay=0), log=lambda *_: None))
+
+
 # Breadfast's real JSON layout is only known once you capture the app. These shapes are invented to
 # cover the common ways shop APIs write products.
 BF_LIST = {"data": {"category": {"name": "Dairy"}, "products": [
@@ -411,11 +449,13 @@ class AppLinks(unittest.TestCase):
         self.assertIn("S.browser_fallback_url=https%3A%2F%2Fwww.amazon.eg%2F-%2Fen%2Fdp%2FB0DC5F7P3N", l["android"])
         self.assertEqual(l["ios"], "https://www.amazon.eg/dp/B0DC5F7P3N")
         self.assertIn("package=com.android.chrome;", l["browser"])
-        # talabat: Chrome on Android (the talabat app can't open grocery items from links), the page elsewhere
+        # talabat: its real app (com.6alabat.cuisineApp), falling back to the page; Chrome as the backup
         t = links("talabat", "https://www.talabat.com/egypt/x/s/1?aid=9")
         self.assertTrue(t["android"].startswith("intent://www.talabat.com/egypt/x/s/1?aid=9#Intent;scheme=https;"
-                                                "package=com.android.chrome;"))
+                                                "package=com.6alabat.cuisineApp;"))
+        self.assertIn("package=com.android.chrome;", t["browser"])
         self.assertEqual((t["web"], t["ios"]), ("https://www.talabat.com/egypt/x/s/1?aid=9",) * 2)
+        self.assertIn("package=com.jumia.android;", links("jumia", "https://www.jumia.com.eg/x-1.html")["android"])
 
     def test_breadfast_uses_the_apps_own_link(self):
         from deals.applinks import links
@@ -460,7 +500,7 @@ class CatalogAndFilters(unittest.TestCase):
         self.assertIn("new", tea["flags"])
         self.assertIn("lowest", tea["flags"])
         self.assertEqual((tea["unit_price"], tea["unit"]), (160.0, "kg"))
-        self.assertIn("package=com.android.chrome;", tea["links"]["android"])
+        self.assertIn("package=com.6alabat.cuisineApp;", tea["links"]["android"])
         self.assertEqual(tea["links"]["web"], TEA_URL)
         self.assertTrue(len(tea["spark"]) >= 2)
         self.assertIn("20% under its usual 100 EGP", tea["why"])
