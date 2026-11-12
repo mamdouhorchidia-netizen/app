@@ -24,8 +24,8 @@ ERROR_PAUSE = 5 * 60
 
 class StoreLoop:
     def __init__(self, store: str, plan, db_path: str, delay: float, hot_every: float = 60,
-                 replan_every: float = 6 * 3600, watch_file: str = None, clock=time.time, sleep=time.sleep,
-                 log=print):
+                 replan_every: float = 6 * 3600, watch_file: str = None, replan_file: str = None,
+                 clock=time.time, sleep=time.sleep, log=print):
         self.store, self.plan, self.db_path = store, plan, db_path
         self.fetcher = Fetcher(delay=delay)
         self.hot_every, self.replan_every, self.watch_file = hot_every, replan_every, watch_file
@@ -38,9 +38,19 @@ class StoreLoop:
         self.cycle_start = 0.0
         self.cycle_secs = None
         self.pages = self.changes = 0
+        self.blocks = 0  # bot checks in a row
         self.last_change = 0.0
         self.watch_mtime = self._mtime()
+        self.replan_file = replan_file  # when this file changes (settings), the store's pages are listed afresh
+        self.replan_mtime = self._file_mtime(replan_file)
         self.con = None
+
+    @staticmethod
+    def _file_mtime(path):
+        try:
+            return os.path.getmtime(path) if path else None
+        except OSError:
+            return None
 
     def _mtime(self):
         try:
@@ -83,6 +93,11 @@ class StoreLoop:
             else:
                 self.sleep(min(self.paused_until - now, 30))
                 return
+        if self.replan_file:
+            m = self._file_mtime(self.replan_file)
+            if m != self.replan_mtime:  # e.g. other hubs chosen: drop the old pages, list the new ones
+                self.replan_mtime, self.tasks, self.planned_at, self.paused_until = m, {}, 0.0, 0.0
+                self.log(f"{self.store}: settings changed, listing pages again")
         if not self.tasks and self.planned_at and now - self.planned_at < 300:
             self.sleep(30)  # the store listed nothing a moment ago: don't ask again right away
             return
@@ -102,7 +117,9 @@ class StoreLoop:
         try:
             offers, follow = task.run()
         except Blocked as e:
-            self._pause(BLOCKED_PAUSE, str(e))
+            # repeated bot checks mean "slow down": 30 min, then 1 h, 2 h, 4 h at most; reset after a clean page
+            self._pause(min(BLOCKED_PAUSE * 2 ** self.blocks, 4 * 3600), str(e))
+            self.blocks += 1
             self._status()
             return
         except SessionExpired as e:  # wait for a new capture (or an hour)
@@ -117,6 +134,7 @@ class StoreLoop:
                 self.tasks.pop(task.key, None)  # gone from the store; the next replan brings it back if not
             return
         done = self.clock()
+        self.blocks = 0
         stats = {}
         db.save_offers(self.con, offers, int(done), stats)
         task.last_run, task.fails = done, 0

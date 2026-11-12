@@ -35,7 +35,9 @@ class TalabatParsing(unittest.TestCase):
         self.assertEqual((cola.price, cola.original_price), (108, 120))
         self.assertEqual(cola.store_discount_pct, 10.0)
         self.assertTrue(cola.url.startswith("https://www.talabat.com/egypt/grocery/619848/talabat-mart/product/"))
-        self.assertTrue(cola.url.endswith(f"/s/{cola.sku}?aid=9838"))
+        self.assertEqual(cola.sku, "619848:S6WENO")  # each hub is its own product
+        self.assertTrue(cola.url.endswith("/s/S6WENO?aid=9838"))
+        self.assertEqual((cola.extra["hub"], cola.extra["hub_name"]), (619848, "Maadi Old"))
         undiscounted = offers[-1]
         self.assertIsNone(undiscounted.original_price)  # originalPrice == price is not a discount
 
@@ -52,11 +54,20 @@ class TalabatParsing(unittest.TestCase):
                 asked.append(url)
                 return 200, cats if "/categories" in url else items
 
-        offers = list(talabat.collect(Fake(delay=0), area_id=7882, log=lambda *_: None))
+        offers = list(talabat.collect(Fake(delay=0), hubs=[{"id": 619848, "aid": 7882, "name": "Maadi Old"}],
+                                      log=lambda *_: None))
         self.assertEqual(len(asked), 1 + 4 * 2)  # categories + 4 subcategories x 2 pages
         self.assertIn("/egypt/grocery/619848/talabat-mart/dairy-eggs/", asked[1])
         self.assertTrue(asked[2].endswith("aid=7882&page=2"))
         self.assertEqual(len(offers), 5)  # every fake page holds the same 5 products: each is kept once
+        asked.clear()
+        two = [{"id": 619848, "aid": 9838, "name": "Maadi Old"}, {"id": 776372, "aid": 8032, "name": "Obour"}]
+        offers = list(talabat.collect(Fake(delay=0), hubs=two, log=lambda *_: None))
+        self.assertEqual(len(asked), 1 + 2 * 4 * 2)  # every shelf in each hub
+        self.assertTrue(any("/grocery/776372/talabat-mart/" in u and "aid=8032" in u for u in asked))
+        self.assertEqual(len(offers), 10)  # the same products, once per hub
+        self.assertEqual({o.extra["hub_name"] for o in offers}, {"Maadi Old", "Obour"})
+        self.assertTrue(all(o.sku.startswith(f"{o.extra['hub']}:") for o in offers))
         asked.clear()
         list(talabat.collect(Fake(delay=0), max_pages=3, log=lambda *_: None))
         self.assertEqual(len(asked), 1 + 3)
@@ -371,6 +382,12 @@ class Scheduler(unittest.TestCase):
         self.assertEqual(loop.paused_until, clock.t + 30 * 60)
         loop.step()  # paused: only waits
         self.assertEqual(loop.con.execute("SELECT error FROM live_status").fetchone()[0], "bot check")
+        pauses = []
+        for _ in range(5):  # each repeat doubles the pause, up to 4 hours
+            clock.t = loop.paused_until
+            loop.step()
+            pauses.append(round((loop.paused_until - clock.t) / 60))
+        self.assertEqual(pauses, [60, 120, 240, 240, 240])
 
     def test_not_configured_waits_quietly(self):
         clock = Clock()
@@ -388,12 +405,17 @@ class AppLinks(unittest.TestCase):
     def test_android_opens_the_app_at_the_item(self):
         from deals.applinks import links
         l = links("amazon_eg", "https://www.amazon.eg/-/en/dp/B0DC5F7P3N")
-        self.assertTrue(l["android"].startswith("intent://www.amazon.eg/-/en/dp/B0DC5F7P3N#Intent;scheme=https;"
+        # the app gets the plain /dp/ address; the fallback stays the English web page
+        self.assertTrue(l["android"].startswith("intent://www.amazon.eg/dp/B0DC5F7P3N#Intent;scheme=https;"
                                                 "package=com.amazon.mShop.android.shopping;"))
         self.assertIn("S.browser_fallback_url=https%3A%2F%2Fwww.amazon.eg%2F-%2Fen%2Fdp%2FB0DC5F7P3N", l["android"])
-        self.assertEqual(l["ios"], "https://www.amazon.eg/-/en/dp/B0DC5F7P3N")
+        self.assertEqual(l["ios"], "https://www.amazon.eg/dp/B0DC5F7P3N")
+        self.assertIn("package=com.android.chrome;", l["browser"])
+        # talabat: Chrome on Android (the talabat app can't open grocery items from links), the page elsewhere
         t = links("talabat", "https://www.talabat.com/egypt/x/s/1?aid=9")
-        self.assertEqual(set(t.values()), {"https://www.talabat.com/egypt/x/s/1?aid=9"})  # its product page, everywhere
+        self.assertTrue(t["android"].startswith("intent://www.talabat.com/egypt/x/s/1?aid=9#Intent;scheme=https;"
+                                                "package=com.android.chrome;"))
+        self.assertEqual((t["web"], t["ios"]), ("https://www.talabat.com/egypt/x/s/1?aid=9",) * 2)
 
     def test_breadfast_uses_the_apps_own_link(self):
         from deals.applinks import links
@@ -438,12 +460,22 @@ class CatalogAndFilters(unittest.TestCase):
         self.assertIn("new", tea["flags"])
         self.assertIn("lowest", tea["flags"])
         self.assertEqual((tea["unit_price"], tea["unit"]), (160.0, "kg"))
-        self.assertEqual(tea["links"]["android"], TEA_URL)
+        self.assertIn("package=com.android.chrome;", tea["links"]["android"])
+        self.assertEqual(tea["links"]["web"], TEA_URL)
         self.assertTrue(len(tea["spark"]) >= 2)
         self.assertIn("20% under its usual 100 EGP", tea["why"])
         self.assertNotIn("steady", self.by["a2"]["flags"])  # 10 days unchanged: not yet 14
         milk = self.by["a1"]
         self.assertEqual(milk["deal_label"], "11.11 Deal")
+
+
+
+    def test_verdicts(self):
+        self.assertEqual(self.by["t2"]["verdict"]["label"], "Buy now")  # lowest in 90 days
+        self.assertEqual(self.by["t1"]["verdict"]["label"], "Cheaper elsewhere")  # 45 at Amazon vs 50
+        self.assertEqual(self.by["t3"]["verdict"]["label"], "Out of stock")
+        later = {d["sku"]: d for d in finder.catalog(self.con, self.now + 10 * DAY)}
+        self.assertEqual(later["a2"]["verdict"]["label"], "Fair price")  # a 'discount' that never moves
 
     def test_cross_store_match(self):
         t1, a1 = self.by["t1"], self.by["a1"]
@@ -638,10 +670,222 @@ class BreadfastUpload(unittest.TestCase):
             status, r = send(body)
         self.assertEqual((status, r["products"], r["requests"]), (200, 3, 1))
 
+    def call(self, path, body, token=None, method="POST"):
+        import urllib.error
+        import urllib.request
+        req = urllib.request.Request(f"{self.base}{path}", data=None if body is None else json.dumps(body).encode(),
+                                     method=method, headers={"Authorization": f"Bearer {token}"} if token else {})
+        try:
+            with urllib.request.urlopen(req) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    def test_push_endpoints(self):
+        sub = {"endpoint": "https://fcm.googleapis.com/fcm/send/abc", "keys": {"p256dh": "x", "auth": "y"}}
+        self.assertEqual(self.call("/api/push/key", None, method="GET")[0], 200)
+        bad = {**sub, "endpoint": "https://127.0.0.1/steal"}
+        self.assertEqual(self.call("/api/push/subscribe", {"subscription": bad})[0], 422)  # only browser push services
+        status, r = self.call("/api/push/subscribe", {"subscription": sub, "prefs": {"watch": ["5"], "all_drops": 1, "min_drop": "20"}})
+        self.assertEqual((status, r["prefs"]["watch"], r["prefs"]["min_drop"]), (200, [5], 20.0))
+        self.call("/api/push/subscribe", {"subscription": sub, "prefs": {"watch": [6]}})  # updates, doesn't duplicate
+        con = db.connect(self.db)
+        rows = con.execute("SELECT prefs FROM push_subs").fetchall()
+        self.assertEqual([json.loads(r[0])["watch"] for r in rows], [[6]])
+        con.close()
+        self.assertEqual(self.call("/api/push/unsubscribe", {"endpoint": sub["endpoint"]})[0], 200)
+        self.assertEqual(self.call("/api/push/test", {"endpoint": sub["endpoint"]})[0], 404)
+
+    def test_hub_settings(self):
+        status, r = self.call("/api/talabat/hubs", None, method="GET")
+        self.assertEqual(r["selected"], [619848])
+        self.assertTrue(any(h["name"] == "El Obour Industrial Area" for h in r["hubs"]))  # the shipped list
+        token = "t" * 24
+        with mock.patch.dict(os.environ, {"DEALS_ADMIN_TOKEN": token}), mock.patch("time.sleep"):
+            self.assertEqual(self.call("/admin/settings", {"talabat_hubs": [776372]}, "wrong-token-123456")[0], 401)
+            self.assertEqual(self.call("/admin/settings", {"talabat_hubs": [123]}, token)[0], 422)  # unknown hub
+            self.assertEqual(self.call("/admin/settings", {"talabat_hubs": []}, token)[0], 422)
+            status, r = self.call("/admin/settings", {"talabat_hubs": [619848, 776372],
+                                                      "hub_link": "https://www.talabat.com/egypt/grocery/619849/talabat-mart?aid=77"}, token)
+        self.assertEqual((status, r["selected"]), (200, [619848, 776372, 619849]))
+        from deals import settings
+        saved = settings.load(os.path.join(self.dir.name, "settings.json"))["talabat_hubs"]
+        self.assertEqual([h["id"] for h in saved], [619848, 776372, 619849])
+        self.assertEqual(saved[2]["aid"], 77)  # the area from the pasted link
+        self.assertEqual(saved[1]["name"], "El Obour Industrial Area")
+
     def test_piasters(self):
         with mock.patch.dict(os.environ, {"DEALS_ADMIN_TOKEN": "t" * 24}):
             status, r = self.post(self.har, "t" * 24, divisor="100")
         self.assertEqual((status, r["samples"][0]["price"]), (200, 0.42))
+
+
+class Hubs(unittest.TestCase):
+    def test_hub_names(self):
+        self.assertEqual(talabat.hub_name("Tmart, El Obour Industrial Area BG"), "El Obour Industrial Area")
+        self.assertEqual(talabat.hub_name("talabat mart, Helwan"), "Helwan")
+        self.assertEqual(talabat.hub_name("طلبات مارت, المعادي القديمة"), "المعادي القديمة")
+
+    def test_old_rows_become_maadi_old(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "d.sqlite3")
+            con = db.connect(path)
+            con.execute("INSERT INTO products (store, sku, name, first_seen, last_seen, price) VALUES"
+                        " ('talabat', 'S6WENO', 'cola', 1, 1, 108), ('amazon_eg', 'B0X', 'x', 1, 1, 5)")
+            con.commit(); con.close()
+            con = db.connect(path)  # the migration runs on connect
+            rows = dict(con.execute("SELECT store, sku FROM products").fetchall())
+            self.assertEqual(rows, {"talabat": "619848:S6WENO", "amazon_eg": "B0X"})
+            extra = json.loads(con.execute("SELECT extra FROM products WHERE store='talabat'").fetchone()[0])
+            self.assertEqual(extra, {"hub": 619848, "hub_name": "Maadi Old"})
+            con.close()
+
+    def test_area_lookup(self):
+        areas = talabat.parse_areas((FIX / "talabat_all_areas.html").read_text())
+        self.assertEqual(areas[0]["city"], "Cairo")  # Cairo and Giza first
+        self.assertIn({"id": 8025, "name": "El Obour - El Hay 5", "slug": "el-obour-el-hay-5", "city": "Cairo"}, areas)
+        self.assertEqual(talabat.parse_area_hub((FIX / "talabat_area_groceries.html").read_text()),
+                         {"id": 776372, "slug": "tmart-el-obour-industrial-area-bg"})
+        self.assertIsNone(talabat.parse_area_hub(
+            '<script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"vendors":[]}}}</script>'))
+
+    def test_discover_hubs(self):
+        all_areas, area = (FIX / "talabat_all_areas.html").read_text(), (FIX / "talabat_area_groceries.html").read_text()
+        asked = []
+
+        class Fake(Fetcher):
+            def get(self, url, headers=None):
+                asked.append(url)
+                return 200, all_areas if "all-areas" in url else area
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "talabat_hubs.json")
+            talabat.discover_hubs(Fake(delay=0), path, log=lambda *_: None)
+            data = json.load(open(path))
+            self.assertEqual(list(data["hubs"]), ["776372"])
+            hub = data["hubs"]["776372"]
+            self.assertEqual(hub["name"], "El Obour Industrial Area")
+            self.assertEqual(len(hub["areas"]), 4)
+            n = len(asked)
+            talabat.discover_hubs(Fake(delay=0), path, log=lambda *_: None)  # carries on: nothing left to look up
+            self.assertEqual(len(asked), n + 1)
+            from deals import web
+            with mock.patch.object(web, "HUBS_FILE", Path(d) / "none.json"):
+                known = web.known_hubs(os.path.join(d, "x.sqlite3"))
+            self.assertEqual(known[776372]["name"], "El Obour Industrial Area")
+            self.assertIn(known[776372]["aid"], {a["id"] for a in hub["areas"]})
+
+    def test_settings(self):
+        from deals import settings
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "settings.json")
+            self.assertEqual(settings.load(path)["talabat_hubs"], settings.DEFAULT_HUBS)
+            settings.save(path, {"talabat_hubs": [{"id": "776372", "aid": 8032, "name": "Obour"}, {"id": "x"}]})
+            self.assertEqual(settings.load(path)["talabat_hubs"], [{"id": 776372, "aid": 8032, "name": "Obour"}])
+
+    def test_scheduler_relists_when_settings_change(self):
+        from deals import settings
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "settings.json")
+            settings.save(path, {"talabat_hubs": settings.DEFAULT_HUBS})
+            clock, plans = Clock(), []
+
+            def plan(f):
+                hubs = settings.load(path)["talabat_hubs"]
+                plans.append([h["id"] for h in hubs])
+                return [Task(f"{h['id']}/x", lambda: ([], [])) for h in hubs]
+            loop = StoreLoop("talabat", plan, ":memory:", delay=0, replan_file=path, clock=clock,
+                             sleep=clock.sleep, log=lambda *_: None)
+            loop.con = db.connect(":memory:")
+            loop.step()
+            settings.save(path, {"talabat_hubs": settings.DEFAULT_HUBS + [{"id": 776372, "aid": 8032, "name": "O"}]})
+            os.utime(path, (time_now := os.path.getmtime(path) + 5, time_now))
+            loop.step()
+            self.assertEqual(plans, [[619848], [619848, 776372]])
+            self.assertEqual(set(loop.tasks), {"619848/x", "776372/x"})
+
+
+class Push(unittest.TestCase):
+    def decrypt(self, body, ua_key, auth):
+        """What the browser does with an aes128gcm push message (RFC 8291), to check our side."""
+        import hashlib as hl, hmac as hm
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        H = lambda k, d: hm.new(k, d, hl.sha256).digest()
+        salt, rs, idlen = body[:16], int.from_bytes(body[16:20], "big"), body[20]
+        as_public, record = body[21:21 + idlen], body[21 + idlen:]
+        ua_public = ua_key.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+        shared = ua_key.exchange(ec.ECDH(), ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), as_public))
+        ikm = H(H(auth, shared), b"WebPush: info\x00" + ua_public + as_public + b"\x01")
+        prk = H(salt, ikm)
+        plain = AESGCM(H(prk, b"Content-Encoding: aes128gcm\x00\x01")[:16]).decrypt(
+            H(prk, b"Content-Encoding: nonce\x00\x01")[:12], record, None)
+        self.assertEqual((rs, plain[-1:]), (4096, b"\x02"))
+        return plain[:-1]
+
+    def test_round_trip(self):
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from deals import push
+        ua = ec.generate_private_key(ec.SECP256R1())
+        auth = os.urandom(16)
+        p256dh = push.b64u(ua.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint))
+        msg = json.dumps({"title": "↓ 20%  حليب جهينة", "body": "50 → 40 EGP"}, ensure_ascii=False).encode()
+        self.assertEqual(self.decrypt(push.encrypt(msg, p256dh, push.b64u(auth)), ua, auth), msg)
+
+    def test_vapid_header_verifies(self):
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+        from deals import push
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "vapid.json")
+            v = push.Vapid.load_or_create(path)
+            self.assertEqual(push.Vapid.load_or_create(path).public_b64, v.public_b64)  # kept, not remade
+            self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o600")
+            h = v.header("https://fcm.googleapis.com/fcm/send/abc", now=1_800_000_000)
+            jwt, k = h.removeprefix("vapid t=").split(", k=")
+            self.assertEqual(k, v.public_b64)
+            head, claims, sig = jwt.split(".")
+            self.assertEqual(json.loads(push.unb64u(claims))["aud"], "https://fcm.googleapis.com")
+            raw = push.unb64u(sig)
+            der = encode_dss_signature(int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big"))
+            ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), push.unb64u(k)).verify(
+                der, f"{head}.{claims}".encode(), ec.ECDSA(hashes.SHA256()))  # raises if wrong
+
+    def test_wants(self):
+        from deals import push
+        d = {"id": 5, "store": "talabat", "hub": 776372, "top_category": "Dairy", "name": "Juhayna Milk 1L",
+             "before": 50, "price": 40, "drop_pct": 20.0, "discount_pct": 0}
+        self.assertTrue(push.wants({"watch": [5]}, d))
+        self.assertFalse(push.wants({"watch": [5], "targets": {"5": 35}}, d))  # target not reached yet
+        self.assertFalse(push.wants({"watch": [6]}, d))
+        self.assertTrue(push.wants({"all_drops": True, "min_drop": 15}, d))
+        self.assertFalse(push.wants({"all_drops": True, "min_drop": 25}, d))
+        self.assertFalse(push.wants({"all_drops": True, "stores": ["amazon_eg"]}, d))
+        self.assertTrue(push.wants({"all_drops": True, "hubs": [776372], "words": ["milk"]}, d))
+        self.assertFalse(push.wants({"all_drops": True, "words": ["coffee"]}, d))
+
+    def test_notifier_batches_and_forgets_dead_subscriptions(self):
+        from deals import push
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "d.sqlite3")
+            con = db.connect(path)
+            db.save_offers(con, [Offer("talabat", "a", "Milk", 50), Offer("talabat", "b", "Tea", 100)], 1000)
+            db.save_offers(con, [Offer("talabat", "a", "Milk", 40), Offer("talabat", "b", "Tea", 90)], 2000)
+            for ep, prefs in (("https://fcm.googleapis.com/x", {"all_drops": True}), ("https://fcm.googleapis.com/gone", {"all_drops": True})):
+                con.execute("INSERT INTO push_subs (endpoint, subscription, prefs, created) VALUES (?,?,?,0)",
+                            (ep, json.dumps({"endpoint": ep, "keys": {}}), json.dumps(prefs)))
+            con.commit(); con.close()
+            n = push.Notifier(path, {"talabat": "talabat mart"}, log=lambda *_: None)
+            n.last = 1500
+            sent = []
+            n.tick(now=2100, sender=lambda v, sub, msg: (sent.append((sub["endpoint"], msg)), 410 if sub["endpoint"].endswith("gone") else 201)[1])
+            self.assertEqual(len(sent), 2)
+            self.assertEqual(sent[0][1]["title"], "2 price drops")
+            con = db.connect(path)
+            self.assertEqual([r[0] for r in con.execute("SELECT endpoint FROM push_subs")], ["https://fcm.googleapis.com/x"])
+            con.close()
 
 
 def offer(sku, price, original=None, in_stock=True, store="talabat"):

@@ -3,12 +3,13 @@
 #   port 8800   the page and its API; GET /healthz
 #
 #   Settings (Coolify environment, all optional):
-#     TALABAT_AREA      talabat area id (default 9838, Maadi)
-#     TALABAT_DELAY / AMAZON_DELAY / BREADFAST_DELAY   seconds between requests (1.5 / 3 / 5)
+#     TALABAT_DELAY / AMAZON_DELAY / BREADFAST_DELAY   seconds between requests (1.5 / 8 / 5)
 #     HOT_EVERY         recheck a shelf whose prices moved in the last 30 min every N seconds (60)
 #     AMAZON_ACCESS_KEY / AMAZON_SECRET_KEY / AMAZON_PARTNER_TAG   use Amazon's API instead of its public pages
 #     CHROME_BIN        another Chrome/Chromium (default: the image's chromium)
-#     DEALS_ADMIN_TOKEN turns on /admin, where the owner uploads a Breadfast app capture (16+ characters; a secret)
+#     DEALS_ADMIN_TOKEN turns on /admin: talabat hubs to follow, adding Breadfast (16+ characters; a secret)
+#   /data also holds settings.json (hubs), talabat_hubs.json (which hub serves which area) and vapid.json (the
+#   key that signs notifications: keep it, or every phone has to turn alerts on again)
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=Africa/Cairo \
@@ -23,6 +24,8 @@ RUN if [ "$APT" = "1" ]; then apt-get update && apt-get install -y --no-install-
     && rm -rf /var/lib/apt/lists/*; fi
 
 WORKDIR /app
+# cryptography: encrypts and signs price-drop notifications (Web Push). The rest is Python's standard library.
+RUN pip install --no-cache-dir cryptography==50.0.1
 COPY deals ./deals
 COPY docker-entrypoint.sh .
 RUN useradd --uid 1000 --create-home app && mkdir -p /data && chown app:app /data && chmod +x docker-entrypoint.sh

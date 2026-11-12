@@ -45,6 +45,14 @@ CREATE TABLE IF NOT EXISTS live_status (
     error TEXT,
     paused_until INTEGER
 );
+CREATE TABLE IF NOT EXISTS push_subs (
+    endpoint TEXT PRIMARY KEY,   -- where the browser's push service takes messages for this device
+    subscription TEXT NOT NULL,  -- JSON: endpoint + keys (p256dh, auth)
+    prefs TEXT NOT NULL,         -- JSON: what to be told about (push.wants)
+    created INTEGER,
+    last_sent INTEGER,
+    fails INTEGER DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY,
     store TEXT NOT NULL,
@@ -67,6 +75,11 @@ def connect(path: str) -> sqlite3.Connection:
         con.execute("ALTER TABLE products ADD COLUMN extra TEXT DEFAULT '{}'")
     if "pending_price" not in cols:
         con.execute("ALTER TABLE products ADD COLUMN pending_price REAL")
+    # talabat products from before hubs were all Maadi Old's: give them that hub (sku "<hub>:<sku>")
+    with con:
+        con.execute("""UPDATE products SET sku = '619848:' || sku,
+                         extra = json_set(COALESCE(NULLIF(extra, ''), '{}'), '$.hub', 619848, '$.hub_name', 'Maadi Old')
+                       WHERE store = 'talabat' AND instr(sku, ':') = 0""")
     return con
 
 

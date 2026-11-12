@@ -11,6 +11,7 @@ The site's robots.txt allows all of it. Prices are per branch, and the area pick
 """
 
 import json
+import os
 import re
 from typing import Iterator, Optional
 from urllib.parse import quote
@@ -51,12 +52,54 @@ def parse_categories(html: str) -> tuple[dict, list[dict]]:
     return store, subs
 
 
-def parse_items(html: str, branch_id, area_id, category: str = "") -> tuple[list[Offer], int]:
-    """Returns (offers, page_count) for one products page."""
+def hub_name(raw: str) -> str:
+    """'Tmart, El Obour Industrial Area BG' / 'talabat mart, Helwan' -> 'El Obour Industrial Area' / 'Helwan'."""
+    name = re.sub(r"^\s*(talabat mart|tmart|طلبات مارت)\s*,?\s*", "", raw or "", flags=re.I).strip()
+    return re.sub(r"\s+BG$", "", name).strip() or (raw or "").strip()
+
+
+def hub_from_slug(slug: str) -> str:
+    """'tmart-el-obour-industrial-area-bg' -> 'El Obour Industrial Area'."""
+    words = re.sub(r"^(tmart|talabat-mart)-?", "", slug or "").removesuffix("-bg").split("-")
+    return " ".join(w if w.isupper() else w.capitalize() for w in words if w) or slug
+
+
+# Districts people search by, with the words talabat's hub names use for them (and Arabic names).
+DISTRICTS = [
+    ("Obour", ("obour",), "العبور"),
+    ("New Cairo", ("tagammoa", "tagamoa", "new cairo", "mivida", "rehab", "fifth settlement", "katameya"), "التجمع القاهرة الجديدة الرحاب"),
+    ("Nasr City", ("nasr city", "abbas el akkad", "makram", "tayaran"), "مدينة نصر"),
+    ("Heliopolis", ("heliopolis", "masr el gedida", "korba", "roxy", "sheraton", "hegaz", "almaza", "nozha"), "مصر الجديدة"),
+    ("Madinaty & Shorouk", ("madinaty", "shorouk", "badr"), "مدينتي الشروق"),
+    ("Maadi", ("maadi",), "المعادي"),
+    ("Mokattam", ("mokattam",), "المقطم"),
+    ("Downtown & Zamalek", ("downtown", "zamalek", "garden city", "sayeda", "manial", "daher", "abbaseya"), "وسط البلد الزمالك"),
+    ("6th of October", ("october",), "أكتوبر"),
+    ("Sheikh Zayed", ("zayed",), "الشيخ زايد"),
+    ("Giza & Haram", ("giza", "haram", "faisal", "dokki", "mohandessin", "agouza", "talbiya"), "الجيزة الهرم فيصل الدقي"),
+    ("Helwan", ("helwan", "zahraa", "maasara"), "حلوان"),
+    ("Shubra & North", ("shubra", "zaitoun", "ain shams", "matareya", "marg"), "شبرا"),
+    ("Alexandria", ("alex", "montazah", "miami", "smouha", "semouha", "agamy", "ibrahimia", "seyouf", "sherka", "fleming", "sidi"), "الإسكندرية"),
+]
+
+
+def district(name: str, cities=()) -> tuple[str, str]:
+    """(district, extra search words) for a hub name like 'Tagammoa 5 Banks Center' -> ('New Cairo', ...)."""
+    text = (name + " " + " ".join(cities)).lower()
+    for label, words, arabic in DISTRICTS:
+        if any(w in text for w in words):
+            return label, label + " " + arabic + " " + " ".join(words)
+    return (cities[0] if cities else "Other"), ""
+
+
+def parse_items(html: str, branch_id, area_id, category: str = "", hub: str = None) -> tuple[list[Offer], int]:
+    """Returns (offers, page_count) for one products page. Each hub is its own product (sku "<hub>:<sku>"),
+    because hubs stock different things."""
     state = next_data(html)["props"]["pageProps"].get("initialState") or {}
     data = state.get("itemsData")
     if data is None:
         raise PageError("products page has no itemsData")
+    hub = hub or hub_name((state.get("groceryStore") or {}).get("branchName") or str(branch_id))
     base = f"{BASE}/egypt/grocery/{branch_id}/talabat-mart"
     offers = []
     for it in data.get("items") or []:
@@ -66,7 +109,7 @@ def parse_items(html: str, branch_id, area_id, category: str = "") -> tuple[list
         original = _num(it.get("originalPrice"))
         offers.append(Offer(
             store=STORE,
-            sku=it["sku"],
+            sku=f"{branch_id}:{it['sku']}",
             name=(it.get("title") or "").strip(),
             price=price,
             original_price=original if original and original > price else None,
@@ -74,7 +117,7 @@ def parse_items(html: str, branch_id, area_id, category: str = "") -> tuple[list
             image=it.get("image") or "",
             category=category,
             in_stock=(it.get("stockAmount") or 0) > 0,
-            extra={"stock": it.get("stockAmount")},
+            extra={"stock": it.get("stockAmount"), "hub": int(branch_id), "hub_name": hub},
         ))
     return offers, int(data.get("pageCount") or 1)
 
@@ -86,38 +129,104 @@ def _num(v) -> Optional[float]:
         return None
 
 
-def plan(fetcher: Fetcher, area_id: int = DEFAULT_AREA, categories: list[str] = None, log=print) -> list[Task]:
-    """One task per subcategory (its page 1, which adds pages 2..n when it runs)."""
-    status, html = fetcher.get(f"{BASE}/egypt/talabat-mart/categories?aid={area_id}")
+def plan(fetcher: Fetcher, hubs: list[dict] = None, categories: list[str] = None, log=print) -> list[Task]:
+    """For each hub, one task per subcategory (its page 1, which adds pages 2..n when it runs).
+    hubs: [{"id": branch id, "aid": an area it serves, "name": ...}]; default Maadi Old. The category tree is
+    the same for every hub; a shelf a hub doesn't carry is skipped."""
+    hubs = hubs or [{"id": 619848, "aid": DEFAULT_AREA, "name": "Maadi Old"}]
+    status, html = fetcher.get(f"{BASE}/egypt/talabat-mart/categories?aid={hubs[0]['aid']}")
     if status != 200:
         raise PageError(f"categories page answered {status}")
-    store, subs = parse_categories(html)
-    branch = store["branchId"]
+    _, subs = parse_categories(html)
     if categories:
         wanted = {c.lower() for c in categories}
         subs = [s for s in subs if s["parent"].lower() in wanted]
-    log(f"talabat: branch {branch} ({store.get('branchName')}), {len(subs)} subcategories,"
-        f" ~{sum(s['count'] for s in subs)} products")
-    return [_page_task(fetcher, branch, area_id, s, 1, log) for s in subs]
+    log(f"talabat: {len(hubs)} hub(s) ({', '.join(h['name'] for h in hubs)}), {len(subs)} subcategories each")
+    return [_page_task(fetcher, h, s, 1, log) for h in hubs for s in subs]
 
 
-def _page_task(fetcher: Fetcher, branch, area_id, sub: dict, page: int, log) -> Task:
+def _page_task(fetcher: Fetcher, hub: dict, sub: dict, page: int, log) -> Task:
+    branch, area_id = hub["id"], hub["aid"]
+
     def run():
         url = (f"{BASE}/egypt/grocery/{branch}/talabat-mart/{sub['parent_slug']}/{sub['slug']}"
                f"?aid={area_id}&page={page}")
         status, html = fetcher.get(url)
         if status != 200:
-            log(f"talabat: {status} for {sub['parent']} / {sub['name']} page {page}, skipped")
+            if status != 404:
+                log(f"talabat: {status} for {hub['name']}: {sub['parent']} / {sub['name']} page {page}, skipped")
             return [], []
-        offers, page_count = parse_items(html, branch, area_id, f"{sub['parent']} / {sub['name']}")
-        follow = [_page_task(fetcher, branch, area_id, sub, n, log) for n in range(2, page_count + 1)] if page == 1 else []
+        name = hub.get("name")
+        offers, page_count = parse_items(html, branch, area_id, f"{sub['parent']} / {sub['name']}",
+                                         None if not name or str(name).isdigit() else name)  # a bare number: use the page's
+        follow = [_page_task(fetcher, hub, sub, n, log) for n in range(2, page_count + 1)] if page == 1 else []
         return offers, follow
 
-    return Task(f"{sub['parent_slug']}/{sub['slug']}/{page}", run)
+    return Task(f"{branch}/{sub['parent_slug']}/{sub['slug']}/{page}", run)
 
 
-def collect(fetcher: Fetcher, area_id: int = DEFAULT_AREA, max_pages: int = None,
+def collect(fetcher: Fetcher, hubs: list[dict] = None, max_pages: int = None,
             categories: list[str] = None, log=print) -> Iterator[Offer]:
-    """Every subcategory of Talabat Mart for one area, once. `max_pages` caps the requests after the
+    """Every subcategory of Talabat Mart in each hub, once. `max_pages` caps the requests after the
     categories page (for trying it out); `categories` keeps only those top-level categories."""
-    yield from run_once(plan(fetcher, area_id, categories, log), max_pages)
+    yield from run_once(plan(fetcher, hubs, categories, log), max_pages)
+
+
+# ---- which hub serves which area ---------------------------------------------------------------------
+
+AREAS_URL = f"{BASE}/egypt/all-areas/groceries"
+FIRST_CITIES = ("cairo", "giza", "october", "obour", "zayed", "shorouk", "madinaty", "ramadan")
+TALABAT_MART_ID = 607445
+
+
+def parse_areas(html: str) -> list[dict]:
+    """Every delivery area: [{"id", "name", "slug", "city"}], Cairo and Giza first."""
+    areas = [{"id": a["id"], "name": a["name"], "slug": a["slug"], "city": a.get("cityName") or ""}
+             for city in (next_data(html)["props"]["pageProps"].get("areas") or {}).values() for a in city]
+    return sorted(areas, key=lambda a: (not any(c in (a["city"] + " " + a["name"]).lower() for c in FIRST_CITIES), a["city"]))
+
+
+def parse_area_hub(html: str) -> Optional[dict]:
+    """The talabat mart hub serving one area, from its groceries page: {"id", "slug"} or None."""
+    for v in next_data(html)["props"]["pageProps"].get("vendors") or []:
+        if v.get("id") == TALABAT_MART_ID or (v.get("name") or "").strip().lower() == "talabat mart":
+            return {"id": int(v["branchId"]), "slug": v.get("branchSlug") or ""}
+    return None
+
+
+def discover_hubs(fetcher: Fetcher, path: str, log=print, stop=None):
+    """Goes through every area once and writes {hub id: {"id", "slug", "name", "areas": [...]}} to `path`,
+    saving as it goes (a restart carries on where it stopped)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        data = {}
+    hubs, done = data.get("hubs") or {}, set(data.get("done") or [])
+    status, html = fetcher.get(AREAS_URL)
+    if status != 200:
+        raise PageError(f"areas page answered {status}")
+    areas = [a for a in parse_areas(html) if a["id"] not in done]
+    log(f"talabat: looking up hubs for {len(areas)} areas")
+
+    def save():
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"hubs": hubs, "done": sorted(done)}, f, ensure_ascii=False)
+        os.replace(tmp, path)
+
+    for i, a in enumerate(areas):
+        if stop and stop():
+            break
+        status, page = fetcher.get(f"{BASE}/egypt/groceries/{a['id']}/{a['slug']}")
+        if status == 200:
+            hub = parse_area_hub(page)
+            if hub:
+                h = hubs.setdefault(str(hub["id"]), {"id": hub["id"], "slug": hub["slug"],
+                                                     "name": hub_from_slug(hub["slug"]), "areas": []})
+                h["areas"].append({"id": a["id"], "name": a["name"], "city": a["city"]})
+            done.add(a["id"])
+        if i % 25 == 0:
+            save()
+    save()
+    log(f"talabat: {len(hubs)} hubs known")

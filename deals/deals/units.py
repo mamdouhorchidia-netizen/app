@@ -68,3 +68,16 @@ def unit_price(price: float, name: str):
     if not size or size[0] <= 0:
         return None
     return round(price / size[0], 2), size[1]
+
+
+def unit_text(price: float, name: str):
+    """What a shopper reads: "41.38 / L", or "25.57 / 100 ml" for small packs; None when unknown."""
+    size = pack_size(name)
+    if not size or size[0] <= 0:
+        return None
+    amount, unit = size
+    if unit == "pc":
+        return f"{price / amount:,.2f} / piece"
+    if amount < 1:  # under a litre or a kilo: per 100 ml / 100 g reads better
+        return f"{price / amount / 10:,.2f} / 100 {'ml' if unit == 'L' else 'g'}"
+    return f"{price / amount:,.2f} / {unit}"

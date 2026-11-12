@@ -402,9 +402,9 @@ def import_request(db_path: str, curl_text: str, requests_file: str, divisor: fl
     finally:
         con.close()
     try:
-        existing, old_divisor = load_requests(requests_file)
+        existing, _ = load_requests(requests_file)
     except NotConfigured:
-        existing, old_divisor = [], divisor
+        existing = []
     key = lambda u: _with_page(u, _page_param(u), 1) if _page_param(u) else u
     kept = [x for x in existing if key(x["url"]) != key(r["url"])] + [r]
     save_requests(requests_file, kept, divisor)

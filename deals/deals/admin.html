@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Deals Admin</title>
+<title>Deals Settings</title>
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <style>
 :root { --bg: #f6f5f2; --panel: #fff; --ink: #1b1a17; --muted: #6d6a63; --line: #e4e1da; --accent: #a80080; --good: #1f7a4d; --bad: #c0362c; --chip: #efede8; }
@@ -34,7 +34,28 @@ ol { padding-left: 20px; }
 </head>
 <body>
 <main>
-  <h1>Add Breadfast</h1>
+  <h1>Settings</h1>
+  <label for="token">Admin token</label>
+  <input type="password" id="token" autocomplete="current-password" placeholder="DEALS_ADMIN_TOKEN from Coolify">
+
+  <section class="card" id="hubs">
+    <h2 style="margin-top:0">talabat mart hubs</h2>
+    <p>Each hub stocks different products, and prices can differ. Tick the hubs to follow (each one adds about
+      15 minutes to a talabat sweep). Search by hub, area or city: for example <i>Obour</i>, <i>Maadi</i>, <i>Zayed</i>.</p>
+    <div class="seg" id="hubdist" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px"></div>
+    <input type="search" id="hubq" placeholder="Search hubs, areas, cities… (English or Arabic)" style="width:100%;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px">
+    <div id="hublist" style="max-height:340px;overflow:auto;margin-top:8px"></div>
+    <p id="hubsel" style="font-size:13px"></p>
+    <details><summary>My hub isn't listed</summary>
+      <p style="font-size:13px">On talabat.com, set your delivery address, open talabat mart, and copy the address from
+        the browser. It looks like <code>talabat.com/egypt/grocery/776372/…</code>.</p>
+      <input type="url" id="hublink" placeholder="https://www.talabat.com/egypt/grocery/…" style="width:100%;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px">
+    </details>
+    <button id="savehubs" type="button">Save hubs</button>
+    <div id="hubout" aria-live="polite"></div>
+  </section>
+
+  <h1 style="margin-top:28px">Add Breadfast</h1>
   <p>Breadfast's prices exist only inside its app. Record the app once on your phone, upload the recording here,
     and the site keeps Breadfast's prices fresh by itself until the app signs you out.</p>
 
@@ -68,8 +89,6 @@ ol { padding-left: 20px; }
 
   <form class="card" id="f">
     <h2 style="margin-top:0">2. Upload it</h2>
-    <label for="token">Admin token</label>
-    <input type="password" id="token" autocomplete="current-password" required placeholder="DEALS_ADMIN_TOKEN from Coolify">
     <label for="file">Recording (.har)</label>
     <input type="file" id="file" accept=".har,.json,application/json" required>
     <label>Prices in the app's data are in</label>
@@ -125,6 +144,55 @@ $("f").onsubmit = e => {
   xhr.onerror = () => { $("go").disabled = false; $("bar").hidden = true; $("out").innerHTML = '<p class="err">Network error: try again.</p>'; };
   xhr.send(file);
 };
+// ---- hubs ----
+let hubs = [], selected = new Set();
+const norm = t => (t || "").toLowerCase();
+let districts = [], dist = "";
+function drawDistricts() {
+  const have = new Set(hubs.map(h => h.district));
+  $("hubdist").innerHTML = ["All", ...districts.filter(d => have.has(d))].map(d =>
+    `<button type="button" data-d="${esc(d === "All" ? "" : d)}" style="width:auto;margin:0;padding:6px 10px;font-size:13px;font-weight:600;border-radius:999px;background:${(d === "All" ? "" : d) === dist ? "var(--accent)" : "var(--chip)"};color:${(d === "All" ? "" : d) === dist ? "#fff" : "var(--ink)"}">${esc(d)} ${d === "All" ? hubs.length : hubs.filter(h => h.district === d).length}</button>`).join("");
+  $("hubdist").querySelectorAll("button").forEach(b => b.onclick = () => { dist = b.dataset.d; drawDistricts(); drawHubs(); });
+}
+function drawHubs() {
+  const q = norm($("hubq").value).trim();
+  const rows = hubs.filter(h => (!dist || h.district === dist) &&
+    (!q || norm(h.name + " " + h.areas.join(" ") + " " + h.cities.join(" ") + " " + h.id + " " + h.district + " " + h.words).includes(q)));
+  let last = null;
+  $("hublist").innerHTML = rows.slice(0, 300).map(h => (h.district !== last ? `<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:12px 4px 4px">${esc(last = h.district)}</div>` : "") + `<label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;margin:0;padding:8px 4px;border-top:1px solid var(--line);cursor:pointer">
+      <input type="checkbox" value="${h.id}" ${selected.has(h.id) ? "checked" : ""} style="margin-top:4px">
+      <span><b>${esc(h.name)}</b> <span style="color:var(--muted);font-size:12px">#${h.id} · ${esc(h.cities.join(", "))}</span><br>
+      <span style="color:var(--muted);font-size:12px" dir="auto">${esc(h.areas.slice(0, 8).join(" · "))}${h.areas.length > 8 ? " …" : ""}</span></span></label>`).join("")
+    || '<p>No hub matches. Paste its talabat link below.</p>';
+  $("hublist").querySelectorAll("input").forEach(i => i.onchange = () => {
+    i.checked ? selected.add(+i.value) : selected.delete(+i.value); hubCount(); });
+  hubCount();
+}
+function hubCount() {
+  const names = hubs.filter(h => selected.has(h.id)).map(h => h.name);
+  $("hubsel").textContent = `${selected.size} hub${selected.size === 1 ? "" : "s"} chosen: ${names.join(", ") || "none"}`;
+}
+fetch("/api/talabat/hubs").then(r => r.json()).then(r => { hubs = r.hubs; districts = r.districts || []; selected = new Set(r.selected); drawDistricts(); drawHubs(); });
+$("hubq").oninput = drawHubs;
+$("savehubs").onclick = async () => {
+  const body = { talabat_hubs: [...selected] };
+  if ($("hublink").value.trim()) body.hub_link = $("hublink").value.trim();
+  $("savehubs").disabled = true;
+  try {
+    const res = await fetch("/admin/settings", { method: "POST", body: JSON.stringify(body),
+      headers: { "Authorization": "Bearer " + $("token").value.trim(), "Content-Type": "application/json" } });
+    const r = await res.json().catch(() => ({}));
+    if (!res.ok) $("hubout").innerHTML = `<p class="err">${esc(r.error || "Failed (" + res.status + ").")}</p>`;
+    else {
+      try { sessionStorage.setItem("dealsAdmin", $("token").value.trim()); } catch {}
+      selected = new Set(r.selected); $("hublink").value = "";
+      fetch("/api/talabat/hubs").then(x => x.json()).then(x => { hubs = x.hubs; drawDistricts(); drawHubs(); });
+      $("hubout").innerHTML = `<p class="ok">Saved. Following ${r.hubs.map(h => esc(h.name)).join(", ")}. The site starts on them within a minute; a full sweep takes about ${15 * r.hubs.length} minutes.</p>`;
+    }
+  } catch { $("hubout").innerHTML = '<p class="err">Network error: try again.</p>'; }
+  $("savehubs").disabled = false;
+};
+
 function showResult(el, r) {
   el.innerHTML = `<p class="ok">Added ${r.products.toLocaleString()} Breadfast products.</p>
     <p>${r.requests === 1 ? "1 product list" : r.requests + " product lists"} will be refreshed automatically, starting within a minute.</p>

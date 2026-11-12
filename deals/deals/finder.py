@@ -18,7 +18,7 @@ import time
 from collections import Counter, defaultdict
 
 from . import applinks, matching
-from .units import unit_price
+from .units import unit_price, unit_text
 
 DAY = 86400
 WINDOW = 95 * DAY
@@ -157,11 +157,22 @@ def catalog(con, now: int = None) -> list[dict]:
             "since": rows[-1]["at"], "first_seen": p["first_seen"], "last_seen": p["last_seen"],
             "tracked_days": a["tracked_days"], "days_at_price": a["days_at_price"],
             "unit_price": up[0] if up else None, "unit": up[1] if up else None,
+            "unit_text": unit_text(price, p["name"]),
             "spark": _spark(rows, now), "links": applinks.links(p["store"], p["url"], extra),
+            "hub": extra.get("hub"), "hub_name": extra.get("hub_name"),
         })
 
     by_id = {it["id"]: it for it in items}
-    for pid, others in matching.match(items).items():
+    # one talabat item per product for matching (each hub keeps its own copy of the same product)
+    seen_base, to_match = set(), []
+    for it in items:
+        if it["store"] == "talabat":
+            base = it["sku"].split(":", 1)[-1]
+            if base in seen_base:
+                continue
+            seen_base.add(base)
+        to_match.append(it)
+    for pid, others in matching.match(to_match).items():
         it = by_id[pid]
         it["matches"] = sorted(({"id": o, "store": by_id[o]["store"], "price": by_id[o]["price"],
                                  "in_stock": by_id[o]["in_stock"]} for o in others), key=lambda m: m["price"])
@@ -173,7 +184,29 @@ def catalog(con, now: int = None) -> list[dict]:
         it.setdefault("cheapest", False)
         it.setdefault("cheaper_by", 0.0)
         it["score"], it["why"] = _score(it)
+        it["verdict"] = verdict(it)
     return items
+
+
+def verdict(d: dict) -> dict:
+    """Buy now / Good price / Fair price / Wait, from what the price has done. {"label", "tone", "why"}."""
+    usual, price = d.get("usual_price"), d["price"]
+    rival = min((m["price"] for m in d.get("matches") or [] if m["in_stock"]), default=None)
+    if not d["in_stock"]:
+        return {"label": "Out of stock", "tone": "muted", "why": "Watch it to hear when it's back."}
+    if rival is not None and rival < price * 0.97:
+        return {"label": "Cheaper elsewhere", "tone": "warn", "why": f"{rival:g} EGP in another store."}
+    if "steady" in d["flags"]:
+        return {"label": "Fair price", "tone": "muted", "why": "The 'discount' never moves: it's the normal price."}
+    if "lowest" in d["flags"] or (d["discount_pct"] >= 25 and d["kind"]):
+        return {"label": "Buy now", "tone": "good",
+                "why": "Lowest price in 90 days." if "lowest" in d["flags"] else f"{d['discount_pct']:g}% off."}
+    if usual and price > usual * 1.05:
+        return {"label": "Wait", "tone": "warn", "why": f"Usually {usual:g} EGP: it's above its normal price now."}
+    if d["discount_pct"] >= 10:
+        return {"label": "Good price", "tone": "good", "why": f"{d['discount_pct']:g}% off."}
+    return {"label": "Fair price", "tone": "muted",
+            "why": f"Its usual price ({usual:g} EGP)." if usual else "Not enough history yet to say more."}
 
 
 SORTS = {
@@ -194,7 +227,7 @@ def query(items: list[dict], deals_only: bool = True, stores: list[str] = None, 
           min_pct: float = 0, max_pct: float = None, stock: str = "in", status: list[str] = None,
           category: str = None, q: str = None, price_min: float = None, price_max: float = None,
           ids: list[int] = None, best: bool = False, sort: str = "score", limit: int = 200,
-          offset: int = 0) -> dict:
+          offset: int = 0, hubs: list[int] = None) -> dict:
     """Returns {"items", "total", "facets"}. Facets count the matches per store, category and kind,
     each ignoring its own filter, so the page can show "(123)" next to every choice."""
     words = [w for w in (q or "").lower().split() if w]
@@ -215,6 +248,8 @@ def query(items: list[dict], deals_only: bool = True, stores: list[str] = None, 
         if stock == "in" and not d["in_stock"] or stock == "out" and d["in_stock"]:
             return False
         if skip != "store" and stores and d["store"] not in stores:
+            return False
+        if skip != "hub" and hubs and d["store"] == "talabat" and d["hub"] not in hubs:
             return False
         if skip != "category" and category and d["top_category"] != category:
             return False
@@ -241,6 +276,8 @@ def query(items: list[dict], deals_only: bool = True, stores: list[str] = None, 
         "store": Counter(d["store"] for d in items if keep(d, "store")),
         "category": Counter(d["top_category"] for d in items if keep(d, "category")),
         "kind": Counter(d["kind"] for d in items if keep(d, "kind") and d["kind"]),
+        "hub": Counter(f'{d["hub"]}|{d["hub_name"]}' for d in items if d["store"] == "talabat" and d["hub"]
+                       and keep(d, "hub")),
     }
     return {"items": hits[offset:offset + limit], "total": len(hits),
             "facets": {k: dict(v.most_common()) for k, v in facets.items()}}

@@ -106,8 +106,9 @@ aside { position: sticky; top: 130px; align-self: start; max-height: calc(100vh 
 .card.fresh { animation: fresh 2.5s ease-out; }
 @keyframes fresh { from { box-shadow: 0 0 0 3px var(--accent); } }
 .card.out { opacity: .62; }
-.pic { position: relative; aspect-ratio: 1 / .86; background: #fff; display: grid; place-items: center; }
-.pic img { max-width: 82%; max-height: 82%; object-fit: contain; }
+.pic { position: relative; aspect-ratio: 1 / 1; background: #fff; display: grid; place-items: center; overflow: hidden; }
+/* every picture fills the same square, whatever size the store sent: small ones grow, big ones shrink */
+.pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 14% 12% 18%; box-sizing: border-box; }
 .pic .ph { font-size: 34px; font-weight: 700; color: #d9d5cc; }
 .badge { position: absolute; top: 8px; left: 8px; color: #fff; font-weight: 750; font-size: 13px; padding: 3px 8px; border-radius: 7px; background: #d6402b; letter-spacing: .01em; }
 .badge.drop { background: #1f7a4d; }
@@ -174,6 +175,25 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
 .toast { background: var(--ink); color: var(--bg); padding: 11px 14px; border-radius: 12px; font-size: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.25); cursor: pointer; animation: up .25s ease-out; }
 @keyframes up { from { transform: translateY(10px); opacity: 0; } }
 
+.search .mic { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; font-size: 17px; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+.search .mic.on { background: color-mix(in srgb, var(--accent) 18%, transparent); animation: pulse 1s infinite; }
+.search:has(.mic:not([hidden])) input { padding-right: 38px; }
+.interp { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 0 6px; font-size: 12.5px; color: var(--muted); align-items: center; }
+.interp b { color: var(--ink); font-weight: 600; background: var(--chip); padding: 2px 8px; border-radius: 999px; }
+.tag.vd-good { background: var(--good-bg); color: var(--good); font-weight: 700; }
+.tag.vd-warn { background: var(--warn-bg); color: var(--warn); font-weight: 700; }
+.tag.vd-muted { font-weight: 600; }
+.verdict { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 12px; margin: 14px 0 0; }
+.verdict.good { background: var(--good-bg); color: var(--good); } .verdict.warn { background: var(--warn-bg); color: var(--warn); } .verdict.muted { background: var(--chip); }
+.verdict b { font-size: 18px; } .verdict span { color: var(--ink); font-size: 14px; }
+.set { display: grid; gap: 10px; margin-top: 10px; }
+.set label { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.set input[type=number], .set input[type=text] { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; width: 90px; }
+.set input[type=text] { width: 100%; }
+.pick { display: flex; gap: 6px; flex-wrap: wrap; }
+.pick label { background: var(--chip); padding: 4px 10px; border-radius: 999px; font-size: 13px; cursor: pointer; }
+.bk td:nth-child(2), .bk td:nth-child(3) { white-space: nowrap; }
+.qty { display: inline-flex; gap: 4px; align-items: center; } .qty button { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
 @media (max-width: 900px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
   aside { position: fixed; inset: auto 0 0 0; top: auto; max-height: 82vh; background: var(--panel); z-index: 15; border-radius: 18px 18px 0 0;
@@ -183,6 +203,12 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
   .sheet-done { display: flex !important; width: 100%; justify-content: center; margin-top: 14px; }
   .filterbtn { display: inline-flex; }
   h1 .t { display: none; }
+  /* phones: title and buttons on the first row, the search on its own full-width row */
+  .top { flex-wrap: wrap; row-gap: 8px; gap: 8px; }
+  .top h1 { margin-right: auto; }
+  .top .search { order: 10; flex: 1 0 100%; }
+  .iconbtn { height: 38px; min-width: 38px; padding: 0 9px; }
+  .hide-sm { display: none; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 10px; }
   .now { font-size: 17px; } .spark { width: 52px; }
   .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 14; }
@@ -199,10 +225,15 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
     <div class="top">
       <h1><span class="pulse"></span><span class="t">Live deals</span></h1>
       <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input type="search" id="q" placeholder="Search milk, Pepsi, حفاضات…" aria-label="Search" autocomplete="off"></label>
+        <input type="search" id="q" placeholder="Try: milk under 50 at talabat · حفاضات أرخص للكيلو" aria-label="Search" autocomplete="off">
+        <button type="button" class="mic" id="mic" title="Search by voice" aria-label="Search by voice" hidden>🎤</button></label>
       <button class="iconbtn" id="watchBtn" title="Watchlist" aria-label="Watchlist">★ <span class="n" id="watchN" hidden>0</span></button>
+      <button class="iconbtn" id="basketBtn" title="Basket" aria-label="Basket">🧺 <span class="n" id="basketN" hidden>0</span></button>
+      <button class="iconbtn" id="alertsBtn" title="Price-drop alerts" aria-label="Price-drop alerts">🔔</button>
+      <button class="iconbtn" id="installBtn" title="Install the app" aria-label="Install the app" hidden>⬇︎ <span class="hide-sm">Install</span></button>
       <button class="iconbtn filterbtn" id="filterBtn" aria-label="Filters">Filters <span class="n" id="filterN" hidden>0</span></button>
     </div>
+    <div class="interp" id="interp" hidden></div>
     <div class="status" id="status">connecting…</div>
   </div>
   <div class="ticker" id="ticker" hidden><div class="ticker-track" id="tickerTrack"></div></div>
@@ -213,6 +244,7 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
     <div class="fgroup"><h3>Show</h3>
       <div class="seg" data-key="deals"><button data-v="1">Deals</button><button data-v="0">All products</button></div></div>
     <div class="fgroup"><h3>Platform</h3><div class="opts" id="fStores"></div></div>
+    <div class="fgroup" id="hubGroup" hidden><h3>talabat hub</h3><div class="opts" id="fHubs"></div></div>
     <div class="fgroup"><h3>Discount type</h3>
       <div class="seg" data-key="kind"><button data-v="">Any</button><button data-v="platform">Platform</button><button data-v="drop">Price drop</button></div>
       <div class="meta" style="margin-top:6px" id="kindCounts"></div></div>
@@ -264,6 +296,7 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
 </div>
 
 <dialog id="dlg" aria-labelledby="dname"><div class="dlg" id="dbody"></div></dialog>
+<dialog id="panel"><div class="dlg" id="pbody"></div></dialog>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script>
@@ -281,15 +314,15 @@ const appLabel = { talabat: "talabat", amazon_eg: "Amazon", breadfast: "Breadfas
 const LABELS = { talabat: "talabat mart", amazon_eg: "Amazon.eg", breadfast: "Breadfast" };
 
 // ---------- state, mirrored in the address so any view can be shared ----------
-const DEFAULTS = { deals: "1", stores: [], kind: "", min: 0, max: 90, stock: "in", status: [], best: false, watch: false,
+const DEFAULTS = { deals: "1", stores: [], hubs: [], kind: "", min: 0, max: 90, stock: "in", status: [], best: false, watch: false,
                    category: "", q: "", pmin: "", pmax: "", sort: "score" };
 let F = { ...DEFAULTS };
 function readURL() {
   const p = new URLSearchParams(location.search);
-  F = { ...DEFAULTS, stores: [], status: [] };
+  F = { ...DEFAULTS, stores: [], hubs: [], status: [] };
   for (const k of ["deals", "kind", "stock", "category", "q", "pmin", "pmax", "sort"]) if (p.has(k)) F[k] = p.get(k);
   for (const k of ["min", "max"]) if (p.has(k)) F[k] = +p.get(k);
-  for (const k of ["stores", "status"]) if (p.get(k)) F[k] = p.get(k).split(",");
+  for (const k of ["stores", "status", "hubs"]) if (p.get(k)) F[k] = p.get(k).split(",");
   F.best = p.get("best") === "1"; F.watch = p.get("watch") === "1";
 }
 function writeURL() {
@@ -305,7 +338,7 @@ function writeURL() {
 
 // ---------- watchlist and price alerts (kept in this browser) ----------
 let watch = store.get("watch", {});  // id -> {target, last, name, store}
-function saveWatch() { store.set("watch", watch); const n = Object.keys(watch).length; $("watchN").hidden = !n; $("watchN").textContent = n; }
+function saveWatch() { store.set("watch", watch); if (typeof syncAlerts === "function") syncAlerts(); const n = Object.keys(watch).length; $("watchN").hidden = !n; $("watchN").textContent = n; }
 function askNotify() { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); }
 function toggleWatch(d, btn) {
   if (watch[d.id]) { delete watch[d.id]; toast("Removed from your watchlist."); }
@@ -331,6 +364,7 @@ async function checkWatch() {
   } catch {}
 }
 function notify(title, body, id) {
+  if (typeof chime === "function") chime();
   toast(`<b>${esc(title)}</b><br>${esc(body)}`, () => showProduct(id), true);
   if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
     const n = new Notification(title, { body, icon: "/icon.svg", tag: "deal-" + id });
@@ -363,6 +397,12 @@ function renderFacets(r) {
     <span class="dot" style="background:var(--${esc(s)},#888)"></span>${esc(r.labels?.[s] || LABELS[s] || s)}<span class="c">${fs[s] ?? 0}</span></label>`).join("");
   $("fStores").querySelectorAll("input").forEach(i => i.onchange = () => {
     F.stores = [...$("fStores").querySelectorAll("input:checked")].map(x => x.value); apply(); });
+  const fh = Object.entries(r.facets.hub || {});
+  $("hubGroup").hidden = fh.length < 2 && !F.hubs.length;
+  $("fHubs").innerHTML = fh.map(([k, n]) => { const [id, name] = k.split("|");
+    return `<label class="opt"><input type="checkbox" value="${esc(id)}" ${F.hubs.includes(id) ? "checked" : ""}> ${esc(name)}<span class="c">${n}</span></label>`; }).join("");
+  $("fHubs").querySelectorAll("input").forEach(i => i.onchange = () => {
+    F.hubs = [...$("fHubs").querySelectorAll("input:checked")].map(x => x.value); apply(); });
   const fc = r.facets.category || {}, cats = Object.keys(fc);
   if (F.category && !cats.includes(F.category)) cats.unshift(F.category);
   $("fCat").innerHTML = `<option value="">All categories</option>` + cats.map(c =>
@@ -374,6 +414,7 @@ function activeChips() {
   const chips = [];
   if (F.deals === "0") chips.push(["All products", () => F.deals = "1"]);
   F.stores.forEach(s => chips.push([LABELS[s] || s, () => F.stores = F.stores.filter(x => x !== s)]));
+  if (F.hubs.length) chips.push([`${F.hubs.length} talabat hub${F.hubs.length > 1 ? "s" : ""}`, () => F.hubs = []]);
   if (F.kind) chips.push([F.kind === "platform" ? "Platform discount" : "Price drop", () => F.kind = ""]);
   if (F.min || F.max < 90) chips.push([$("pctLabel").textContent + " off", () => { F.min = 0; F.max = 90; }]);
   if (F.stock !== "in") chips.push([F.stock === "out" ? "Out of stock" : "Any availability", () => F.stock = "in"]);
@@ -412,6 +453,8 @@ function scoreSVG(s) {
 }
 function tagsFor(d) {
   const t = [];
+  if (d.verdict && d.verdict.label !== "Fair price" && d.verdict.label !== "Out of stock")
+    t.push(`<span class="tag vd-${d.verdict.tone}" title="${esc(d.verdict.why)}">${esc(d.verdict.label)}</span>`);
   if (d.deal_label) t.push(`<span class="tag hot">${esc(d.deal_label)}</span>`);
   if (d.flags.includes("lowest")) t.push('<span class="tag good">lowest in 90 days</span>');
   if (d.flags.includes("new")) t.push(`<span class="tag">changed ${ago(d.since)}</span>`);
@@ -426,7 +469,7 @@ function tagsFor(d) {
 const initial = n => esc((n || "?").trim()[0] || "?");
 function card(d, fresh) {
   const badge = d.discount_pct > 0 ? `<span class="badge ${d.kind === "drop" ? "drop" : ""}" title="${d.kind === "drop" ? "under its usual price" : "the store's own discount"}">−${Math.round(d.discount_pct)}%</span>` : "";
-  const unit = d.unit_price ? `${fmt(d.unit_price)} / ${d.unit === "pc" ? "piece" : d.unit}` : "";
+  const unit = d.unit_text || "";
   const was = d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : "";
   return `<article class="card${fresh ? " fresh" : ""}${d.in_stock ? "" : " out"}" data-id="${d.id}">
     <div class="pic">${d.image ? `<img loading="lazy" src="${esc(d.image)}" alt="" data-i="${initial(d.name)}">` : `<span class="ph">${initial(d.name)}</span>`}
@@ -436,7 +479,7 @@ function card(d, fresh) {
     <div class="body"><div class="name" dir="auto">${esc(d.name)}</div>
       <div class="tags">${tagsFor(d)}</div>
       <div class="priceline"><div><span class="now">${fmt(d.price)} <small>EGP</small></span>${was}</div>${sparkSVG(d.spark)}</div>
-      <div class="meta">${d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : ""}${d.saving > 0 ? `<span>save ${fmt(d.saving)}</span>` : ""}${unit ? `<span>${unit}</span>` : ""}</div>
+      <div class="meta">${d.hub_name ? `<span title="talabat hub">📍 ${esc(d.hub_name)}</span>` : ""}${d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : ""}${d.saving > 0 ? `<span>save ${fmt(d.saving)}</span>` : ""}${unit ? `<span>${unit}</span>` : ""}</div>
       <div class="cta"><a href="${esc(appHref(d))}" target="_blank" rel="noopener" data-open>Open in ${esc(appLabel[d.store] || "store")} ↗</a></div>
     </div></article>`;
 }
@@ -451,13 +494,16 @@ const PAGE = 48;
 function params(offset, limit) {
   const p = new URLSearchParams({ deals: F.deals, stock: F.stock, sort: F.sort, limit, offset });
   if (F.stores.length) p.set("stores", F.stores.join(","));
+  if (F.hubs.length) p.set("hubs", F.hubs.join(","));
   if (F.kind) p.set("kind", F.kind);
   if (F.min) p.set("min", F.min);
   if (F.max < 90) p.set("max", F.max);
   if (F.status.length) p.set("status", F.status.join(","));
   if (F.best) p.set("best", "1");
   if (F.category) p.set("category", F.category);
-  if (F.q.trim()) p.set("q", F.q.trim());
+  const nl = understand(F.q);
+  if (nl.q) p.set("q", nl.q);
+  for (const [k, v] of Object.entries(nl.set)) p.set(k, v);
   if (F.pmin !== "") p.set("pmin", F.pmin);
   if (F.pmax !== "") p.set("pmax", F.pmax);
   if (F.watch) { p.set("ids", Object.keys(watch).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); }
@@ -470,7 +516,7 @@ async function load({ append = false, quiet = false } = {}) {
   try {
     const r = await (await fetch("/api/deals?" + params(offset, limit))).json();
     lastStatus = r.status || []; lastChanges = r.changes_last_hour || 0; renderStatus();
-    renderFacets(r); total = r.total;
+    renderFacets(r); total = r.total; window.lastFacets = r.facets;
     $("count").innerHTML = `${total.toLocaleString()} <small>${F.deals === "1" && !F.watch ? (total === 1 ? "deal" : "deals") : "products"}</small>`;
     if (append) {
       items = items.concat(r.items);
@@ -535,8 +581,9 @@ async function showProduct(id) {
         <div class="meta"><span style="color:var(--${esc(p.store)});font-weight:650">${esc(LABELS[p.store] || p.store)}</span><span>${esc(p.category || "")}</span><span>tracked ${ago(p.first_seen).replace(" ago", "")}</span></div>
         <div style="margin-top:8px"><span class="bigprice">${fmt(p.price)} EGP</span>
           ${d && d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : ""}
-          ${d && d.unit_price ? `<span class="meta" style="display:inline;margin-left:8px">${fmt(d.unit_price)} / ${d.unit === "pc" ? "piece" : d.unit}</span>` : ""}</div>
+          ${d && d.unit_text ? `<span class="meta" style="display:inline;margin-left:8px">${esc(d.unit_text)}</span>` : ""}</div>
         <div class="tags" style="margin-top:6px">${d ? tagsFor(d) : ""}</div></div></div>
+    ${d && d.verdict ? `<div class="verdict ${d.verdict.tone}"><b>${esc(d.verdict.label)}</b><span>${esc(d.verdict.why)}</span></div>` : ""}
     ${d && d.why && d.why.length ? `<div class="why">${scoreSVG(d.score)}<ul>${d.why.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
     <h4>Price history</h4>
     <svg class="chart" id="chart" viewBox="0 0 640 200" preserveAspectRatio="none" role="img" aria-label="Price history"></svg>
@@ -550,7 +597,9 @@ async function showProduct(id) {
       <button class="btn" id="setTarget">${w ? "Update alert" : "Watch"}</button></div>
     <div class="row">
       <a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener">Open in ${esc(appLabel[p.store] || "store")} app ↗</a>
-      ${d && d.links.web && d.links.web !== link ? `<a class="btn" href="${esc(d.links.web)}" target="_blank" rel="noopener">Open on the web</a>` : ""}
+      ${d && (isAndroid ? d.links.browser : d.links.web) && (isAndroid ? d.links.browser : d.links.web) !== link
+        ? `<a class="btn" href="${esc(isAndroid ? d.links.browser : d.links.web)}" target="_blank" rel="noopener">Open in browser</a>` : ""}
+      <button class="btn" id="toBasket">🧺 ${basket[id] ? "In basket (" + basket[id] + ")" : "Add to basket"}</button>
       <button class="btn" id="share">Share</button>
     </div>`;
   if (!$("dlg").open) $("dlg").showModal();
@@ -563,6 +612,8 @@ async function showProduct(id) {
     $("setTarget").textContent = "Update alert";
     document.querySelectorAll(`.card[data-id="${id}"] [data-watch]`).forEach(b => b.setAttribute("aria-pressed", "true"));
   };
+  $("toBasket").onclick = () => { basket[id] = (basket[id] || 0) + 1; saveBasket(); $("toBasket").textContent = `🧺 In basket (${basket[id]})`;
+    toast("Added to your basket. 🧺 shows where it's cheapest."); };
   $("share").onclick = async () => {
     const url = location.origin + "/?p=" + id, text = `${p.name}: ${fmt(p.price)} EGP`;
     try { if (navigator.share) await navigator.share({ title: text, text, url });
@@ -623,8 +674,8 @@ let priceT;
   F.pmin = $("prmin").value; F.pmax = $("prmax").value; apply(); }, 400); });
 $("sort").onchange = () => { F.sort = $("sort").value; apply(); };
 let typing;
-$("q").oninput = () => { clearTimeout(typing); typing = setTimeout(() => { F.q = $("q").value; apply(); }, 300); };
-$("reset").onclick = () => { F = { ...DEFAULTS, stores: [], status: [] }; syncControls(); apply(); };
+$("q").oninput = () => { clearTimeout(typing); typing = setTimeout(() => { F.q = $("q").value; showUnderstood(); apply(); }, 300); };
+$("reset").onclick = () => { F = { ...DEFAULTS, stores: [], hubs: [], status: [] }; syncControls(); apply(); };
 $("watchBtn").onclick = () => { F.watch = !F.watch; syncControls(); apply(); };
 const sheet = open => { $("filters").classList.toggle("open", open);
   document.querySelector(".scrim")?.remove();
@@ -646,7 +697,198 @@ document.addEventListener("keydown", e => {
 });
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { load({ quiet: true }); loadTicker(); } });
 
-readURL(); syncControls(); saveWatch(); activeChips(); load(); loadTicker();
+
+// ---------- understanding plain-language searches (English and Arabic) ----------
+const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+function understand(text) {
+  let t = " " + (text || "").replace(/[٠-٩]/g, c => AR_DIGITS.indexOf(c)) + " ";
+  const set = {}, said = [];
+  const take = (re, fn) => { t = t.replace(re, (...m) => { fn(m); return " "; }); };
+  take(/\b(?:at least|over|above|min(?:imum)?)\s*(\d{1,2})\s*%(?:\s*off)?|(\d{1,2})\s*%\s*(?:off|\+|or more)|(?:خصم|تخفيض)\s*(\d{1,2})\s*%?/gi,
+       m => { const v = m[1] || m[2] || m[3]; set.min = v; said.push(`${v}%+ off`); });
+  take(/\b(?:under|below|less than|cheaper than|max(?:imum)?|up to)\s*(\d+(?:\.\d+)?)\s*(?:egp|le|pounds?|جنيه)?|(?:أقل من|اقل من|تحت|بحد أقصى)\s*(\d+(?:\.\d+)?)\s*(?:جنيه)?|<\s*(\d+)/gi,
+       m => { const v = m[1] || m[2] || m[3]; set.pmax = v; said.push(`under ${v} EGP`); });
+  take(/\b(?:over|above|more than)\s*(\d+(?:\.\d+)?)\s*(?:egp|le|pounds?)\b|(?:أكثر من|اكثر من|فوق)\s*(\d+(?:\.\d+)?)\s*(?:جنيه)?/gi,
+       m => { const v = m[1] || m[2]; set.pmin = v; said.push(`over ${v} EGP`); });
+  const stores = [];
+  take(/(?:^|\s)(?:at |on |from |in |من |في )?(talabat|tmart|طلبات)(?=[\s,.]|$)/gi, () => stores.push("talabat"));
+  take(/(?:^|\s)(?:at |on |from |in |من |في )?(amazon|أمازون|امازون)(?=[\s,.]|$)/gi, () => stores.push("amazon_eg"));
+  take(/(?:^|\s)(?:at |on |from |in |من |في )?(breadfast|بريدفاست)(?=[\s,.]|$)/gi, () => stores.push("breadfast"));
+  if (stores.length) { set.stores = [...new Set(stores)].join(","); said.push([...new Set(stores)].map(x => LABELS[x]).join(" or ")); }
+  take(/\b(?:per|a|each|by the)\s*(?:kg|kilo|liter|litre|l|piece)\b|(?:للكيلو|للتر|بالكيلو|للقطعة)/gi, () => { set.sort = "unit"; said.push("cheapest per kg / L"); });
+  take(/\b(cheapest|lowest price|cheap)\b|(?:أرخص|ارخص)/gi, () => { if (!set.sort) { set.sort = "price"; said.push("cheapest first"); } });
+  take(/\b(biggest (?:discount|deal)s?|best deals?)\b|(?:أكبر خصم|اكبر خصم|أفضل عرض)/gi, () => { set.sort = "discount"; said.push("biggest discount"); });
+  take(/\b(lowest ever|all[- ]time low|record low)\b|(?:أقل سعر)/gi, () => { set.status = "lowest"; said.push("lowest in 90 days"); });
+  take(/\b(new deals|new today|just dropped|today)\b|(?:جديد النهارده|النهارده|اليوم)/gi, () => { set.status = (set.status ? set.status + "," : "") + "new"; said.push("changed in 24 h"); });
+  take(/\b(in stock|available)\b|(?:متاح|متوفر)/gi, () => { set.stock = "in"; said.push("in stock"); });
+  take(/\b(deals?|offers?|discounts?|sale)\b|(?:عروض|عرض|خصومات|تخفيضات)/gi, () => { set.deals = "1"; });
+  const q = t.replace(/\b(?:show me|find|i want|search for|the|for)\b|(?:عايز|عاوز|ابحث عن|هات)/gi, " ").replace(/\s+/g, " ").trim();
+  if (Object.keys(set).length && !("deals" in set)) set.deals = "0";  // "milk under 50" means every milk, not only deals
+  return { q, set, said };
+}
+function showUnderstood() {
+  const nl = understand(F.q);
+  $("interp").hidden = !nl.said.length;
+  $("interp").innerHTML = nl.said.length ? "Understood: " + nl.said.map(x => `<b>${esc(x)}</b>`).join(" ") + (nl.q ? ` <b>“${esc(nl.q)}”</b>` : "") : "";
+}
+
+// ---------- voice search ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SR) {
+  $("mic").hidden = false;
+  $("mic").onclick = () => {
+    const r = new SR();
+    r.lang = /^ar/i.test(navigator.language) ? "ar-EG" : "en-US"; r.interimResults = false; r.maxAlternatives = 1;
+    $("mic").classList.add("on");
+    r.onresult = e => { $("q").value = e.results[0][0].transcript; F.q = $("q").value; showUnderstood(); apply(); };
+    r.onend = () => $("mic").classList.remove("on");
+    r.onerror = () => { $("mic").classList.remove("on"); toast("Couldn't hear that: try again, or type."); };
+    r.start();
+  };
+}
+
+// ---------- the deals chime (its own sound, played while the site is open) ----------
+let audio;
+function chime() {
+  if (!alertsPrefs().sound) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const now = audio.currentTime;
+    [[784, 0], [1047, .12], [1319, .24], [1568, .36]].forEach(([f, t], i) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = i === 3 ? "triangle" : "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0, now + t); g.gain.linearRampToValueAtTime(.22, now + t + .02);
+      g.gain.exponentialRampToValueAtTime(.001, now + t + (i === 3 ? .6 : .25));
+      o.connect(g).connect(audio.destination); o.start(now + t); o.stop(now + t + .7);
+    });
+    if (navigator.vibrate) navigator.vibrate([90, 60, 90, 60, 260]);
+  } catch {}
+}
+
+// ---------- installable app ----------
+let installEvent = null;
+const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvent = e; $("installBtn").hidden = false; });
+if (!standalone && isIOS) $("installBtn").hidden = false;
+$("installBtn").onclick = async () => {
+  if (installEvent) { installEvent.prompt(); const r = await installEvent.userChoice; if (r.outcome === "accepted") $("installBtn").hidden = true; installEvent = null; return; }
+  panel(`<h2>Install Live deals</h2>${isIOS ? `<ol><li>Tap the <b>Share</b> button (the square with an arrow) at the bottom of Safari.</li>
+    <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li><li>Open it from the new icon. Alerts work only from the installed app on iPhone (iOS 16.4 or later).</li></ol>`
+    : `<ol><li>In Chrome, open the <b>⋮</b> menu.</li><li>Choose <b>Install app</b> (or <b>Add to Home screen</b>).</li></ol>`}`);
+};
+window.addEventListener("appinstalled", () => { $("installBtn").hidden = true; toast("Installed. Find Live deals on your home screen."); });
+
+// ---------- price-drop alerts (push) ----------
+function alertsPrefs() { return Object.assign({ enabled: false, all_drops: false, min_drop: 20, stores: [], hubs: [], categories: [], words: [], sound: true },
+  store.get("alerts", {})); }
+function panel(html) { $("pbody").innerHTML = `<button class="x" aria-label="Close" onclick="this.closest('dialog').close()">×</button>` + html; if (!$("panel").open) $("panel").showModal(); }
+async function pushSubscription(create) {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub && create) {
+    const { key } = await (await fetch("/api/push/key")).json();
+    const raw = Uint8Array.from(atob(key.replace(/-/g, "+").replace(/_/g, "/") + "==".slice(0, (4 - key.length % 4) % 4)), c => c.charCodeAt(0));
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: raw });
+  }
+  return sub;
+}
+let syncT;
+function syncAlerts() {  // the server needs the watchlist and choices to know what to tell this device
+  clearTimeout(syncT);
+  syncT = setTimeout(async () => {
+    const a = alertsPrefs(); if (!a.enabled) return;
+    try {
+      const sub = await pushSubscription(false); if (!sub) return;
+      const targets = {}; Object.entries(watch).forEach(([k, v]) => { if (v.target) targets[k] = v.target; });
+      await fetch("/api/push/subscribe", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription: sub.toJSON(), prefs: { ...a, watch: Object.keys(watch).map(Number), targets } }) });
+    } catch {}
+  }, 800);
+}
+$("alertsBtn").onclick = async () => {
+  const a = alertsPrefs(), supported = "PushManager" in window && "serviceWorker" in navigator;
+  const facets = window.lastFacets || {};
+  const cats = Object.keys(facets.category || {}).slice(0, 30);
+  const hubs = Object.keys(facets.hub || {});
+  panel(`<h2>🔔 Price-drop alerts</h2>
+    ${supported ? "" : `<p class="tip">${isIOS ? "On iPhone, alerts work from the installed app: tap ⬇︎ Install first (iOS 16.4+)." : "This browser can't receive alerts."}</p>`}
+    <div class="set">
+      <label><input type="checkbox" id="aOn" ${a.enabled ? "checked" : ""} ${supported ? "" : "disabled"}> <b>Alerts on this device</b></label>
+      <label><input type="checkbox" checked disabled> Products on my watchlist ★ (and their target prices)</label>
+      <label><input type="checkbox" id="aAll" ${a.all_drops ? "checked" : ""}> Any price drop of at least <input type="number" id="aMin" min="5" max="90" step="5" value="${a.min_drop}"> %</label>
+      <div><div class="tip">…only at these stores (none = all)</div><div class="pick" id="aStores">${Object.entries(LABELS).map(([k, l]) =>
+        `<label><input type="checkbox" value="${k}" ${a.stores.includes(k) ? "checked" : ""}> ${esc(l)}</label>`).join("")}</div></div>
+      ${hubs.length > 1 ? `<div><div class="tip">…only these talabat hubs</div><div class="pick" id="aHubs">${hubs.map(h => { const [id, n] = h.split("|");
+        return `<label><input type="checkbox" value="${id}" ${a.hubs.map(String).includes(id) ? "checked" : ""}> ${esc(n)}</label>`; }).join("")}</div></div>` : ""}
+      <div><div class="tip">…only these categories</div><div class="pick" id="aCats">${cats.map(c =>
+        `<label><input type="checkbox" value="${esc(c)}" ${a.categories.includes(c) ? "checked" : ""}> ${esc(c)}</label>`).join("")}</div></div>
+      <label style="display:block">…only names containing (comma-separated)<input type="text" id="aWords" value="${esc(a.words.join(", "))}" placeholder="milk, nescafe, حفاضات"></label>
+      <label><input type="checkbox" id="aSound" ${a.sound ? "checked" : ""}> Deals chime and buzz while the site is open</label>
+    </div>
+    <div class="row"><button class="btn primary" id="aSave">Save</button><button class="btn" id="aTest">Send a test</button><button class="btn" id="aHear">▶ Hear the chime</button></div>
+    <p class="tip">Alerts arrive even when the site is closed, at most one bundle every 5 minutes. When the site is closed, the phone plays its notification sound with the deals buzz pattern; browsers don't allow a custom sound there.</p>`);
+  $("aHear").onclick = () => { const was = alertsPrefs(); store.set("alerts", { ...was, sound: true }); chime(); store.set("alerts", was); };
+  $("aSave").onclick = async () => {
+    const pick = id => [...document.querySelectorAll(`#${id} input:checked`)].map(i => i.value);
+    const next = { enabled: $("aOn").checked, all_drops: $("aAll").checked, min_drop: +$("aMin").value || 20,
+      stores: pick("aStores"), hubs: document.getElementById("aHubs") ? pick("aHubs").map(Number) : [], categories: pick("aCats"),
+      words: $("aWords").value.split(",").map(x => x.trim()).filter(Boolean), sound: $("aSound").checked };
+    try {
+      if (next.enabled) {
+        if (Notification.permission !== "granted" && await Notification.requestPermission() !== "granted") {
+          toast("Notifications are blocked for this site: allow them in the browser's site settings."); return; }
+        await pushSubscription(true);
+      } else {
+        const sub = await pushSubscription(false);
+        if (sub) { await fetch("/api/push/unsubscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }) }); await sub.unsubscribe(); }
+      }
+      store.set("alerts", next); syncAlerts();
+      toast(next.enabled ? "Alerts are on. 🔔" : "Alerts are off."); $("panel").close();
+    } catch (e) { toast("Couldn't turn alerts on: " + (e.message || e)); }
+  };
+  $("aTest").onclick = async () => {
+    const sub = await pushSubscription(false).catch(() => null);
+    if (!sub) { toast("Turn alerts on and save first."); return; }
+    syncAlerts(); await new Promise(r => setTimeout(r, 1200));
+    const r = await fetch("/api/push/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }) });
+    const j = await r.json().catch(() => ({})); toast(r.ok ? "Test sent: it should arrive in a few seconds." : (j.error || "Test failed."));
+  };
+};
+navigator.serviceWorker && navigator.serviceWorker.addEventListener("message", e => {
+  if (e.data && e.data.type === "deal-push") { chime(); toast(`<b>${esc(e.data.m.title)}</b><br>${esc(e.data.m.body)}`, () => location.href = e.data.m.url || "/", true); }
+});
+
+// ---------- basket: where each item is cheapest ----------
+let basket = store.get("basket", {});
+function saveBasket() { store.set("basket", basket); const n = Object.values(basket).reduce((a, b) => a + b, 0); $("basketN").hidden = !n; $("basketN").textContent = n; }
+async function showBasket() {
+  const ids = Object.keys(basket);
+  if (!ids.length) { panel(`<h2>🧺 Basket</h2><p class="tip">Open any product and tap <b>Add to basket</b>. The basket shows the cheapest store for each item, using the same products found in other stores.</p>`); return; }
+  const r = await (await fetch(`/api/deals?deals=0&stock=all&limit=500&ids=${ids.join(",")}`)).json();
+  const rows = r.items.map(d => {
+    const opts = [{ id: d.id, store: d.store, price: d.price, in_stock: d.in_stock }, ...d.matches].filter(o => o.in_stock);
+    const best = opts.sort((a, b) => a.price - b.price)[0] || { ...d };
+    return { d, best, qty: basket[d.id] || 1, saving: Math.max(0, d.price - best.price) };
+  });
+  const total = rows.reduce((s, x) => s + x.best.price * x.qty, 0), listed = rows.reduce((s, x) => s + x.d.price * x.qty, 0);
+  const byStore = {}; rows.forEach(x => byStore[x.best.store] = (byStore[x.best.store] || 0) + x.best.price * x.qty);
+  panel(`<h2>🧺 Basket</h2>
+    <table class="cmp bk">${rows.map(x => `<tr><td dir="auto">${esc(x.d.name.slice(0, 48))}${x.d.in_stock ? "" : " <span class='tag'>out of stock</span>"}</td>
+      <td><span style="color:var(--${x.best.store});font-weight:650">${esc(LABELS[x.best.store] || x.best.store)}</span><br>${fmt(x.best.price)} EGP${x.saving ? `<br><span class="tag good">save ${fmt(x.saving * x.qty)}</span>` : ""}</td>
+      <td><span class="qty"><button data-q="${x.d.id}" data-d="-1">−</button>${x.qty}<button data-q="${x.d.id}" data-d="1">+</button></span></td></tr>`).join("")}</table>
+    <h4>Cheapest plan</h4>
+    <p>${Object.entries(byStore).map(([s, v]) => `<b>${esc(LABELS[s] || s)}</b> ${fmt(v)} EGP`).join(" · ")}</p>
+    <p class="bigprice">${fmt(total)} EGP</p>${listed > total ? `<p class="tag good">saves ${fmt(listed - total)} EGP against buying each where you found it</p>` : ""}
+    <div class="row"><button class="btn" id="bClear">Empty basket</button></div>`);
+  document.querySelectorAll("[data-q]").forEach(b => b.onclick = () => { const id = b.dataset.q;
+    basket[id] = (basket[id] || 0) + +b.dataset.d; if (basket[id] <= 0) delete basket[id]; saveBasket(); showBasket(); });
+  $("bClear").onclick = () => { basket = {}; saveBasket(); $("panel").close(); };
+}
+$("basketBtn").onclick = showBasket;
+
+readURL(); syncControls(); saveWatch(); saveBasket(); activeChips(); showUnderstood(); load(); loadTicker();
 setInterval(loadTicker, 15000); setInterval(checkWatch, 60000); checkWatch();
 const pid = new URLSearchParams(location.search).get("p"); if (pid) showProduct(+pid);
 </script>

@@ -9,7 +9,9 @@
   /api/status            each store: products, last check, last change, cycle time, errors
   /manifest.webmanifest, /icon.svg   so the page installs as an app
   /healthz               200 when the database answers (Coolify's health check)
-  /admin                 the owner's page for uploading a Breadfast app capture
+  /admin                 the owner's page: talabat hubs to follow, and adding Breadfast
+  /api/talabat/hubs      every known talabat mart hub (name, number, areas) and the ones followed
+  POST /admin/settings   {"talabat_hubs": [ids]} or {"hub_link": "https://www.talabat.com/egypt/grocery/<hub>/..."}
   POST /admin/breadfast  the capture itself (?divisor=1|100), with "Authorization: Bearer $DEALS_ADMIN_TOKEN";
                          off (403) until DEALS_ADMIN_TOKEN is set
   POST /admin/breadfast-request   {"curl": "...", "divisor": 1}: one product-list request copied as cURL
@@ -18,6 +20,7 @@
 import hmac
 import json
 import os
+import re
 import sqlite3
 import tempfile
 import threading
@@ -26,20 +29,50 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import db, finder
-from .stores import LABELS, breadfast
+from . import db, finder, settings
+from .stores import LABELS, breadfast, talabat
 
 PAGE = Path(__file__).with_name("live.html")
 ADMIN_PAGE = Path(__file__).with_name("admin.html")
+HUBS_FILE = Path(__file__).parent / "stores" / "talabat_hubs.json"
+
+
+def known_hubs(db_path: str = None) -> dict:
+    """{hub id: {"id", "name", "aid", "areas": [...]}}: the list shipped with the app, plus what the server's
+    own weekly look-up (talabat_hubs.json next to the database) has found."""
+    raw = {}
+    for f in [HUBS_FILE] + ([Path(os.path.dirname(os.path.abspath(db_path))) / "talabat_hubs.json"] if db_path else []):
+        try:
+            d = json.loads(Path(f).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for k, h in (d.get("hubs") if "hubs" in d else d).items():
+            old = raw.get(str(k), {})
+            areas = {a["id"]: a for a in (old.get("areas") or []) + (h.get("areas") or [])}
+            raw[str(k)] = {**old, **h, "areas": list(areas.values())}
+    out = {}
+    for h in raw.values():
+        areas = h.get("areas") or []
+        out[int(h["id"])] = {"id": int(h["id"]), "name": h.get("name") or talabat.hub_from_slug(h.get("slug") or ""),
+                             "aid": areas[0]["id"] if areas else 9838, "areas": areas}
+    return out
+
+
 MAX_UPLOAD = 300 * 1024 * 1024
 _import_lock = threading.Lock()
 CACHE_SECONDS = 5
 CATALOG_SECONDS = 15
 MANIFEST = json.dumps({
-    "name": "Live deals", "short_name": "Deals", "start_url": "/", "display": "standalone",
-    "background_color": "#f6f5f2", "theme_color": "#d6402b",
-    "icons": [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}],
+    "name": "Live deals", "short_name": "Deals", "start_url": "/", "scope": "/", "display": "standalone",
+    "background_color": "#f6f5f2", "theme_color": "#d6402b", "description": "Live prices and real deals",
+    "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+              {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+              {"src": "/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}],
 }).encode()
+STATIC = {"/sw.js": ("sw.js", "text/javascript"), "/icon-192.png": ("icon-192.png", "image/png"),
+          "/icon-512.png": ("icon-512.png", "image/png"), "/icon-maskable.png": ("icon-maskable.png", "image/png")}
+# the browser push services; the server sends pushes nowhere else
+PUSH_HOSTS = ("fcm.googleapis.com", "push.services.mozilla.com", "push.apple.com", "notify.windows.com")
 ICON = (b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" '
         b'fill="#d6402b"/><path d="M150 330 L250 230 L300 280 L390 180" stroke="#fff" stroke-width="44" fill="none" '
         b'stroke-linecap="round" stroke-linejoin="round"/><circle cx="390" cy="180" r="34" fill="#fff"/></svg>')
@@ -93,6 +126,64 @@ def make_handler(db_path: str, requests_file: str = None):
     catalog_state = {"at": 0.0, "items": [], "by_id": {}}
     catalog_lock = threading.Lock()
 
+    vapid_box = {}
+
+    def vapid():
+        if "v" not in vapid_box:
+            from . import push
+            vapid_box["v"] = push.Vapid.load_or_create(os.path.join(os.path.dirname(os.path.abspath(db_path)), "vapid.json"))
+        return vapid_box["v"]
+
+    def push_api(path: str, body: dict):
+        """subscribe {subscription, prefs} · unsubscribe {endpoint} · test {endpoint}"""
+        from . import push
+        sub = body.get("subscription") or {}
+        endpoint = str(body.get("endpoint") or sub.get("endpoint") or "")
+        host = (urlparse(endpoint).hostname or "").lower()
+        if not endpoint.startswith("https://") or not any(host == h or host.endswith("." + h) for h in PUSH_HOSTS):
+            return 422, {"error": "That isn't a browser push address."}
+        con = db.connect(db_path)
+        try:
+            if path == "/api/push/subscribe":
+                keys = sub.get("keys") or {}
+                if not (keys.get("p256dh") and keys.get("auth")):
+                    return 422, {"error": "The subscription has no keys."}
+                prefs = body.get("prefs") or {}
+                prefs = {"watch": [int(x) for x in prefs.get("watch") or []][:500],
+                         "targets": {str(k): float(v) for k, v in (prefs.get("targets") or {}).items() if v},
+                         "all_drops": bool(prefs.get("all_drops")), "min_drop": float(prefs.get("min_drop") or 0),
+                         "stores": [str(x) for x in prefs.get("stores") or []][:10],
+                         "hubs": [int(x) for x in prefs.get("hubs") or []][:20],
+                         "categories": [str(x) for x in prefs.get("categories") or []][:50],
+                         "words": [str(x)[:40] for x in prefs.get("words") or []][:20]}
+                if con.execute("SELECT COUNT(*) FROM push_subs").fetchone()[0] > 20000:
+                    return 503, {"error": "Too many subscriptions."}
+                with con:
+                    con.execute("""INSERT INTO push_subs (endpoint, subscription, prefs, created) VALUES (?,?,?,?)
+                                   ON CONFLICT(endpoint) DO UPDATE SET subscription=excluded.subscription,
+                                   prefs=excluded.prefs""",
+                                (endpoint, json.dumps({"endpoint": endpoint, "keys": {"p256dh": keys["p256dh"],
+                                                                                      "auth": keys["auth"]}}),
+                                 json.dumps(prefs), int(time.time())))
+                return 200, {"ok": True, "prefs": prefs}
+            row = con.execute("SELECT * FROM push_subs WHERE endpoint=?", (endpoint,)).fetchone()
+            if path == "/api/push/unsubscribe":
+                with con:
+                    con.execute("DELETE FROM push_subs WHERE endpoint=?", (endpoint,))
+                return 200, {"ok": True}
+            if not row:
+                return 404, {"error": "Not subscribed."}
+            if time.time() - (row["last_sent"] or 0) < 30:
+                return 429, {"error": "One test every 30 seconds."}
+            status = push.send(vapid(), json.loads(row["subscription"]),
+                               {"title": "Live deals: alerts are on", "body": "This is how a price drop will look.",
+                                "url": "/", "tag": "deals-test"})
+            with con:
+                con.execute("UPDATE push_subs SET last_sent=? WHERE endpoint=?", (int(time.time()), endpoint))
+            return (200, {"ok": True}) if 200 <= status < 300 else (502, {"error": f"The push service answered {status}."})
+        finally:
+            con.close()
+
     def catalog(con) -> list[dict]:
         with catalog_lock:  # one rebuild at a time; everyone else gets the fresh copy
             if time.monotonic() - catalog_state["at"] > CATALOG_SECONDS:
@@ -122,6 +213,8 @@ def make_handler(db_path: str, requests_file: str = None):
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
+            if ctype == "text/javascript":
+                self.send_header("Service-Worker-Allowed", "/")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             self.wfile.write(body)
@@ -156,7 +249,7 @@ def make_handler(db_path: str, requests_file: str = None):
                                 stock=q.get("stock", "in"), status=[x for x in q.get("status", "").split(",") if x],
                                 category=q.get("category") or None, q=q.get("q") or None,
                                 price_min=num("pmin"), price_max=num("pmax"), ids=nums("ids"),
-                                best=q.get("best") == "1", sort=q.get("sort", "score"),
+                                best=q.get("best") == "1", sort=q.get("sort", "score"), hubs=nums("hubs"),
                                 limit=min(int(q.get("limit", 60)), 500), offset=int(q.get("offset", 0)))
                     if args["ids"] is not None:
                         args["ids"] = set(args["ids"])
@@ -180,6 +273,28 @@ def make_handler(db_path: str, requests_file: str = None):
                     matches = [dict(catalog_state["by_id"][m["id"]], spark=None) for m in item.get("matches", [])
                                if m["id"] in catalog_state["by_id"]]
                     self.json({"product": dict(p), "item": item, "history": db.history(con, pid), "matches": matches})
+                elif u.path == "/api/talabat/hubs":
+                    chosen = settings.load(settings.path_for(db_path))["talabat_hubs"]
+                    hubs = known_hubs(db_path)
+                    for h in chosen:
+                        hubs.setdefault(h["id"], {**h, "areas": []})
+                    rows = []
+                    for h in hubs.values():
+                        cities = sorted({a["city"] for a in h["areas"]})
+                        area_names = [a["name"] for a in h["areas"]]
+                        label, words = talabat.district(h["name"], cities)  # the hub's own name decides
+                        if not words:  # a name that says nothing: go by the areas it serves
+                            label, words = talabat.district(" ".join(area_names[:5]), cities)
+                        rows.append({"id": h["id"], "name": h["name"], "aid": h["aid"], "areas": area_names[:40],
+                                     "cities": cities, "district": label, "words": words})
+                    order = [d[0] for d in talabat.DISTRICTS]
+                    rows.sort(key=lambda h: (order.index(h["district"]) if h["district"] in order else 99, h["name"].lower()))
+                    self.json({"selected": [h["id"] for h in chosen], "districts": order, "hubs": rows})
+                elif u.path in STATIC:
+                    name, ctype = STATIC[u.path]
+                    self.send(200, (Path(__file__).parent / name).read_bytes(), ctype)
+                elif u.path == "/api/push/key":
+                    self.json({"key": vapid().public_b64})
                 elif u.path == "/manifest.webmanifest":
                     self.send(200, MANIFEST, "application/manifest+json")
                 elif u.path == "/icon.svg":
@@ -198,7 +313,16 @@ def make_handler(db_path: str, requests_file: str = None):
 
         def do_POST(self):
             u = urlparse(self.path)
-            if u.path not in ("/admin/breadfast", "/admin/breadfast-request"):
+            if u.path in ("/api/push/subscribe", "/api/push/unsubscribe", "/api/push/test"):
+                try:
+                    size = int(self.headers.get("Content-Length") or 0)
+                    if not 0 < size <= 1 << 16:
+                        return self.json({"error": "Send JSON."}, 413)
+                    code, out = push_api(u.path, json.loads(self.rfile.read(size)))
+                except (ValueError, TypeError, AttributeError):
+                    code, out = 400, {"error": "Send JSON."}
+                return self.json(out, code)
+            if u.path not in ("/admin/breadfast", "/admin/breadfast-request", "/admin/settings"):
                 return self.json({"error": "not found"}, 404)
             token = os.environ.get("DEALS_ADMIN_TOKEN", "")
             if len(token) < 16:
@@ -212,6 +336,40 @@ def make_handler(db_path: str, requests_file: str = None):
                 size = int(self.headers.get("Content-Length") or 0)
             except ValueError:
                 size = 0
+            if u.path == "/admin/settings":
+                if not 0 < size <= 1 << 16:
+                    return self.json({"error": "Send the settings as JSON."}, 413)
+                try:
+                    body = json.loads(self.rfile.read(size))
+                    hubs = known_hubs(db_path)
+                    path = settings.path_for(db_path)
+                    current = settings.load(path)
+                    chosen = {h["id"]: h for h in current["talabat_hubs"]}
+                    if "talabat_hubs" in body:
+                        ids = [int(x) for x in body["talabat_hubs"]]
+                        if not ids:
+                            return self.json({"error": "Choose at least one hub."}, 422)
+                        unknown = [i for i in ids if i not in hubs and i not in chosen]
+                        if unknown:
+                            return self.json({"error": f"Unknown hub(s): {unknown}. Add a hub by its talabat link."}, 422)
+                        chosen = {i: chosen.get(i) or {"id": i, "aid": hubs[i]["aid"], "name": hubs[i]["name"]} for i in ids}
+                    if body.get("hub_link"):
+                        m = re.search(r"talabat\.com/egypt/grocery/(\d+)/", body["hub_link"])
+                        if not m:
+                            return self.json({"error": "That isn't a talabat mart link (…talabat.com/egypt/grocery/<hub>/…)."}, 422)
+                        hid = int(m.group(1))
+                        aid = re.search(r"[?&]aid=(\d+)", body["hub_link"])
+                        known = hubs.get(hid, {})
+                        chosen[hid] = {"id": hid, "aid": int(aid.group(1)) if aid else known.get("aid", 9838),
+                                       "name": known.get("name") or str(hid)}
+                    if len(chosen) > 10:
+                        return self.json({"error": "Up to 10 hubs (each one adds ~15 minutes to a talabat sweep)."}, 422)
+                    current["talabat_hubs"] = list(chosen.values())
+                    settings.save(path, current)
+                except (ValueError, TypeError, KeyError):
+                    return self.json({"error": "Send {\"talabat_hubs\": [ids]} or {\"hub_link\": \"…\"}."}, 400)
+                return self.json({"selected": [h["id"] for h in current["talabat_hubs"]],
+                                  "hubs": current["talabat_hubs"]})
             if u.path == "/admin/breadfast-request":
                 if not 0 < size <= 1 << 20:
                     return self.json({"error": "Paste one request (up to 1 MB)."}, 413)
