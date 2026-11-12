@@ -1,0 +1,5 @@
+*.sqlite3*
+__pycache__/
+# your Breadfast app session and captures: never commit these
+breadfast_requests*.json
+*.har
