@@ -23,6 +23,7 @@ import base64
 import json
 import os
 import re
+import shlex
 from typing import Iterator, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -303,4 +304,109 @@ def import_capture(db_path: str, har_path: str, requests_file: str, divisor: flo
     if requests:
         save_requests(requests_file, requests, divisor)
     return {"products": len(unique), "requests": len(requests),
+            "samples": [{"name": o.name, "price": o.price, "original_price": o.original_price} for o in unique[:8]]}
+
+
+# ---- one request pasted "as cURL" ------------------------------------------------------------------
+
+class BadRequest(ValueError):
+    pass
+
+
+def _public_host(host: str) -> bool:
+    """False for names that lead to this machine or a private network (the server sends the pasted request)."""
+    import ipaddress
+    import socket
+    try:
+        addrs = {a[4][0] for a in socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)}
+    except OSError:
+        return True  # can't look it up here: the request itself will fail, harmlessly
+    return all(ipaddress.ip_address(a.split("%")[0]).is_global for a in addrs)
+
+
+def parse_curl(text: str) -> dict:
+    """{"url", "headers"} from a request copied as cURL (HTTP Toolkit, Proxyman, Charles, browser dev tools).
+    Only a GET to a Breadfast address is accepted: this is for reading product lists, nothing else."""
+    text = text.replace("\\\r\n", " ").replace("\\\n", " ").replace("^\n", " ").strip()
+    try:
+        tokens = shlex.split(text)
+    except ValueError as e:
+        raise BadRequest(f"couldn't read that command ({e})")
+    if not tokens or tokens[0].lower() not in ("curl", "curl.exe"):
+        raise BadRequest("paste the request copied as cURL (it starts with curl)")
+    url, headers, method, i = None, {}, "GET", 1
+    with_value = {"-H", "--header", "-X", "--request", "-b", "--cookie", "-A", "--user-agent", "-e", "--referer",
+                  "--url", "-u", "--user", "-o", "--output", "--connect-timeout", "-m", "--max-time"}
+    while i < len(tokens):
+        t = tokens[i]
+        if t in with_value and i + 1 < len(tokens):
+            v = tokens[i + 1]
+            if t in ("-H", "--header") and ":" in v:
+                k, _, val = v.partition(":")
+                headers[k.strip()] = val.strip()
+            elif t in ("-X", "--request"):
+                method = v.upper()
+            elif t in ("-b", "--cookie"):
+                headers["Cookie"] = v
+            elif t in ("-A", "--user-agent"):
+                headers["User-Agent"] = v
+            elif t in ("-e", "--referer"):
+                headers["Referer"] = v
+            elif t == "--url":
+                url = v
+            i += 2
+            continue
+        if t.startswith(("-d", "--data", "-F", "--form", "-T", "--upload")):
+            method = "POST"
+        elif not t.startswith("-") and url is None:
+            url = t
+        i += 1
+    if method != "GET":
+        raise BadRequest(f"that's a {method} request; copy one that loads a product list (GET)")
+    if not url or not url.startswith("https://"):
+        raise BadRequest("no https address in that command")
+    host = (urlsplit(url).hostname or "").lower()
+    if "breadfast" not in host:
+        raise BadRequest(f"that request goes to {host}, not to Breadfast")
+    if not _public_host(host):
+        raise BadRequest(f"{host} isn't a public internet address")
+    if SKIP_URL.search(urlsplit(url).path):
+        raise BadRequest("that request is for your cart, orders or account; copy one from a category list")
+    headers = {k: v for k, v in headers.items() if not k.startswith(":") and k.lower() not in DROP_HEADERS}
+    return {"url": url, "headers": headers}
+
+
+def import_request(db_path: str, curl_text: str, requests_file: str, divisor: float = 1,
+                   fetcher: Fetcher = None) -> dict:
+    """Sends one pasted request once, saves the products it returns, and adds it to the refreshed requests."""
+    from .. import db
+    r = parse_curl(curl_text)
+    fetcher = fetcher or Fetcher(delay=0)
+    status, body = fetcher.request(r["url"], headers=r["headers"])
+    if status in (401, 403):
+        raise BadRequest(f"Breadfast answered {status}: that request's sign-in has expired; copy a fresh one")
+    if status != 200:
+        raise BadRequest(f"Breadfast answered {status}")
+    try:
+        found = products_in(json.loads(body), divisor)
+    except ValueError:
+        raise BadRequest("Breadfast didn't answer with data (JSON) for that request")
+    unique = list({o.sku: o for o in found}.values())
+    if not unique:
+        raise BadRequest("that request returned no products; copy one from a category or product list")
+    con = db.connect(db_path)
+    try:
+        run = db.start_run(con, STORE)
+        seen, changed = db.save_offers(con, unique)
+        db.finish_run(con, run, seen, changed)
+    finally:
+        con.close()
+    try:
+        existing, old_divisor = load_requests(requests_file)
+    except NotConfigured:
+        existing, old_divisor = [], divisor
+    key = lambda u: _with_page(u, _page_param(u), 1) if _page_param(u) else u
+    kept = [x for x in existing if key(x["url"]) != key(r["url"])] + [r]
+    save_requests(requests_file, kept, divisor)
+    return {"products": len(unique), "requests": len(kept),
             "samples": [{"name": o.name, "price": o.price, "original_price": o.original_price} for o in unique[:8]]}

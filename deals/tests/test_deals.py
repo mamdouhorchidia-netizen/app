@@ -144,6 +144,33 @@ class AmazonBestSellers(unittest.TestCase):
         self.assertEqual(f.delay, 3.0)
         self.assertNotIn(503, f.retry_statuses)
 
+    def test_every_level(self):
+        level2 = (FIX / "amazon_bestsellers_level2.html").read_text()
+        self.assertIn(("21840298031", "Formula"), amazon_eg.parse_subcategories(level2, "grocery", "21840237031"))
+        self.assertIn(("21840299031", "Finger Food, Snacks & Rusks"),
+                      amazon_eg.parse_subcategories(level2, "grocery", "21840237031"))
+        self.assertEqual(len(amazon_eg.parse_subcategories(level2, "grocery", "21840237031")), 8)
+        self.assertEqual(amazon_eg.parse_subcategories(level2, "grocery", "99999"), [])  # not this list's children
+        self.assertEqual(len(amazon_eg.parse_subcategories(self.page, "grocery")), 3)  # department: level 1 only
+
+        def answer(url):
+            if "/grocery?" in url:
+                return 200, self.page                     # the department: 3 sub-lists
+            if "/grocery/21840237031?" in url:
+                return 200, level2                        # Baby Foods: 8 sub-lists of its own
+            return 200, "<html></html>"                   # everything below: no further lists
+        f, asked = self.fake(answer)
+        list(amazon_eg.collect_bestsellers(f, ["grocery"], log=lambda *_: None))
+        lists = {u.split("?")[0] for u in asked}
+        self.assertEqual(len(lists), 1 + 3 + 8)
+        self.assertIn("https://www.amazon.eg/-/en/gp/bestsellers/grocery/21840298031", lists)  # Formula, level 2
+        self.assertEqual(len(asked), 2 * len(lists))  # two pages of each list
+
+    def test_all_departments_but_gift_cards(self):
+        self.assertEqual(len(amazon_eg.DEFAULT_DEPARTMENTS), 17)
+        self.assertNotIn("gift-cards", amazon_eg.DEFAULT_DEPARTMENTS)
+        self.assertTrue(all(d in amazon_eg.DEPARTMENT_NAMES for d in amazon_eg.DEFAULT_DEPARTMENTS))
+
     def test_bot_check_stops_the_run(self):
         f, asked = self.fake(lambda url: (503, "<html>Enter the characters you see below (captcha)</html>"))
         with self.assertRaises(Blocked):
@@ -485,6 +512,60 @@ class PackSizes(unittest.TestCase):
         self.assertIsNone(pack_size("Granzia Pionizer Compressor Nebulizer"))
 
 
+class BreadfastPastedRequest(unittest.TestCase):
+    CURL = ("curl -X GET 'https://api.breadfast.com/v4/categories/12/products?page=1' "
+            "-H 'authorization: Bearer abc' -H 'accept-encoding: br' -H 'x-app-version: 9.1'")
+
+    def test_parse(self):
+        r = breadfast.parse_curl(self.CURL)
+        self.assertEqual(r, {"url": "https://api.breadfast.com/v4/categories/12/products?page=1",
+                             "headers": {"authorization": "Bearer abc", "x-app-version": "9.1"}})
+        r = breadfast.parse_curl("curl 'https://api.breadfast.com/p?page=2' \\\n  -H 'accept: application/json' \\\n  -b 'sid=1' --compressed")
+        self.assertEqual(r["headers"], {"accept": "application/json", "Cookie": "sid=1"})
+
+    def test_refusals(self):
+        for bad in ["curl https://evil.example/x", "curl -X POST https://api.breadfast.com/v1/cart/add",
+                    "curl -d 'a=1' https://api.breadfast.com/p", "curl https://api.breadfast.com/v1/user/profile",
+                    "curl http://api.breadfast.com/p", "wget https://api.breadfast.com/p", "curl 'unclosed"]:
+            with self.assertRaises(breadfast.BadRequest, msg=bad):
+                breadfast.parse_curl(bad)
+        with mock.patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("10.0.0.5", 443))]):
+            with self.assertRaisesRegex(breadfast.BadRequest, "public"):
+                breadfast.parse_curl("curl https://breadfast.internal.example/p")
+
+    def fetcher(self, status=200, body=None):
+        asked = []
+
+        class Fake(Fetcher):
+            def request(self, url, data=None, headers=None, method=None):
+                asked.append((url, headers))
+                return status, json.dumps(BF_LIST if body is None else body)
+        return Fake(delay=0), asked
+
+    def test_import_and_merge(self):
+        with tempfile.TemporaryDirectory() as d:
+            dbp, req = os.path.join(d, "d.sqlite3"), os.path.join(d, "r.json")
+            f, asked = self.fetcher()
+            r = breadfast.import_request(dbp, self.CURL, req, 1, f)
+            self.assertEqual((r["products"], r["requests"]), (3, 1))
+            self.assertEqual(asked[0][1], {"authorization": "Bearer abc", "x-app-version": "9.1"})
+            other = self.CURL.replace("categories/12", "categories/13")
+            self.assertEqual(breadfast.import_request(dbp, other, req, 1, f)["requests"], 2)
+            page2 = self.CURL.replace("page=1", "page=2")  # same list: replaces, doesn't add
+            self.assertEqual(breadfast.import_request(dbp, page2, req, 1, f)["requests"], 2)
+            requests, _ = breadfast.load_requests(req)
+            self.assertEqual(len(requests), 2)
+
+    def test_expired_or_empty(self):
+        with tempfile.TemporaryDirectory() as d:
+            dbp, req = os.path.join(d, "d.sqlite3"), os.path.join(d, "r.json")
+            with self.assertRaisesRegex(breadfast.BadRequest, "expired"):
+                breadfast.import_request(dbp, self.CURL, req, 1, self.fetcher(401)[0])
+            with self.assertRaisesRegex(breadfast.BadRequest, "no products"):
+                breadfast.import_request(dbp, self.CURL, req, 1, self.fetcher(body={"banners": []})[0])
+            self.assertFalse(os.path.exists(req))
+
+
 class BreadfastUpload(unittest.TestCase):
     """The owner's upload page, on a real server in a thread."""
 
@@ -535,6 +616,27 @@ class BreadfastUpload(unittest.TestCase):
         items = finder.query(finder.catalog(db.connect(self.db)), deals_only=False, stock="all")["items"]
         self.assertEqual({d["store"] for d in items}, {"breadfast"})
         self.assertEqual(len(items), 3)
+
+    def test_paste_endpoint(self):
+        import urllib.error
+        import urllib.request
+        token = "t" * 24
+        body = json.dumps({"curl": BreadfastPastedRequest.CURL, "divisor": "1"}).encode()
+
+        def send(b, tok=token):
+            req = urllib.request.Request(f"{self.base}/admin/breadfast-request", data=b, method="POST",
+                                         headers={"Authorization": f"Bearer {tok}"})
+            try:
+                with urllib.request.urlopen(req) as r:
+                    return r.status, json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read())
+        with mock.patch.dict(os.environ, {"DEALS_ADMIN_TOKEN": token}), mock.patch("time.sleep"), \
+                mock.patch.object(breadfast.Fetcher, "request", return_value=(200, json.dumps(BF_LIST))):
+            self.assertEqual(send(body, "wrong-token-123456")[0], 401)
+            self.assertEqual(send(json.dumps({"curl": "curl https://evil.example/x"}).encode())[0], 422)
+            status, r = send(body)
+        self.assertEqual((status, r["products"], r["requests"]), (200, 3, 1))
 
     def test_piasters(self):
         with mock.patch.dict(os.environ, {"DEALS_ADMIN_TOKEN": "t" * 24}):
