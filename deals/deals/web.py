@@ -282,7 +282,9 @@ def make_handler(db_path: str, requests_file: str = None):
                     for h in hubs.values():
                         cities = sorted({a["city"] for a in h["areas"]})
                         area_names = [a["name"] for a in h["areas"]]
-                        label, words = talabat.district(h["name"] + " " + " ".join(area_names[:5]), cities)
+                        label, words = talabat.district(h["name"], cities)  # the hub's own name decides
+                        if not words:  # a name that says nothing: go by the areas it serves
+                            label, words = talabat.district(" ".join(area_names[:5]), cities)
                         rows.append({"id": h["id"], "name": h["name"], "aid": h["aid"], "areas": area_names[:40],
                                      "cities": cities, "district": label, "words": words})
                     order = [d[0] for d in talabat.DISTRICTS]
