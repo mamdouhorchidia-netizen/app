@@ -278,11 +278,16 @@ def make_handler(db_path: str, requests_file: str = None):
                     hubs = known_hubs(db_path)
                     for h in chosen:
                         hubs.setdefault(h["id"], {**h, "areas": []})
-                    self.json({"selected": [h["id"] for h in chosen],
-                               "hubs": sorted(({"id": h["id"], "name": h["name"], "aid": h["aid"],
-                                                "areas": [a["name"] for a in h["areas"]][:40],
-                                                "cities": sorted({a["city"] for a in h["areas"]})}
-                                               for h in hubs.values()), key=lambda h: h["name"].lower())})
+                    rows = []
+                    for h in hubs.values():
+                        cities = sorted({a["city"] for a in h["areas"]})
+                        area_names = [a["name"] for a in h["areas"]]
+                        label, words = talabat.district(h["name"] + " " + " ".join(area_names[:5]), cities)
+                        rows.append({"id": h["id"], "name": h["name"], "aid": h["aid"], "areas": area_names[:40],
+                                     "cities": cities, "district": label, "words": words})
+                    order = [d[0] for d in talabat.DISTRICTS]
+                    rows.sort(key=lambda h: (order.index(h["district"]) if h["district"] in order else 99, h["name"].lower()))
+                    self.json({"selected": [h["id"] for h in chosen], "districts": order, "hubs": rows})
                 elif u.path in STATIC:
                     name, ctype = STATIC[u.path]
                     self.send(200, (Path(__file__).parent / name).read_bytes(), ctype)

@@ -42,7 +42,8 @@ ol { padding-left: 20px; }
     <h2 style="margin-top:0">talabat mart hubs</h2>
     <p>Each hub stocks different products, and prices can differ. Tick the hubs to follow (each one adds about
       15 minutes to a talabat sweep). Search by hub, area or city: for example <i>Obour</i>, <i>Maadi</i>, <i>Zayed</i>.</p>
-    <input type="search" id="hubq" placeholder="Search hubs, areas, cities…" style="width:100%;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px">
+    <div class="seg" id="hubdist" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px"></div>
+    <input type="search" id="hubq" placeholder="Search hubs, areas, cities… (English or Arabic)" style="width:100%;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px">
     <div id="hublist" style="max-height:340px;overflow:auto;margin-top:8px"></div>
     <p id="hubsel" style="font-size:13px"></p>
     <details><summary>My hub isn't listed</summary>
@@ -146,11 +147,19 @@ $("f").onsubmit = e => {
 // ---- hubs ----
 let hubs = [], selected = new Set();
 const norm = t => (t || "").toLowerCase();
+let districts = [], dist = "";
+function drawDistricts() {
+  const have = new Set(hubs.map(h => h.district));
+  $("hubdist").innerHTML = ["All", ...districts.filter(d => have.has(d))].map(d =>
+    `<button type="button" data-d="${esc(d === "All" ? "" : d)}" style="width:auto;margin:0;padding:6px 10px;font-size:13px;font-weight:600;border-radius:999px;background:${(d === "All" ? "" : d) === dist ? "var(--accent)" : "var(--chip)"};color:${(d === "All" ? "" : d) === dist ? "#fff" : "var(--ink)"}">${esc(d)} ${d === "All" ? hubs.length : hubs.filter(h => h.district === d).length}</button>`).join("");
+  $("hubdist").querySelectorAll("button").forEach(b => b.onclick = () => { dist = b.dataset.d; drawDistricts(); drawHubs(); });
+}
 function drawHubs() {
   const q = norm($("hubq").value).trim();
-  const rows = hubs.filter(h => !q || norm(h.name + " " + h.areas.join(" ") + " " + h.cities.join(" ") + " " + h.id).includes(q));
-  rows.sort((a, b) => (selected.has(b.id) - selected.has(a.id)) || a.name.localeCompare(b.name));
-  $("hublist").innerHTML = rows.slice(0, 200).map(h => `<label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;margin:0;padding:8px 4px;border-top:1px solid var(--line);cursor:pointer">
+  const rows = hubs.filter(h => (!dist || h.district === dist) &&
+    (!q || norm(h.name + " " + h.areas.join(" ") + " " + h.cities.join(" ") + " " + h.id + " " + h.district + " " + h.words).includes(q)));
+  let last = null;
+  $("hublist").innerHTML = rows.slice(0, 300).map(h => (h.district !== last ? `<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:12px 4px 4px">${esc(last = h.district)}</div>` : "") + `<label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;margin:0;padding:8px 4px;border-top:1px solid var(--line);cursor:pointer">
       <input type="checkbox" value="${h.id}" ${selected.has(h.id) ? "checked" : ""} style="margin-top:4px">
       <span><b>${esc(h.name)}</b> <span style="color:var(--muted);font-size:12px">#${h.id} · ${esc(h.cities.join(", "))}</span><br>
       <span style="color:var(--muted);font-size:12px" dir="auto">${esc(h.areas.slice(0, 8).join(" · "))}${h.areas.length > 8 ? " …" : ""}</span></span></label>`).join("")
@@ -163,7 +172,7 @@ function hubCount() {
   const names = hubs.filter(h => selected.has(h.id)).map(h => h.name);
   $("hubsel").textContent = `${selected.size} hub${selected.size === 1 ? "" : "s"} chosen: ${names.join(", ") || "none"}`;
 }
-fetch("/api/talabat/hubs").then(r => r.json()).then(r => { hubs = r.hubs; selected = new Set(r.selected); drawHubs(); });
+fetch("/api/talabat/hubs").then(r => r.json()).then(r => { hubs = r.hubs; districts = r.districts || []; selected = new Set(r.selected); drawDistricts(); drawHubs(); });
 $("hubq").oninput = drawHubs;
 $("savehubs").onclick = async () => {
   const body = { talabat_hubs: [...selected] };
@@ -177,7 +186,7 @@ $("savehubs").onclick = async () => {
     else {
       try { sessionStorage.setItem("dealsAdmin", $("token").value.trim()); } catch {}
       selected = new Set(r.selected); $("hublink").value = "";
-      fetch("/api/talabat/hubs").then(x => x.json()).then(x => { hubs = x.hubs; drawHubs(); });
+      fetch("/api/talabat/hubs").then(x => x.json()).then(x => { hubs = x.hubs; drawDistricts(); drawHubs(); });
       $("hubout").innerHTML = `<p class="ok">Saved. Following ${r.hubs.map(h => esc(h.name)).join(", ")}. The site starts on them within a minute; a full sweep takes about ${15 * r.hubs.length} minutes.</p>`;
     }
   } catch { $("hubout").innerHTML = '<p class="err">Network error: try again.</p>'; }

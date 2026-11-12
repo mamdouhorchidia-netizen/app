@@ -60,8 +60,36 @@ def hub_name(raw: str) -> str:
 
 def hub_from_slug(slug: str) -> str:
     """'tmart-el-obour-industrial-area-bg' -> 'El Obour Industrial Area'."""
-    words = re.sub(r"^(tmart|talabat-mart)-", "", slug or "").removesuffix("-bg").split("-")
+    words = re.sub(r"^(tmart|talabat-mart)-?", "", slug or "").removesuffix("-bg").split("-")
     return " ".join(w if w.isupper() else w.capitalize() for w in words if w) or slug
+
+
+# Districts people search by, with the words talabat's hub names use for them (and Arabic names).
+DISTRICTS = [
+    ("Obour", ("obour",), "العبور"),
+    ("New Cairo", ("tagammoa", "tagamoa", "new cairo", "mivida", "rehab", "fifth settlement", "katameya"), "التجمع القاهرة الجديدة الرحاب"),
+    ("Nasr City", ("nasr city", "abbas el akkad", "makram", "tayaran"), "مدينة نصر"),
+    ("Heliopolis", ("heliopolis", "masr el gedida", "korba", "roxy", "sheraton", "hegaz", "almaza", "nozha"), "مصر الجديدة"),
+    ("Madinaty & Shorouk", ("madinaty", "shorouk", "badr"), "مدينتي الشروق"),
+    ("Maadi", ("maadi",), "المعادي"),
+    ("Mokattam", ("mokattam",), "المقطم"),
+    ("Downtown & Zamalek", ("downtown", "zamalek", "garden city", "sayeda", "manial", "daher", "abbaseya"), "وسط البلد الزمالك"),
+    ("6th of October", ("october",), "أكتوبر"),
+    ("Sheikh Zayed", ("zayed",), "الشيخ زايد"),
+    ("Giza & Haram", ("giza", "haram", "faisal", "dokki", "mohandessin", "agouza", "talbiya"), "الجيزة الهرم فيصل الدقي"),
+    ("Helwan", ("helwan", "zahraa", "maasara"), "حلوان"),
+    ("Shubra & North", ("shubra", "zaitoun", "ain shams", "matareya", "marg"), "شبرا"),
+    ("Alexandria", ("alex", "montazah", "miami", "smouha", "semouha", "agamy", "ibrahimia", "seyouf", "sherka", "fleming", "sidi"), "الإسكندرية"),
+]
+
+
+def district(name: str, cities=()) -> tuple[str, str]:
+    """(district, extra search words) for a hub name like 'Tagammoa 5 Banks Center' -> ('New Cairo', ...)."""
+    text = (name + " " + " ".join(cities)).lower()
+    for label, words, arabic in DISTRICTS:
+        if any(w in text for w in words):
+            return label, label + " " + arabic + " " + " ".join(words)
+    return (cities[0] if cities else "Other"), ""
 
 
 def parse_items(html: str, branch_id, area_id, category: str = "", hub: str = None) -> tuple[list[Offer], int]:
