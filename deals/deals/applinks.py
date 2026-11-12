@@ -55,6 +55,12 @@ def _tagged(url: str) -> str:
     return url + ("&" if "?" in url else "?") + "tag=" + tag
 
 
+def talabat_short(url: str) -> str:
+    """talabat's hub product address → the short one its app opens."""
+    m = re.search(r"talabat\.com/egypt/grocery/\d+/talabat-mart/product/([^/?#]+)/s/([^/?#]+)", url)
+    return f"https://www.talabat.com/egypt/talabat-mart/product/{m.group(1)}/s/{m.group(2)}" if m else url
+
+
 def links(store: str, url: str, extra: dict = None) -> dict:
     """{"web", "android", "ios", "browser"}: where a tap should go on each kind of device; "browser" opens the
     store's web page in Chrome on Android (a way round an app that can't show the item)."""
@@ -73,13 +79,12 @@ def links(store: str, url: str, extra: dict = None) -> dict:
     if not url:
         return {"web": "", "android": "", "ios": "", "browser": ""}
     if store == "talabat":
-        # talabat's app claims every talabat.com address (Android and iPhone) but can't open a product page from
-        # one ("Sorry, we couldn't load this page"), and a link to Chrome is handed to it too. What it does open
-        # is talabat:// (its pages' al:android:url): its home screen. So phones open the app there, with the
-        # product's name copied to paste in talabat mart's search ("copy"); without the app, the product's web page,
-        # which works when its area (aid) is served by the item's hub.
-        app = f"intent://#Intent;scheme=talabat;package={package};S.browser_fallback_url={quote(url, safe='')};end"
-        return {"web": url, "android": app, "ios": "talabat://", "browser": _intent(url, CHROME, url), "copy": True}
+        # talabat's app claims every talabat.com address (Android and iPhone). It opens a product from the short
+        # address, /egypt/talabat-mart/product/<slug>/s/<sku>, at the user's own address (as 3rrood links), but not
+        # from the hub one (/egypt/grocery/<hub>/talabat-mart/product/...?aid=...): "Sorry, we couldn't load this
+        # page". A plain link, so the phone hands it to the app, or opens the web page where there's no app.
+        url = talabat_short(url)
+        return {"web": url, "android": url, "ios": url, "browser": _intent(url, CHROME, url)}
     if store == "amazon_eg":
         url = _tagged(url)
     in_chrome = _intent(url, CHROME, url)

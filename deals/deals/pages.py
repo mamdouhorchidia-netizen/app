@@ -103,14 +103,6 @@ LINK_JS = """<script>
 (function () { const a = /Android/i.test(navigator.userAgent), i = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   document.querySelectorAll("a[data-web]").forEach(x => { const h = a ? x.dataset.android : i ? x.dataset.ios : x.dataset.web;
     if (h) x.href = h; });
-  if (a || i) document.querySelectorAll("a[data-copy-name]").forEach(x => x.onclick = async ev => {
-    ev.preventDefault();  // talabat's app opens at home: the name goes to the clipboard for its search
-    try { await navigator.clipboard.writeText(x.dataset.copyName); } catch {}
-    const t = document.createElement("div");
-    t.textContent = "Name copied: in talabat, open talabat mart and paste it in the search.";
-    t.style.cssText = "position:fixed;bottom:16px;left:16px;right:16px;background:#1b1a17;color:#fff;padding:12px 14px;border-radius:12px;z-index:9";
-    document.body.append(t); setTimeout(() => t.remove(), 6000);
-    location.href = x.href; });
   document.querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => {
     try { await navigator.clipboard.writeText(b.dataset.copy); } catch {}
     const t = b.textContent; b.textContent = "Copied"; setTimeout(() => b.textContent = t, 1400);
@@ -148,9 +140,8 @@ def layout(title: str, body: str, active: str = "", og: dict = None, title_ar: s
 def _link_attrs(d: dict) -> str:
     l = d.get("links") or {}
     web = l.get("web") or d.get("url") or "#"
-    copy = f' data-copy-name="{e(d.get("name"))}"' if l.get("copy") else ""
     return (f'href="{e(web)}" data-web="{e(web)}" data-android="{e(l.get("android") or web)}" '
-            f'data-ios="{e(l.get("ios") or web)}" target="_blank" rel="noopener"{copy}')
+            f'data-ios="{e(l.get("ios") or web)}" target="_blank" rel="noopener"')
 
 
 def mini_card(d: dict) -> str:

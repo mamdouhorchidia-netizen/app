@@ -449,14 +449,12 @@ class AppLinks(unittest.TestCase):
         self.assertIn("S.browser_fallback_url=https%3A%2F%2Fwww.amazon.eg%2F-%2Fen%2Fdp%2FB0DC5F7P3N", l["android"])
         self.assertEqual(l["ios"], "https://www.amazon.eg/dp/B0DC5F7P3N")
         self.assertIn("package=com.android.chrome;", l["browser"])
-        # talabat: its app (com.talabat, per talabat.com's assetlinks.json) claims every talabat.com address but
-        # can't open a product from one, so phones open it at home (talabat://) and copy the name for its search;
-        # without the app, the product's web page
-        t = links("talabat", "https://www.talabat.com/egypt/x/s/1?aid=9")
-        self.assertTrue(t["android"].startswith("intent://#Intent;scheme=talabat;package=com.talabat;"
-                                                "S.browser_fallback_url=https%3A%2F%2Fwww.talabat.com%2Fegypt%2Fx%2Fs%2F1%3Faid%3D9;"))
-        self.assertEqual((t["ios"], t["copy"]), ("talabat://", True))
-        self.assertEqual(t["web"], "https://www.talabat.com/egypt/x/s/1?aid=9")
+        # talabat: the short product address, which its app (com.talabat) opens at the user's own address,
+        # as a plain link everywhere; the hub address (grocery/<hub>/...?aid=) made the app fail
+        t = links("talabat", "https://www.talabat.com/egypt/grocery/650270/talabat-mart/product/kitkat-42g/s/904059?aid=8025")
+        short = "https://www.talabat.com/egypt/talabat-mart/product/kitkat-42g/s/904059"
+        self.assertEqual((t["web"], t["android"], t["ios"]), (short, short, short))
+        self.assertIn("package=com.android.chrome;", t["browser"])
         self.assertIn("package=com.jumia.android;", links("jumia", "https://www.jumia.com.eg/x-1.html")["android"])
 
     def test_breadfast_uses_the_apps_own_link(self):
@@ -502,8 +500,8 @@ class CatalogAndFilters(unittest.TestCase):
         self.assertIn("new", tea["flags"])
         self.assertIn("lowest", tea["flags"])
         self.assertEqual((tea["unit_price"], tea["unit"]), (160.0, "kg"))
-        self.assertIn("scheme=talabat;package=com.talabat;", tea["links"]["android"])
-        self.assertEqual(tea["links"]["web"], TEA_URL)
+        self.assertEqual(tea["links"]["android"], "https://www.talabat.com/egypt/talabat-mart/product/tea/s/T2")
+        self.assertEqual(tea["links"]["web"], "https://www.talabat.com/egypt/talabat-mart/product/tea/s/T2")
         self.assertTrue(len(tea["spark"]) >= 2)
         self.assertIn("20% under its usual 100 EGP", tea["why"])
         self.assertNotIn("steady", self.by["a2"]["flags"])  # 10 days unchanged: not yet 14
@@ -1064,8 +1062,7 @@ class Pages(unittest.TestCase):
         self.assertIn("خصم 50%", page)
         self.assertIn("<svg class=\"chart\"", page)
         self.assertIn("📍 El Obour El Hay 9", page)
-        self.assertIn('data-android="intent://#Intent;scheme=talabat;package=com.talabat;', page)
-        self.assertIn('data-copy-name="Lipton Black Tea &lt;500 gm&gt;"', page)  # the name, for talabat's search
+        self.assertIn('data-android="https://www.talabat.com/egypt/talabat-mart/product/tea/s/T2"', page)
         self.assertNotIn("<500", page)
 
     def test_coupons_lines(self):
