@@ -1100,3 +1100,103 @@ class Pages(unittest.TestCase):
             self.assertNotIn("tag=", links("jumia", "https://www.jumia.com.eg/x.html")["web"])
         with unittest.mock.patch.dict(os.environ, {"AMAZON_TAG": "bad tag&x=1"}):
             self.assertNotIn("tag=", links("amazon_eg", "https://www.amazon.eg/dp/B0DC5F7P3N")["web"])
+
+
+class SmallStores(unittest.TestCase):
+    def test_dream2000_shopify_catalogue(self):
+        from deals.stores import dream2000
+        offers = dream2000.parse_products(json.loads((FIX / "dream2000_products.json").read_text()))
+        self.assertEqual(len(offers), 3)
+        o = offers[0]
+        self.assertEqual((o.store, o.sku, o.price, o.original_price, o.in_stock), ("dream2000", "10411890016395",
+                                                                                   13730.0, 15110.0, True))
+        self.assertTrue(o.url.startswith("https://dream2000.com/products/"))
+        self.assertEqual((o.brand, o.category), ("LG", "Appliances & electronics"))  # no type: the store's line
+
+    def test_dream2000_cheapest_buyable_variant(self):
+        from deals.stores import dream2000
+        data = {"products": [{"id": 1, "handle": "tv", "title": "TV", "images": [], "variants": [
+            {"price": "900", "compare_at_price": "1000", "available": False},
+            {"price": "950", "compare_at_price": "1200", "available": True}]}]}
+        o = dream2000.parse_products(data)[0]
+        self.assertEqual((o.price, o.original_price, o.in_stock), (950.0, 1200.0, True))
+
+    def test_kenzz_page_and_its_codes(self):
+        from deals.stores import kenzz
+        offers = kenzz.parse_page((FIX / "kenzz_category.html").read_text(), "ألعاب")
+        self.assertEqual(len(offers), 4)
+        o = offers[0]
+        self.assertEqual((o.sku, o.price, o.original_price), ("F7S75J8UWACZ", 654.0, 854.0))
+        self.assertEqual((o.extra["promo_code"], o.extra["promo_price"]), ("KBF26", 543.0))
+        self.assertTrue(o.url.startswith("https://kenzz.com/product/F7S75J8UWACZ/"))
+        self.assertEqual(kenzz.category_name("https://kenzz.com/category/A-B/%D9%83%D9%84-%D8%AD%D8%A7%D8%AC%D8%A9/"
+                                             "%D8%A3%D9%84%D8%B9%D8%A7%D8%A8"), "ألعاب")
+        self.assertEqual(kenzz.parse_page("<html>new design</html>"), [])
+
+
+class Forecast(unittest.TestCase):
+    def rows(self, prices_by_day):
+        t0 = 1_760_000_000
+        return [{"at": t0 + d * DAY, "price": p, "original_price": None, "in_stock": True} for d, p in prices_by_day]
+
+    def test_a_weekly_sale_is_predicted(self):
+        from deals import forecast
+        # 100 EGP, on sale at 80 for 2 days every 7 days, last sale ended on day 16
+        rows = self.rows([(0, 100), (7, 80), (9, 100), (14, 80), (16, 100)])
+        now = rows[0]["at"] + 18 * DAY
+        r = forecast.rhythm(rows, now)
+        self.assertEqual((r["regular"], r["sales"], r["every_days"], r["lasts_days"], r["typical_sale"]),
+                         (100, 2, 7.0, 2.0, 80))
+        self.assertFalse(r["on_sale"])
+        self.assertEqual(r["next_in_days"], 3.0)  # day 14 + 7 = day 21, now day 18
+        self.assertIn("about every 7 days, usually down to 80 EGP", r["text"])
+        # and the advice is to wait for it
+        d = {"price": 100, "usual_price": 100, "matches": [], "in_stock": True, "flags": [], "discount_pct": 0,
+             "kind": None, "rhythm": r}
+        self.assertEqual(finder.verdict(d)["label"], "Wait")
+
+    def test_on_sale_now_and_too_little_history(self):
+        from deals import forecast
+        rows = self.rows([(0, 100), (7, 80), (9, 100), (14, 80)])
+        r = forecast.rhythm(rows, rows[0]["at"] + 15 * DAY)
+        self.assertTrue(r["on_sale"])
+        self.assertEqual(r["ends_in_days"], 1.0)
+        self.assertIsNone(forecast.rhythm(self.rows([(0, 100), (7, 80), (9, 100)]), rows[0]["at"] + 10 * DAY))
+
+
+class Brief(unittest.TestCase):
+    def test_counts(self):
+        con = db.connect(":memory:")
+        t0 = 1_760_000_000
+        db.save_offers(con, [Offer("talabat", "a", "Steady 1", 90, 100), Offer("talabat", "b", "Tea", 100)], t0)
+        db.save_offers(con, [Offer("talabat", "b", "Tea", 70, 100)], t0 + 20 * DAY)
+        b = finder.brief(finder.catalog(con, t0 + 20 * DAY + 60), t0 + 20 * DAY + 60)
+        self.assertEqual((b["deals"], b["dropped_24h"], b["fake"]), (1, 1, 1))
+        self.assertEqual(b["top"][0]["name"], "Tea")
+        self.assertEqual(b["biggest_saving"]["name"], "Tea")
+        con.close()
+
+    def test_trust_pages(self):
+        from deals import pages
+        self.assertIn("As an Amazon Associate we earn from qualifying purchases", pages.about_page(["طلبات مارت"]).decode())
+        self.assertIn("mailto:hi@example.com", pages.contact_page("hi@example.com").decode())
+        self.assertIn("No accounts", pages.privacy_page().decode())
+
+
+class InflatedWasPrice(unittest.TestCase):
+    def test_a_huge_never_charged_was_price_is_not_a_deal(self):
+        con = db.connect(":memory:")
+        t0 = 1_760_000_000
+        db.save_offers(con, [Offer("kenzz", "w", "Washer", 19647, 102548), Offer("jumia", "j", "Flash", 300, 1000)], t0)
+        for t in (t0 + DAY, t0 + DAY + 60):  # the 1000 was really charged (a jump this big counts when seen twice)
+            db.save_offers(con, [Offer("jumia", "j", "Flash", 1000)], t)
+        for t in (t0 + 2 * DAY, t0 + 2 * DAY + 30):
+            db.save_offers(con, [Offer("jumia", "j", "Flash", 300, 1000)], t)
+        by = {d["sku"]: d for d in finder.catalog(con, t0 + 2 * DAY + 60)}
+        self.assertIn("inflated", by["w"]["flags"])
+        self.assertEqual(by["w"]["verdict"]["label"], "Check the price")
+        self.assertNotIn("inflated", by["j"]["flags"])
+        r = finder.query(list(by.values()), status=["real"])
+        self.assertEqual([d["sku"] for d in r["items"]], ["j"])
+        self.assertEqual(finder.brief(list(by.values()), t0 + 2 * DAY + 60)["fake"], 1)
+        con.close()

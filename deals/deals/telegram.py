@@ -21,7 +21,8 @@ import urllib.request
 from . import finder
 
 API = "https://api.telegram.org"
-AR_STORE = {"talabat": "طلبات مارت", "amazon_eg": "أمازون مصر", "jumia": "جوميا", "breadfast": "بريدفاست"}
+AR_STORE = {"talabat": "طلبات مارت", "amazon_eg": "أمازون مصر", "jumia": "جوميا", "breadfast": "بريدفاست", "dream2000": "دريم 2000",
+            "kenzz": "كنز"}
 
 
 def _money(n) -> str:
@@ -53,7 +54,7 @@ def caption(d: dict, base_url: str) -> str:
 
 
 def worth_posting(d: dict, min_pct: float) -> bool:
-    if not d["in_stock"] or not d.get("discount_pct") or "steady" in d["flags"]:
+    if not d["in_stock"] or not d.get("discount_pct") or {"steady", "inflated"} & set(d["flags"]):
         return False
     return d["discount_pct"] >= min_pct or ("lowest" in d["flags"] and d["discount_pct"] >= 20)
 

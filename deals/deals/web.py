@@ -265,6 +265,8 @@ def make_handler(db_path: str, requests_file: str = None):
                                  now=int(time.time()))
                         return r
                     self.json(cached("deals" + json.dumps(args, sort_keys=True, default=sorted), build))
+                elif u.path == "/api/brief":
+                    self.json(cached("brief", lambda: finder.brief(catalog(con))))
                 elif u.path == "/api/changes":
                     limit = min(int(q.get("limit", 30)), 100)
                     self.json(cached(f"changes{limit}", lambda: {"changes": recent_changes(con, limit)}))
@@ -327,7 +329,7 @@ def make_handler(db_path: str, requests_file: str = None):
                         deals = finder.query(items, deals_only=True, limit=0)["facets"]["store"]
                         best = {}
                         for d in items:
-                            if d["in_stock"] and d["discount_pct"] and "steady" not in d["flags"]:
+                            if d["in_stock"] and d["discount_pct"] and not {"steady", "inflated"} & set(d["flags"]):
                                 best[d["store"]] = max(best.get(d["store"], 0), d["discount_pct"])
                         return pages.stores_page(status(con), {}, deals, best)
                     self.send(200, cached("stores", build_stores), "text/html; charset=utf-8")
@@ -342,13 +344,34 @@ def make_handler(db_path: str, requests_file: str = None):
                         r = finder.query(items, deals_only=True, limit=0)["facets"]["category"]
                         top = {}
                         for d in items:
-                            if d["in_stock"] and d["discount_pct"] and "steady" not in d["flags"]:
+                            if d["in_stock"] and d["discount_pct"] and not {"steady", "inflated"} & set(d["flags"]):
                                 top[d["top_category"]] = max(top.get(d["top_category"], 0), d["discount_pct"])
                         rows = sorted(((c, n, top.get(c, 0)) for c, n in r.items() if n), key=lambda x: -x[1])
                         return pages.cats_page(rows)
                     self.send(200, cached("cats", build_cats), "text/html; charset=utf-8")
                 elif u.path == "/coupons":
-                    self.send(200, pages.coupons_page(pages.load_coupons(coupons_file)), "text/html; charset=utf-8")
+                    def build_coupons():
+                        found = {}  # codes the stores show on their own products (Kenzz), with how many they cut
+                        for d in catalog(con):
+                            if d.get("promo_code") and d["in_stock"]:
+                                c = found.setdefault((d["store"], d["promo_code"]), {"n": 0, "best": 0.0})
+                                c["n"] += 1
+                                c["best"] = max(c["best"], d["price"] - (d["promo_price"] or d["price"]))
+                        auto = [{"store": st, "code": code, "auto": True, "url": f"{PUBLIC_URL}/?deals=0&status=promo&stores={st}",
+                                 "title": f"Extra off on {v['n']} products, up to {v['best']:,.0f} EGP"}
+                                for (st, code), v in sorted(found.items(), key=lambda kv: -kv[1]["n"])[:60]]
+                        return pages.coupons_page(pages.load_coupons(coupons_file) + auto)
+                    self.send(200, cached("coupons", build_coupons), "text/html; charset=utf-8")
+                elif u.path == "/about":
+                    self.send(200, pages.about_page([pages.AR_STORE.get(k, v) for k, v in LABELS.items()
+                                                     if k in {r["store"] for r in status(con)}]),
+                              "text/html; charset=utf-8")
+                elif u.path == "/privacy":
+                    self.send(200, pages.privacy_page(), "text/html; charset=utf-8")
+                elif u.path == "/contact":
+                    self.send(200, pages.contact_page(os.environ.get("CONTACT_EMAIL", "").strip(),
+                                                      os.environ.get("TELEGRAM_CHANNEL_URL", "").strip()),
+                              "text/html; charset=utf-8")
                 elif u.path == "/api/coupons":
                     self.json({"coupons": pages.load_coupons(coupons_file)})
                 elif u.path == "/api/status":

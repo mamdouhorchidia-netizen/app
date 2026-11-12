@@ -13,8 +13,10 @@ from datetime import datetime, timezone, timedelta
 from .stores import LABELS
 
 CAIRO = timezone(timedelta(hours=2))
-AR_STORE = {"talabat": "طلبات مارت", "amazon_eg": "أمازون مصر", "jumia": "جوميا", "breadfast": "بريدفاست"}
-APP = {"talabat": "talabat", "amazon_eg": "Amazon", "jumia": "Jumia", "breadfast": "Breadfast"}
+AR_STORE = {"talabat": "طلبات مارت", "amazon_eg": "أمازون مصر", "jumia": "جوميا", "breadfast": "بريدفاست", "dream2000": "دريم 2000",
+            "kenzz": "كنز"}
+APP = {"talabat": "talabat", "amazon_eg": "Amazon", "jumia": "Jumia", "breadfast": "Breadfast", "dream2000": "Dream 2000",
+       "kenzz": "Kenzz"}
 
 
 def e(s) -> str:
@@ -30,7 +32,7 @@ def money(n) -> str:
 CSS = """
 :root { --bg:#f6f5f2; --panel:#fff; --ink:#1b1a17; --muted:#6d6a63; --faint:#a6a29a; --line:#e4e1da; --accent:#d6402b;
   --good:#1f7a4d; --good-bg:#e3f3ea; --warn:#9a6a00; --warn-bg:#fbf0d4; --chip:#efede8; --shadow:0 1px 2px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.04);
-  --talabat:#ff5a00; --amazon_eg:#232f3e; --breadfast:#a80080; --jumia:#f68b1e; }
+  --talabat:#ff5a00; --amazon_eg:#232f3e; --breadfast:#a80080; --jumia:#f68b1e; --dream2000:#0b4ea2; --kenzz:#7b2cbf; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#121211; --panel:#1c1b19; --ink:#f0eee9; --muted:#a29e95;
   --faint:#6f6b64; --line:#2f2d29; --accent:#ff6b55; --good:#5cc98f; --good-bg:#173326; --warn:#e6b84d; --warn-bg:#3a2f12; --chip:#262421;
   --shadow:none; --amazon_eg:#8aa0bb; } }
@@ -109,6 +111,13 @@ LINK_JS = """<script>
 </script>"""
 
 
+FOOTER = ('<div><a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/contact">Contact</a></div>'
+          '<div>Prices are checked around the clock from each store\'s public pages. A price can change at the store '
+          'before it changes here.</div><div>Some links earn us a small commission from the store, at no extra cost to '
+          'you. As an Amazon Associate we earn from qualifying purchases.</div>')
+LANG_CSS = "html[lang=ar] .en-only, html[lang=en] .ar-only { display: none; } .doc { max-width: 760px; } .doc h2 { margin-top: 22px; }"
+
+
 def layout(title: str, body: str, active: str = "", og: dict = None, title_ar: str = None) -> bytes:
     og = og or {}
     meta = "".join(f'<meta property="og:{k}" content="{e(v)}">' for k, v in og.items() if v)
@@ -120,11 +129,11 @@ def layout(title: str, body: str, active: str = "", og: dict = None, title_ar: s
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{e(title_ar or title)}</title><meta name="description" content="{e(og.get('description') or title)}">{meta}
 <meta name="theme-color" content="#d6402b"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon.svg" type="image/svg+xml">
-<style>{CSS}</style><script src="/i18n.js"></script></head>
+<style>{CSS}{LANG_CSS}</style><script src="/i18n.js"></script></head>
 <body><header><div class="wrap"><div class="top"><a class="logo" href="/"><span class="pulse"></span><span>Live deals</span></a>
 <button class="iconbtn" id="langBtn" aria-label="Language">ع</button></div><nav class="nav">{nav}</nav></div></header>
 <main class="wrap">{body}</main>
-<footer class="wrap">Prices are checked around the clock from each store's public pages. A price can change at the store before it changes here.</footer>
+<footer class="wrap">{FOOTER}</footer>
 {LINK_JS}</body></html>""".encode()
 
 
@@ -281,7 +290,7 @@ def coupons_page(coupons: list[dict]) -> bytes:
     rows = "".join(f"""<div class="panel coupon" style="margin-bottom:10px">
 <button class="code" data-copy="{e(c["code"])}"{f' data-go="{e(c["url"])}"' if c.get("url") else ""}>{e(c["code"])}</button>
 <div><div><span class="chip" style="background:var(--{e(c.get("store"))},#555)">{e(LABELS.get(c.get("store"), c.get("store") or ""))}</span>
-<span dir="auto"> {e(c.get("title") or "")}</span></div>
+<span{"" if c.get("auto") else ' dir="auto"'}> {e(c.get("title") or "")}</span></div>
 <div class="small muted">{f'until {e(c["expires"])}' if c.get("expires") else ""}</div></div></div>""" for c in live)
     body = (f'<h1 class="title">🎟️ Coupons</h1><p class="muted">Tap a code to copy it</p>'
             f'{rows or "<div class=empty>No coupons yet.</div>"}')
@@ -313,3 +322,64 @@ def parse_coupons(text: str) -> list[dict]:
             c["url"] = parts[4][:500]
         out.append(c)
     return out[:200]
+
+
+def _doc(ar: str, en: str) -> str:
+    return f'<div class="doc"><div class="ar-only" data-noi18n>{ar}</div><div class="en-only" dir="ltr">{en}</div></div>'
+
+
+def about_page(stores: list[str]) -> bytes:
+    names = "، ".join(stores)
+    ar = f"""<h1 class="title">عن عروض لحظة بلحظة</h1>
+<p>موقع مصري بيتابع أسعار {names} طول اليوم، وبيقولك العرض ده حقيقي ولا لأ.</p>
+<h2>بنعمل إيه</h2><ul>
+<li>بنسجل كل سعر وكل تغيير، فتشوف تاريخ سعر كل منتج.</li>
+<li>بنقارن السعر بسعره المعتاد، مش بس بالسعر المشطوب، وبنكشف <b>الخصم الوهمي</b>: الخصم اللي سعره ما بيتغيرش أبدًا.</li>
+<li>بنتعلم مواعيد عروض كل منتج من تاريخه، ونقولك امتى العرض الجاي غالبًا.</li>
+<li>بنقارن نفس المنتج بين المتاجر، ونبعتلك تنبيه أول ما السعر اللي مستنيه يوصل.</li></ul>
+<h2>منين الأسعار؟</h2><p>من صفحات المتاجر العامة، بهدوء وبهوية واضحة، وبنحترم ملفات robots.txt بتاعتها. ممكن السعر يتغير
+في المتجر قبل ما يتغير هنا، فالسعر النهائي هو اللي في المتجر.</p>
+<h2>بنكسب إزاي؟</h2><p>بعض اللينكات بتدينا عمولة صغيرة من المتجر لو اشتريت، من غير أي تكلفة زيادة عليك. ده مش بيأثر على ترتيب
+العروض: الترتيب بيطلع من الأسعار بس.</p>"""
+    en = f"""<h1 class="title">About Live deals</h1>
+<p>An Egyptian site that follows the prices of {", ".join(stores)} around the clock, and tells you whether a deal is real.</p>
+<h2>What it does</h2><ul>
+<li>Records every price and every change, so each product has its full price history.</li>
+<li>Compares the price with its usual price, not just the struck-through one, and catches <b>fake discounts</b>: "discounts" whose price never moves.</li>
+<li>Learns each product's sale rhythm from its history and says when the next sale is likely.</li>
+<li>Compares the same product across stores, and alerts you the moment your target price is reached.</li></ul>
+<h2>Where the prices come from</h2><p>From the stores' public pages, at a gentle pace, with a clear identity, following their
+robots.txt. A price can change at the store before it changes here; the store's price is the final one.</p>
+<h2>How the site is paid for</h2><p>Some links earn us a small commission from the store when you buy, at no extra cost to you.
+That never changes the order of the deals: it comes from the prices alone. As an Amazon Associate we earn from qualifying purchases.</p>"""
+    return layout("About", _doc(ar, en), active="/about", og={"title": "عن عروض لحظة بلحظة"}, title_ar="عن الموقع")
+
+
+def privacy_page() -> bytes:
+    ar = """<h1 class="title">الخصوصية</h1>
+<ul><li>مفيش حسابات ولا تسجيل دخول. قايمة المتابعة والسلة واللي شفته قريب محفوظين على جهازك بس.</li>
+<li>لو شغلت التنبيهات، بنحفظ عنوان الاشتراك اللي المتصفح بيدّيهولنا واختياراتك (النسبة، المتاجر، الكلمات) عشان نبعتلك. تقدر تقفلها في أي وقت من 🔔 وبتتمسح.</li>
+<li>مش بنستخدم إعلانات ولا أدوات تتبع من شركات تانية. السيرفر بيحتفظ بسجلات تشغيل عادية لفترة قصيرة.</li>
+<li>لما تدوس على لينك متجر، بتروح لموقع المتجر، وبتنطبق سياسة الخصوصية بتاعته.</li></ul>"""
+    en = """<h1 class="title">Privacy</h1>
+<ul><li>No accounts, no sign-in. Your watchlist, basket and recently viewed items are kept in your own browser only.</li>
+<li>If you turn on alerts, we keep the push address your browser gives us and your choices (percentage, stores, words) to send
+them. Turn them off any time from 🔔 and they are deleted.</li>
+<li>No ads and no third-party trackers. The server keeps ordinary operating logs for a short time.</li>
+<li>A store link takes you to that store's site, where its own privacy policy applies.</li></ul>"""
+    return layout("Privacy", _doc(ar, en), active="/privacy", og={"title": "الخصوصية · عروض لحظة بلحظة"}, title_ar="الخصوصية")
+
+
+def contact_page(email: str = "", telegram: str = "") -> bytes:
+    ways_ar, ways_en = [], []
+    if email:
+        ways_ar.append(f'<li>إيميل: <a href="mailto:{e(email)}" dir="ltr">{e(email)}</a></li>')
+        ways_en.append(f'<li>Email: <a href="mailto:{e(email)}">{e(email)}</a></li>')
+    if telegram:
+        ways_ar.append(f'<li>تليجرام: <a href="{e(telegram)}" dir="ltr">{e(telegram)}</a></li>')
+        ways_en.append(f'<li>Telegram: <a href="{e(telegram)}">{e(telegram)}</a></li>')
+    ar = (f'<h1 class="title">تواصل معانا</h1><p>سعر غلط؟ متجر عايزه يتضاف؟ أو انت صاحب متجر وعايز تتكلم معانا؟</p>'
+          f'<ul>{"".join(ways_ar) or "<li>قريب.</li>"}</ul>')
+    en = (f'<h1 class="title">Contact</h1><p>A wrong price? A store you want added? Or you run a store and want to talk?</p>'
+          f'<ul>{"".join(ways_en) or "<li>Soon.</li>"}</ul>')
+    return layout("Contact", _doc(ar, en), active="/contact", og={"title": "تواصل · عروض لحظة بلحظة"}, title_ar="تواصل معانا")

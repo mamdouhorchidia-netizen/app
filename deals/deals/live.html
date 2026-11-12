@@ -14,7 +14,7 @@
   --bg: #f6f5f2; --panel: #ffffff; --ink: #1b1a17; --muted: #6d6a63; --faint: #a6a29a; --line: #e4e1da;
   --accent: #d6402b; --accent-ink: #ffffff; --good: #1f7a4d; --good-bg: #e3f3ea; --warn: #9a6a00; --warn-bg: #fbf0d4;
   --chip: #efede8; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04); --drop: #1f7a4d;
-  --talabat: #ff5a00; --amazon_eg: #232f3e; --breadfast: #a80080; --jumia: #f68b1e; --radius: 14px;
+  --talabat: #ff5a00; --amazon_eg: #232f3e; --breadfast: #a80080; --jumia: #f68b1e; --dream2000: #0b4ea2; --kenzz: #7b2cbf; --radius: 14px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -194,6 +194,20 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
 .tag.vd-good { background: var(--good-bg); color: var(--good); font-weight: 700; }
 .tag.vd-warn { background: var(--warn-bg); color: var(--warn); font-weight: 700; }
 .tag.vd-muted { font-weight: 600; }
+.foot { color: var(--faint); font-size: 12.5px; text-align: center; padding: 30px 0 10px; line-height: 1.8; }
+.brief { margin: 14px 0 4px; padding: 16px; border-radius: var(--radius); color: #fff;
+  background: linear-gradient(135deg, #2a1a17 0%, #5b1f14 55%, var(--accent) 140%); box-shadow: var(--shadow); }
+.brief h2 { margin: 0 0 2px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.brief .sub { opacity: .75; font-size: 13px; margin-bottom: 12px; }
+.brief .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.brief .st { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 10px 12px;
+  text-align: start; color: #fff; cursor: pointer; font: inherit; }
+.brief .st:hover { background: rgba(255,255,255,.18); }
+.brief .st b { display: block; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.brief .st span { font-size: 12.5px; opacity: .85; }
+.brief .best { margin-top: 10px; font-size: 13.5px; opacity: .92; cursor: pointer; }
+.brief .best b { color: #ffd2c8; }
+.rhythm { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line); font-size: 14px; }
 .verdict { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 12px; margin: 14px 0 0; }
 .verdict.good { background: var(--good-bg); color: var(--good); } .verdict.warn { background: var(--warn-bg); color: var(--warn); } .verdict.muted { background: var(--chip); }
 .verdict b { font-size: 18px; } .verdict span { color: var(--ink); font-size: 14px; }
@@ -275,6 +289,9 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
       <label class="opt"><input type="checkbox" value="label"> Store event deals</label>
       <label class="opt"><input type="checkbox" value="back"> Back in stock</label>
       <label class="opt"><input type="checkbox" value="compare"> Sold in other stores too</label>
+      <label class="opt" title="A 'discount' whose price never moves: probably the normal price"><input type="checkbox" value="fake"> 🕵️ Fake discounts caught</label>
+      <label class="opt"><input type="checkbox" value="promo"> 🎟️ Extra off with a code</label>
+      <label class="opt"><input type="checkbox" value="soon"> ⏳ Sale due within 3 days</label>
       <label class="opt"><input type="checkbox" id="fBest"> Cheapest across stores</label>
       <label class="opt"><input type="checkbox" id="fWatch"> My watchlist</label>
     </div></div>
@@ -287,6 +304,7 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
   </aside>
 
   <main>
+    <section class="brief" id="brief" hidden></section>
     <div class="bar">
       <span class="count" id="count">…</span>
       <div class="chips" id="activeChips"></div>
@@ -306,6 +324,8 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
     </div>
     <div class="grid" id="grid"></div>
     <div id="more"></div>
+    <footer class="foot"><div><a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/contact">Contact</a></div>
+      <div>Some links earn us a small commission from the store, at no extra cost to you. As an Amazon Associate we earn from qualifying purchases.</div></footer>
   </main>
 </div>
 
@@ -324,8 +344,8 @@ const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? 
                 set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
 const isAndroid = /Android/i.test(navigator.userAgent), isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const appHref = d => (isAndroid ? d.links?.android : isIOS ? d.links?.ios : d.links?.web) || d.links?.web || d.url || "#";
-const appLabel = { talabat: "talabat", amazon_eg: "Amazon", breadfast: "Breadfast", jumia: "Jumia" };
-const LABELS = { talabat: "talabat mart", amazon_eg: "Amazon.eg", breadfast: "Breadfast", jumia: "Jumia" };
+const appLabel = { talabat: "talabat", amazon_eg: "Amazon", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz" };
+const LABELS = { talabat: "talabat mart", amazon_eg: "Amazon.eg", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz" };
 
 // ---------- state, mirrored in the address so any view can be shared ----------
 document.querySelectorAll("#nav a").forEach(a => { const u = new URL(a.href);
@@ -434,7 +454,8 @@ function activeChips() {
   if (F.kind) chips.push([F.kind === "platform" ? "Platform discount" : "Price drop", () => F.kind = ""]);
   if (F.min || F.max < 90) chips.push([$("pctLabel").textContent + " off", () => { F.min = 0; F.max = 90; }]);
   if (F.stock !== "in") chips.push([F.stock === "out" ? "Out of stock" : "Any availability", () => F.stock = "in"]);
-  const names = { real: "Real deals", new: "Changed 24 h", lowest: "Lowest 90 d", label: "Event deals", back: "Back in stock", compare: "In other stores" };
+  const names = { real: "Real deals", new: "Changed 24 h", lowest: "Lowest 90 d", label: "Event deals", back: "Back in stock", compare: "In other stores",
+                  fake: "🕵️ Fake discounts caught", promo: "🎟️ Extra off with a code", soon: "⏳ Sale due within 3 days" };
   F.status.forEach(s => chips.push([names[s] || s, () => F.status = F.status.filter(x => x !== s)]));
   if (F.best) chips.push(["Cheapest across stores", () => F.best = false]);
   if (F.watch) chips.push(["Watchlist", () => F.watch = false]);
@@ -480,6 +501,9 @@ function tagsFor(d) {
   else if (d.matches.length) { const m = d.matches.find(x => x.in_stock && x.price < d.price);
     if (m) t.push(`<span class="tag warn">${fmt(m.price)} at ${esc(LABELS[m.store] || m.store)}</span>`); }
   if (d.flags.includes("steady")) t.push('<span class="tag warn">discount never moves</span>');
+  if (d.flags.includes("inflated")) t.push('<span class="tag warn">⚠️ "was" price looks inflated</span>');
+  if (d.promo_code) t.push(`<span class="tag hot" title="Code">🎟️ ${esc(d.promo_code)}: ${fmt(d.promo_price)}</span>`);
+  if (d.rhythm && d.rhythm.next_in_days != null && d.rhythm.next_in_days <= 3) t.push(`<span class="tag warn">⏳ sale due soon</span>`);
   if (!d.in_stock) t.push('<span class="tag">out of stock</span>');
   return t.join("");
 }
@@ -554,7 +578,7 @@ async function load({ append = false, quiet = false } = {}) {
   loading = false;
   clearTimeout(timer); timer = setTimeout(() => load({ quiet: true }), document.hidden ? 60000 : 10000);
 }
-function apply() { writeURL(); activeChips(); load(); }
+function apply() { writeURL(); activeChips(); load(); loadBrief(); }
 
 function renderStatus() {
   const parts = lastStatus.map(s => {
@@ -603,6 +627,8 @@ async function showProduct(id) {
           ${d && d.unit_text ? `<span class="meta unit" style="display:inline;margin-inline-start:8px">${esc(d.unit_text)}</span>` : ""}</div>
         <div class="tags" style="margin-top:6px">${d ? tagsFor(d) : ""}</div></div></div>
     ${d && d.verdict ? `<div class="verdict ${d.verdict.tone}"><b>${esc(d.verdict.label)}</b><span>${esc(d.verdict.why)}</span></div>` : ""}
+    ${d && d.rhythm ? `<div class="rhythm">⏳ <b>Sale rhythm</b><br>${esc(d.rhythm.text)}</div>` : ""}
+    ${d && d.promo_code ? `<div class="rhythm">🎟️ With the code <b data-noi18n>${esc(d.promo_code)}</b> at checkout: ${fmt(d.promo_price)} EGP</div>` : ""}
     ${d && d.why && d.why.length ? `<div class="why">${scoreSVG(d.score)}<ul>${d.why.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
     <h4>Price history</h4>
     <svg class="chart" id="chart" viewBox="0 0 640 200" preserveAspectRatio="none" role="img" aria-label="Price history"></svg>
@@ -908,7 +934,27 @@ async function showBasket() {
 }
 $("basketBtn").onclick = showBasket;
 
-readURL(); syncControls(); saveWatch(); saveBasket(); activeChips(); showUnderstood(); load(); loadTicker();
+// ---------- today in 30 seconds (the home page, before any filter) ----------
+const isHome = () => !location.search || location.search === "?";
+async function loadBrief() {
+  if (!isHome()) { $("brief").hidden = true; return; }
+  let b; try { b = await (await fetch("/api/brief")).json(); } catch { return; }
+  if (!b.deals) return;
+  const st = (n, label, act) => `<button class="st" data-act="${act}"><b>${n.toLocaleString()}</b><span>${label}</span></button>`;
+  const best = b.biggest_saving;
+  $("brief").innerHTML = `<h2>⚡ Today in 30 seconds</h2><div class="sub">What the stores changed while you weren't looking</div>
+    <div class="stats">${st(b.dropped_24h, "price drops in 24 h", "new")}${b.record_lows ? st(b.record_lows, "lowest price in 90 days", "lowest") : ""}
+      ${b.fake ? st(b.fake, "fake discounts caught", "fake") : ""}${b.soon ? st(b.soon, "sales due within 3 days", "soon") : ""}
+      ${b.promo ? st(b.promo, "extra off with a code", "promo") : ""}${st(b.deals, "real deals right now", "real")}</div>
+    ${best ? `<div class="best" data-id="${best.id}">💰 Biggest saving now: <b dir="auto">${esc(best.name.slice(0, 60))}</b> · save ${fmt(best.saving)} EGP</div>` : ""}`;
+  $("brief").hidden = false;
+  $("brief").querySelectorAll(".st").forEach(x => x.onclick = () => {
+    F.status = [x.dataset.act]; if (x.dataset.act === "soon") F.deals = "0";
+    F.sort = x.dataset.act === "new" ? "newest" : "score"; syncControls(); apply(); $("brief").hidden = true; });
+  const bs = $("brief").querySelector(".best"); if (bs) bs.onclick = () => showProduct(+bs.dataset.id);
+}
+readURL(); syncControls(); saveWatch(); saveBasket(); activeChips(); showUnderstood(); load(); loadTicker(); loadBrief();
+setInterval(loadBrief, 60000);
 setInterval(loadTicker, 15000); setInterval(checkWatch, 60000); checkWatch();
 const pid = new URLSearchParams(location.search).get("p"); if (pid) showProduct(+pid);
 </script>

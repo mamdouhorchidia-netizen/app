@@ -6,8 +6,8 @@
   let lang = "ar";
   try { lang = localStorage.getItem(KEY) || "ar"; } catch {}
 
-  const STORE = { "talabat mart": "طلبات مارت", "Amazon.eg": "أمازون مصر", "Jumia": "جوميا", "Breadfast": "بريدفاست" };
-  const APP = { talabat: "طلبات", Amazon: "أمازون", Jumia: "جوميا", Breadfast: "بريدفاست", store: "المتجر" };
+  const STORE = { "talabat mart": "طلبات مارت", "Amazon.eg": "أمازون مصر", "Jumia": "جوميا", "Breadfast": "بريدفاست", "Dream 2000": "دريم 2000", "Kenzz": "كنز" };
+  const APP = { talabat: "طلبات", Amazon: "أمازون", Jumia: "جوميا", Breadfast: "بريدفاست", "Dream 2000": "دريم 2000", Kenzz: "كنز", store: "المتجر" };
   const EXACT = {
     // header and filters
     "Live deals": "عروض لحظة بلحظة", "connecting…": "بيتصل…", "Filters": "فلاتر", "Install": "تثبيت",
@@ -62,7 +62,21 @@
     // stores, coupons, categories pages
     "Stores": "المتاجر", "Categories": "الأقسام", "Coupons": "كوبونات", "Home": "الرئيسية", "Recently viewed": "كمّل من حيث وقفت",
     "All stores": "كل المتاجر", "Tap a code to copy it": "دوس على الكوبون يتنسخ على طول", "Just dropped": "اللي نزل دلوقتي",
-    "See all": "شوف الكل", "🎟️ Coupons": "🎟️ كوبونات", "🧺 Add to basket": "🧺 ضيف للسلة", "Product page": "صفحة المنتج",
+    "See all": "شوف الكل", "⚡ Today in 30 seconds": "⚡ النهارده في 30 ثانية",
+    "What the stores changed while you weren't looking": "اللي المتاجر غيّرته وانت مش واخد بالك",
+    "price drops in 24 h": "نزول سعر في 24 ساعة", "lowest price in 90 days": "أقل سعر في 90 يوم",
+    "fake discounts caught": "خصم وهمي اتكشف", "sales due within 3 days": "عروض جاية خلال 3 أيام",
+    "extra off with a code": "خصم زيادة بكود", "real deals right now": "عرض حقيقي دلوقتي",
+    "🕵️ Fake discounts caught": "🕵️ خصومات وهمية اتكشفت", "🎟️ Extra off with a code": "🎟️ خصم زيادة بكود",
+    "⏳ Sale due within 3 days": "⏳ عرض جاي خلال 3 أيام", "⏳ sale due soon": "⏳ عرض جاي قريب",
+    "Sale rhythm": "مواعيد العروض", "On sale now.": "عليه عرض دلوقتي.", "Code": "كود",
+    "Some links earn us a small commission from the store, at no extra cost to you. As an Amazon Associate we earn from qualifying purchases.":
+      "بعض اللينكات بتدينا عمولة صغيرة من المتجر، من غير أي تكلفة زيادة عليك. كشريك في برنامج أمازون، بنكسب من عمليات الشراء المؤهلة.",
+    "Some links earn us a small commission from the store, at no extra cost to you.": "بعض اللينكات بتدينا عمولة صغيرة من المتجر، من غير أي تكلفة زيادة عليك.",
+    "As an Amazon Associate we earn from qualifying purchases.": "كشريك في برنامج أمازون، بنكسب من عمليات الشراء المؤهلة.",
+    "⚠️ \"was\" price looks inflated": "⚠️ السعر القديم شكله متضخم", "Check the price": "اتأكد من السعر",
+    "The 'was' price looks inflated: compare with other stores before buying.": "السعر القديم شكله متضخم: قارن بمتاجر تانية قبل ما تشتري.",
+    "About": "عن الموقع", "Privacy": "الخصوصية", "Contact": "تواصل معانا", "Appliances & electronics": "أجهزة وإلكترونيات", "Kenzz deals": "عروض كنز", "🎟️ Coupons": "🎟️ كوبونات", "🧺 Add to basket": "🧺 ضيف للسلة", "Product page": "صفحة المنتج",
     "★ Watch": "★ تابع السعر", "More deals like this": "عروض شبهه", "Lowest in 90 days": "أقل سعر في 90 يوم",
     "Highest in 90 days": "أعلى سعر في 90 يوم", "Usual price": "السعر المعتاد", "Price changes": "مرات تغيير السعر",
     "Not found": "مش موجود", "This product isn't tracked (any more).": "المنتج ده مش متتابع (خلاص).",
@@ -70,12 +84,13 @@
       "الأسعار بتتحدّث طول اليوم من صفحات المتاجر نفسها. ممكن السعر يتغير في المتجر قبل ما يتغير هنا.", "Telegram channel": "قناة التليجرام", "No coupons yet.": "مفيش كوبونات لسه.",
   };
   const RX = [
-    [/^Open in (talabat|Amazon|Jumia|Breadfast|store) app ↗$/, (m, a) => `افتح في تطبيق ${APP[a]} ↗`],
-    [/^Open in (talabat|Amazon|Jumia|Breadfast|store) ↗$/, (m, a) => `افتح في ${APP[a]} ↗`],
+    [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|store) app ↗$/, (m, a) => `افتح في تطبيق ${APP[a]} ↗`],
+    [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|store) ↗$/, (m, a) => `افتح في ${APP[a]} ↗`],
     [/^changed (.+)$/, "نزل $1"], [/^usually (.+)$/, "عادة $1"], [/^save (.+)$/, "وفّر $1"], [/^saves (.+) against.*$/, "بتوفر $1"],
     [/^([\d,.]+) at (.+)$/, (m, p, s) => `${p} في ${STORE[s] || s}`],
     [/^In basket \((\d+)\)$/, "في السلة ($1)"], [/^🧺 In basket \((\d+)\)$/, "🧺 في السلة ($1)"],
     [/^tracked since (.+)$/, "متابَع من $1"], [/^up to (\d+)% off$/, "خصومات لحد $1%"], [/^until (.+)$/, "لحد $1"],
+    [/^Extra off on (\d+) products, up to ([\d,]+) EGP$/, "خصم زيادة على $1 منتج، لحد $2 ج.م"],
     [/^deals · ([\d,]+) products$/, "عرض · $1 منتج"], [/^deals · up to (\d+)% off$/, "عرض · خصومات لحد $1%"],
     [/^live$/, "شغال دلوقتي"], [/^paused$/, "متوقف شوية"], [/^not running$/, "مش شغال"],
     [/^Saved (\d+) coupon\(s\)\.$/, "اتحفظ $1 كوبون."], [/^tracked (\d+) (s|min|h|d)$/, (m, n, u) => `متابَع من ${n} ${{ s: "ث", min: "د", h: "س", d: "يوم" }[u]}`], [/^tracked (.+)$/, "متابَع من $1"],
@@ -88,12 +103,23 @@
     [/^([\d.]+)% off the store's own price$/, "خصم $1% من سعر المتجر"],
     [/^([\d.]+)% under its usual ([\d.,]+) EGP$/, "أقل $1% من سعره المعتاد $2 ج.م"],
     [/^and ([\d.]+)% under its usual price$/, "وأقل $1% من سعره المعتاد"], [/^lowest price in 90 days\.?$/i, "أقل سعر في 90 يوم"],
+    [/^the 'was' price \(([\d.,]+) EGP\) has never been charged here: likely inflated$/, "السعر القديم ($1 ج.م) عمره ما اتباع بيه هنا: غالبًا متضخم"],
     [/^price changed in the last 24 h$/, "السعر اتغير في آخر 24 ساعة"], [/^cheapest of the stores that sell it$/, "الأرخص بين المتاجر اللي بتبيعه"],
     [/^same 'discounted' price for ([\d.]+) days: the old price may never be charged$/, "نفس السعر 'المخفّض' من $1 يوم: يمكن السعر القديم عمره ما اتباع بيه"],
     [/^([\d.]+)% off\.$/, "خصم $1%."], [/^Usually ([\d.,]+) EGP: it's above its normal price now\.$/, "عادة $1 ج.م: سعره دلوقتي أعلى من العادي."],
     [/^([\d.,]+) EGP in another store\.$/, "$1 ج.م في متجر تاني."], [/^The 'discount' never moves: it's the normal price\.$/, "الخصم ثابت: ده سعره العادي."],
     [/^Its usual price \(([\d.,]+) EGP\)\.$/, "سعره المعتاد ($1 ج.م)."], [/^Not enough history yet to say more\.$/, "مفيش تاريخ كفاية لسه."],
     [/^Watch it to hear when it's back\.$/, "تابعه عشان تعرف أول ما يرجع."],
+    [/^💰 Biggest saving now:$/, "💰 أكبر توفير دلوقتي:"], [/^· save ([\d,.]+) EGP$/, "· وفّر $1 ج.م"],
+    [/^🎟️ With the code$/, "🎟️ بالكود"], [/^at checkout: ([\d,.]+) EGP$/, "وقت الدفع: $1 ج.م"],
+    [/^Goes on sale about every (\d+) (h|days?), usually down to ([\d.,]+) EGP\. (.*)$/, (m, n, u, p, rest) =>
+      `بيعمل عرض كل حوالي ${n} ${u === "h" ? "ساعة" : "يوم"}، وغالبًا بينزل لـ ${p} ج.م. ` +
+      rest.replace(/^Next one likely in about (\d+) (h|days?)\.$/, (m2, k, v) => `العرض الجاي غالبًا بعد ${k} ${v === "h" ? "ساعة" : "يوم"}.`)
+          .replace("One is due any day now.", "العرض الجاي ممكن ييجي في أي يوم.")],
+    [/^On sale now\. Its sales usually last about (\d+) (h|days?)(.*)$/, (m, n, u, rest) =>
+      `عليه عرض دلوقتي. عروضه بتستمر عادة حوالي ${n} ${u === "h" ? "ساعة" : "يوم"}` +
+      rest.replace(/^, so about (\d+) (h|days?) left\.$/, (m2, k, v) => `، يعني فاضل حوالي ${k} ${v === "h" ? "ساعة" : "يوم"}.`)
+          .replace(": this one may end any time.", ": العرض ده ممكن يخلص في أي وقت.")],
     // units
     [/\/ piece$/, "/ للقطعة"], [/\/ 100 ml$/, "/ 100 مل"], [/\/ 100 g$/, "/ 100 جم"], [/\/ L$/, "/ لتر"], [/\/ kg$/, "/ كيلو"],
     // times and the status line (inside longer text)
@@ -102,7 +128,7 @@
     [/full sweep ([\d]+) (s|min)/g, (m, n, u) => `لفة كاملة ${n} ${u === "s" ? "ث" : "د"}`],
     [/ · first sweep/g, " · أول لفة"], [/ · watching/g, " · بيراقب"], [/ · changed /g, " · نزل "],
     [/price changes in the last hour/g, "تغيير سعر في آخر ساعة"], [/\bEGP\b/g, "ج.م"],
-    [/talabat mart|Amazon\.eg|Jumia|Breadfast/g, m => STORE[m]],
+    [/talabat mart|Amazon\.eg|Jumia|Breadfast|Dream 2000|Kenzz/g, m => STORE[m]],
   ];
   const SKIP = "[dir=auto],script,style,code,textarea,[data-noi18n],input,svg";
   const ATTRS = ["placeholder", "title", "aria-label"];
