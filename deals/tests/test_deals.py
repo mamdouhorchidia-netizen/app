@@ -449,10 +449,12 @@ class AppLinks(unittest.TestCase):
         self.assertIn("S.browser_fallback_url=https%3A%2F%2Fwww.amazon.eg%2F-%2Fen%2Fdp%2FB0DC5F7P3N", l["android"])
         self.assertEqual(l["ios"], "https://www.amazon.eg/dp/B0DC5F7P3N")
         self.assertIn("package=com.android.chrome;", l["browser"])
-        # talabat: its real app (com.6alabat.cuisineApp), falling back to the page; Chrome as the backup
+        # talabat: its app can't open a product link (its pages declare only talabat://), so Android opens the
+        # product's web page in Chrome, which works when the link's area is served by the item's hub
         t = links("talabat", "https://www.talabat.com/egypt/x/s/1?aid=9")
         self.assertTrue(t["android"].startswith("intent://www.talabat.com/egypt/x/s/1?aid=9#Intent;scheme=https;"
-                                                "package=com.6alabat.cuisineApp;"))
+                                                "package=com.android.chrome;"))
+        self.assertNotIn("cuisineApp", t["android"])
         self.assertIn("package=com.android.chrome;", t["browser"])
         self.assertEqual((t["web"], t["ios"]), ("https://www.talabat.com/egypt/x/s/1?aid=9",) * 2)
         self.assertIn("package=com.jumia.android;", links("jumia", "https://www.jumia.com.eg/x-1.html")["android"])
@@ -500,7 +502,7 @@ class CatalogAndFilters(unittest.TestCase):
         self.assertIn("new", tea["flags"])
         self.assertIn("lowest", tea["flags"])
         self.assertEqual((tea["unit_price"], tea["unit"]), (160.0, "kg"))
-        self.assertIn("package=com.6alabat.cuisineApp;", tea["links"]["android"])
+        self.assertIn("package=com.android.chrome;", tea["links"]["android"])
         self.assertEqual(tea["links"]["web"], TEA_URL)
         self.assertTrue(len(tea["spark"]) >= 2)
         self.assertIn("20% under its usual 100 EGP", tea["why"])
@@ -1028,3 +1030,73 @@ class HistoryAndDeals(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Pages(unittest.TestCase):
+    """The product page, coupons, the Telegram channel and the Amazon tag."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.path = os.path.join(self.dir, "d.sqlite3")
+        con = db.connect(self.path)
+        self.t0 = 1_760_000_000
+        db.save_offers(con, [Offer("talabat", "650270:T2", "Lipton Black Tea <500 gm>", 100, category="Coffee & Tea / Tea",
+                                   url=TEA_URL, image="https://img/t.jpg", extra={"hub": 650270, "hub_name": "El Obour El Hay 9"}),
+                             Offer("amazon_eg", "B0DC5F7P3N", "Soap", 90, 100, url="https://www.amazon.eg/-/en/dp/B0DC5F7P3N")],
+                       self.t0)
+        db.save_offers(con, [Offer("talabat", "650270:T2", "Lipton Black Tea <500 gm>", 50, 100, category="Coffee & Tea / Tea",
+                                   url=TEA_URL, image="https://img/t.jpg", extra={"hub": 650270, "hub_name": "El Obour El Hay 9"})],
+                       self.t0 + 5 * DAY)
+        self.now = self.t0 + 5 * DAY + 60
+        self.con = con
+
+    def tearDown(self):
+        self.con.close()
+
+    def test_product_page_has_preview_tags_and_history(self):
+        from deals import pages
+        self.con.row_factory = __import__("sqlite3").Row
+        p = dict(self.con.execute("SELECT * FROM products WHERE sku='650270:T2'").fetchone())
+        item = next(d for d in finder.catalog(self.con, self.now) if d["id"] == p["id"])
+        page = pages.product_page(p, item, db.history(self.con, p["id"]), [], [], "https://deals.example", self.now).decode()
+        self.assertIn('<meta property="og:title" content="Lipton Black Tea &lt;500 gm&gt; · 50 ج.م">', page)  # escaped
+        self.assertIn('og:image" content="https://img/t.jpg"', page)
+        self.assertIn("خصم 50%", page)
+        self.assertIn("<svg class=\"chart\"", page)
+        self.assertIn("📍 El Obour El Hay 9", page)
+        self.assertIn('data-android="intent://www.talabat.com/', page)  # opens talabat's page, in Chrome
+        self.assertNotIn("<500", page)
+
+    def test_coupons_lines(self):
+        from deals import pages
+        c = pages.parse_coupons("# mine\ntalabat | MART50 | 50 off | 2027-01-31\nAmazon | A1\nbad line\n"
+                                "jumia | J | x | | javascript:alert(1)")
+        self.assertEqual([x["code"] for x in c], ["MART50", "A1", "J"])
+        self.assertEqual((c[0]["expires"], c[1]["store"]), ("2027-01-31", "amazon_eg"))
+        self.assertNotIn("url", c[2])  # only https links
+        html_ = pages.coupons_page(c + [{"store": "jumia", "code": "OLD", "expires": "2020-01-01"}]).decode()
+        self.assertIn('data-copy="MART50"', html_)
+        self.assertNotIn("OLD", html_)
+
+    def test_telegram_posts_fresh_big_deals_once(self):
+        from deals import telegram
+        sent = []
+        p = telegram.Poster(self.path, "t", "@ch", "https://deals.example", send=lambda m, b: sent.append((m, b)))
+        p.since = self.t0 + 5 * DAY - 10
+        self.assertEqual(p.once(self.now), 1)  # the tea at half price; the soap's 10 % isn't enough
+        method, body = sent[0]
+        self.assertEqual((method, body["chat_id"], body["photo"]), ("sendPhoto", "@ch", "https://img/t.jpg"))
+        self.assertIn("https://deals.example/p/", body["caption"])
+        self.assertIn("&lt;500 gm&gt;", body["caption"])
+        p.since = 0
+        self.assertEqual(p.once(self.now + 120), 0)  # never the same price twice
+
+    def test_amazon_tag(self):
+        from deals.applinks import links
+        with unittest.mock.patch.dict(os.environ, {"AMAZON_TAG": "mytag-21"}):
+            l = links("amazon_eg", "https://www.amazon.eg/-/en/dp/B0DC5F7P3N")
+            self.assertTrue(l["web"].endswith("/dp/B0DC5F7P3N?tag=mytag-21"))
+            self.assertIn("amazon.eg/dp/B0DC5F7P3N?tag=mytag-21#Intent", l["android"])
+            self.assertNotIn("tag=", links("jumia", "https://www.jumia.com.eg/x.html")["web"])
+        with unittest.mock.patch.dict(os.environ, {"AMAZON_TAG": "bad tag&x=1"}):
+            self.assertNotIn("tag=", links("amazon_eg", "https://www.amazon.eg/dp/B0DC5F7P3N")["web"])

@@ -55,6 +55,17 @@ ol { padding-left: 20px; }
     <div id="hubout" aria-live="polite"></div>
   </section>
 
+  <form class="card" id="cf">
+    <h2 style="margin-top:0">🎟️ Coupons</h2>
+    <p>Shown on <a href="/coupons">/coupons</a>; a visitor taps a code to copy it. One per line:
+      <code>store | CODE | what it gives | until (YYYY-MM-DD) | link</code>. The last two are optional; past dates hide
+      themselves. Lines starting with # are skipped.</p>
+    <textarea id="ctext" rows="7" style="width:100%;font:13px ui-monospace,monospace" dir="ltr"
+      placeholder="talabat | MART50 | 50 EGP off talabat mart over 400 | 2026-12-31&#10;jumia | JUMIA10 | 10% off fashion"></textarea>
+    <button id="cgo">Save coupons</button>
+    <div id="cout" aria-live="polite"></div>
+  </form>
+
   <h1 style="margin-top:28px">Add Breadfast</h1>
   <p>Breadfast's prices exist only inside its app. Record the app once on your phone, upload the recording here,
     and the site keeps Breadfast's prices fresh by itself until the app signs you out.</p>
@@ -211,6 +222,20 @@ $("f2").onsubmit = async e => {
     else { try { sessionStorage.setItem("dealsAdmin", $("token").value.trim()); } catch {} showResult($("out2"), r); $("curl").value = ""; }
   } catch { $("out2").innerHTML = '<p class="err">Network error: try again.</p>'; }
   $("go2").disabled = false;
+};
+fetch("/api/coupons").then(r => r.json()).then(r => { $("ctext").value = (r.coupons || []).map(c =>
+  [c.store, c.code, c.title || "", c.expires || "", c.url || ""].join(" | ").replace(/( \| )+$/, "")).join("\n"); }).catch(() => {});
+$("cf").onsubmit = async e => {
+  e.preventDefault(); $("cgo").disabled = true;
+  try {
+    const res = await fetch("/admin/coupons", { method: "POST",
+      headers: { "Authorization": "Bearer " + $("token").value.trim(), "Content-Type": "application/json" },
+      body: JSON.stringify({ text: $("ctext").value }) });
+    const r = await res.json().catch(() => ({}));
+    $("cout").innerHTML = res.ok ? `<p class="ok">Saved ${r.coupons.length} coupon(s).</p>` : `<p class="err">${esc(r.error || "Failed (" + res.status + ").")}</p>`;
+    if (res.ok) try { sessionStorage.setItem("dealsAdmin", $("token").value.trim()); } catch {}
+  } catch { $("cout").innerHTML = '<p class="err">Network error: try again.</p>'; }
+  $("cgo").disabled = false;
 };
 </script>
 </body>

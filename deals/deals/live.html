@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Live Deals</title>
-<meta name="description" content="Live prices and real deals from talabat mart, Amazon.eg and Breadfast.">
+<meta name="description" content="عروض وأسعار لحظة بلحظة من طلبات مارت وأمازون مصر وجوميا وبريدفاست">
 <meta name="theme-color" content="#d6402b">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -45,24 +45,35 @@ h1 { font-size: 19px; margin: 0; letter-spacing: -.01em; white-space: nowrap; di
 @keyframes pulse { 50% { opacity: .25; } }
 .search { flex: 1; min-width: 0; position: relative; }
 .search input { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  padding: 9px 12px 9px 34px; font-size: 15px; }
-.search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--faint); }
+  padding-block: 9px; padding-inline: 34px 12px; font-size: 15px; }
+.search svg { position: absolute; inset-inline-start: 11px; top: 50%; transform: translateY(-50%); color: var(--faint); }
 .iconbtn { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; height: 40px; min-width: 40px;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; cursor: pointer; flex: none; }
 .iconbtn .n { background: var(--accent); color: var(--accent-ink); border-radius: 999px; font-size: 11px; padding: 0 6px; font-weight: 700; }
 .status { color: var(--muted); font-size: 12.5px; padding: 0 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ticker { overflow: hidden; border-top: 1px solid var(--line); height: 30px; position: relative; font-size: 13px; }
-.ticker-track { display: inline-flex; gap: 28px; white-space: nowrap; padding-left: 100%; line-height: 30px;
+.ticker-track { display: inline-flex; gap: 28px; white-space: nowrap; padding-left: 100%; line-height: 30px; direction: ltr;
   animation: scroll linear infinite; }
 .ticker:hover .ticker-track { animation-play-state: paused; }
 @keyframes scroll { to { transform: translateX(-100%); } }
 .tick { cursor: pointer; color: var(--muted); }
+[dir=rtl] .tick { direction: rtl; unicode-bidi: isolate; }
+.slider { direction: ltr; }
+.badge, .score { direction: ltr; unicode-bidi: isolate; }
+.dlg-head { padding-inline-end: 40px; }
+.unit { direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
+svg.chart { direction: ltr; }
+[dir=rtl] body { font-family: system-ui, "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif; }
+.nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 0 0 8px; font-size: 13.5px; }
+.nav a { color: var(--muted); text-decoration: none; padding: 5px 11px; border-radius: 999px; white-space: nowrap; border: 1px solid transparent; }
+.nav a:hover { color: var(--ink); border-color: var(--line); }
+.nav a.on { background: var(--chip); color: var(--ink); font-weight: 650; }
 .tick b { color: var(--ink); font-weight: 600; }
 .tick .down { color: var(--drop); font-weight: 600; } .tick .up { color: var(--accent); font-weight: 600; }
 
 /* layout */
 .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 20px; padding-top: 16px; padding-bottom: 60px; }
-aside { position: sticky; top: 130px; align-self: start; max-height: calc(100vh - 140px); overflow: auto; padding-right: 4px; }
+aside { position: sticky; top: 130px; align-self: start; max-height: calc(100vh - 140px); overflow: auto; padding-inline-end: 4px; }
 .fgroup { padding: 12px 0; border-bottom: 1px solid var(--line); }
 .fgroup:first-child { padding-top: 0; }
 .fgroup h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; font-weight: 650; }
@@ -73,7 +84,7 @@ aside { position: sticky; top: 130px; align-self: start; max-height: calc(100vh 
 .opt { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 7px; cursor: pointer; font-size: 14px; }
 .opt:hover { background: var(--chip); }
 .opt input { accent-color: var(--accent); margin: 0; width: 16px; height: 16px; }
-.opt .c { margin-left: auto; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.opt .c { margin-inline-start: auto; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
 .opt .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .range label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
@@ -110,13 +121,13 @@ aside { position: sticky; top: 130px; align-self: start; max-height: calc(100vh 
 /* every picture fills the same square, whatever size the store sent: small ones grow, big ones shrink */
 .pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 14% 12% 18%; box-sizing: border-box; }
 .pic .ph { font-size: 34px; font-weight: 700; color: #d9d5cc; }
-.badge { position: absolute; top: 8px; left: 8px; color: #fff; font-weight: 750; font-size: 13px; padding: 3px 8px; border-radius: 7px; background: #d6402b; letter-spacing: .01em; }
+.badge { position: absolute; top: 8px; inset-inline-start: 8px; color: #fff; font-weight: 750; font-size: 13px; padding: 3px 8px; border-radius: 7px; background: #d6402b; letter-spacing: .01em; }
 .badge.drop { background: #1f7a4d; }
-.score { position: absolute; top: 6px; right: 6px; width: 38px; height: 38px; }
+.score { position: absolute; top: 6px; inset-inline-end: 6px; width: 38px; height: 38px; }
 .score text { font-size: 12px; font-weight: 750; fill: #1b1a17; }
 .why .score { position: static; flex: none; width: 52px; height: 52px; }
-.store { position: absolute; bottom: 8px; left: 8px; color: #fff; font-size: 11px; font-weight: 650; padding: 2px 7px; border-radius: 5px; }
-.watch { position: absolute; bottom: 6px; right: 6px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(255,255,255,.92);
+.store { position: absolute; bottom: 8px; inset-inline-start: 8px; color: #fff; font-size: 11px; font-weight: 650; padding: 2px 7px; border-radius: 5px; }
+.watch { position: absolute; bottom: 6px; inset-inline-end: 6px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(255,255,255,.92);
   display: grid; place-items: center; cursor: pointer; color: #a6a29a; box-shadow: 0 1px 3px rgba(0,0,0,.15); font-size: 16px; }
 .watch[aria-pressed="true"] { color: #e0a100; }
 .body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
@@ -124,7 +135,7 @@ aside { position: sticky; top: 130px; align-self: start; max-height: calc(100vh 
 .priceline { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: auto; }
 .now { font-size: 19px; font-weight: 750; letter-spacing: -.01em; white-space: nowrap; }
 .now small { font-size: 12px; font-weight: 600; color: var(--muted); }
-.was { color: var(--muted); text-decoration: line-through; font-size: 13px; margin-left: 4px; }
+.was { color: var(--muted); text-decoration: line-through; font-size: 13px; margin-inline-start: 4px; }
 .spark { width: 72px; height: 26px; flex: none; }
 .meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
 .tags { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -148,10 +159,10 @@ dialog::backdrop { background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
 .dlg-head .img { width: 110px; height: 110px; background: #fff; border-radius: 12px; display: grid; place-items: center; border: 1px solid var(--line); }
 .dlg-head img { max-width: 90%; max-height: 90%; }
 .dlg h2 { font-size: 17px; margin: 0 30px 6px 0; line-height: 1.3; }
-.x { position: absolute; top: 12px; right: 14px; background: var(--chip); border: 0; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; color: var(--muted); }
+.x { position: absolute; top: 12px; inset-inline-end: 14px; background: var(--chip); border: 0; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; color: var(--muted); }
 .bigprice { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
 .why { margin: 14px 0; padding: 12px 14px; background: var(--chip); border-radius: 12px; display: flex; gap: 14px; align-items: center; }
-.why ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.why ul { margin: 0; padding-inline-start: 18px; font-size: 14px; }
 .chart { width: 100%; height: 200px; display: block; touch-action: pan-y; }
 .chart .ln { fill: none; stroke: var(--accent); stroke-width: 2.2; vector-effect: non-scaling-stroke; }
 .chart .ar { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
@@ -162,7 +173,7 @@ dialog::backdrop { background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
 .tip { font-size: 13px; color: var(--muted); min-height: 18px; }
 table.cmp { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 6px; }
 table.cmp td { padding: 8px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
-table.cmp td:last-child { text-align: right; }
+table.cmp td:last-child { text-align: end; }
 table.cmp .best { color: var(--good); font-weight: 700; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 9px 14px; cursor: pointer; text-decoration: none; font-size: 14px; display: inline-flex; gap: 6px; align-items: center; }
@@ -175,9 +186,9 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
 .toast { background: var(--ink); color: var(--bg); padding: 11px 14px; border-radius: 12px; font-size: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.25); cursor: pointer; animation: up .25s ease-out; }
 @keyframes up { from { transform: translateY(10px); opacity: 0; } }
 
-.search .mic { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; font-size: 17px; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+.search .mic { position: absolute; inset-inline-end: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; font-size: 17px; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
 .search .mic.on { background: color-mix(in srgb, var(--accent) 18%, transparent); animation: pulse 1s infinite; }
-.search:has(.mic:not([hidden])) input { padding-right: 38px; }
+.search:has(.mic:not([hidden])) input { padding-inline-end: 38px; }
 .interp { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 0 6px; font-size: 12.5px; color: var(--muted); align-items: center; }
 .interp b { color: var(--ink); font-weight: 600; background: var(--chip); padding: 2px 8px; border-radius: 999px; }
 .tag.vd-good { background: var(--good-bg); color: var(--good); font-weight: 700; }
@@ -205,7 +216,7 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
   h1 .t { display: none; }
   /* phones: title and buttons on the first row, the search on its own full-width row */
   .top { flex-wrap: wrap; row-gap: 8px; gap: 8px; }
-  .top h1 { margin-right: auto; }
+  .top h1 { margin-inline-end: auto; }
   .top .search { order: 10; flex: 1 0 100%; }
   .iconbtn { height: 38px; min-width: 38px; padding: 0 9px; }
   .hide-sm { display: none; }
@@ -218,6 +229,7 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
 .sheet-done { display: none; }
 @media (prefers-reduced-motion: reduce) { .pulse, .card.fresh, .ticker-track, .skel { animation: none; } }
 </style>
+<script src="/i18n.js"></script>
 </head>
 <body>
 <header>
@@ -227,12 +239,14 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
       <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input type="search" id="q" placeholder="Try: milk under 50 at talabat · حفاضات أرخص للكيلو" aria-label="Search" autocomplete="off">
         <button type="button" class="mic" id="mic" title="Search by voice" aria-label="Search by voice" hidden>🎤</button></label>
+      <button class="iconbtn" id="langBtn" title="العربية" aria-label="Language">ع</button>
       <button class="iconbtn" id="watchBtn" title="Watchlist" aria-label="Watchlist">★ <span class="n" id="watchN" hidden>0</span></button>
       <button class="iconbtn" id="basketBtn" title="Basket" aria-label="Basket">🧺 <span class="n" id="basketN" hidden>0</span></button>
       <button class="iconbtn" id="alertsBtn" title="Price-drop alerts" aria-label="Price-drop alerts">🔔</button>
       <button class="iconbtn" id="installBtn" title="Install the app" aria-label="Install the app" hidden>⬇︎ <span class="hide-sm">Install</span></button>
       <button class="iconbtn filterbtn" id="filterBtn" aria-label="Filters">Filters <span class="n" id="filterN" hidden>0</span></button>
     </div>
+    <nav class="nav" id="nav"><a href="/">Home</a><a href="/?deals=1&amp;sort=newest&amp;status=new">Just dropped</a><a href="/cats">Categories</a><a href="/stores">Stores</a><a href="/coupons">🎟️ Coupons</a><a href="/?recent=1">Recently viewed</a></nav>
     <div class="interp" id="interp" hidden></div>
     <div class="status" id="status">connecting…</div>
   </div>
@@ -314,7 +328,9 @@ const appLabel = { talabat: "talabat", amazon_eg: "Amazon", breadfast: "Breadfas
 const LABELS = { talabat: "talabat mart", amazon_eg: "Amazon.eg", breadfast: "Breadfast", jumia: "Jumia" };
 
 // ---------- state, mirrored in the address so any view can be shared ----------
-const DEFAULTS = { deals: "1", stores: [], hubs: [], kind: "", min: 0, max: 90, stock: "in", status: [], best: false, watch: false,
+document.querySelectorAll("#nav a").forEach(a => { const u = new URL(a.href);
+  if (u.pathname === location.pathname && u.search === location.search) a.classList.add("on"); });
+const DEFAULTS = { deals: "1", stores: [], hubs: [], kind: "", min: 0, max: 90, stock: "in", status: [], best: false, watch: false, recent: false,
                    category: "", q: "", pmin: "", pmax: "", sort: "score" };
 let F = { ...DEFAULTS };
 function readURL() {
@@ -323,7 +339,7 @@ function readURL() {
   for (const k of ["deals", "kind", "stock", "category", "q", "pmin", "pmax", "sort"]) if (p.has(k)) F[k] = p.get(k);
   for (const k of ["min", "max"]) if (p.has(k)) F[k] = +p.get(k);
   for (const k of ["stores", "status", "hubs"]) if (p.get(k)) F[k] = p.get(k).split(",");
-  F.best = p.get("best") === "1"; F.watch = p.get("watch") === "1";
+  F.best = p.get("best") === "1"; F.watch = p.get("watch") === "1"; F.recent = p.get("recent") === "1";
 }
 function writeURL() {
   const p = new URLSearchParams();
@@ -422,6 +438,7 @@ function activeChips() {
   F.status.forEach(s => chips.push([names[s] || s, () => F.status = F.status.filter(x => x !== s)]));
   if (F.best) chips.push(["Cheapest across stores", () => F.best = false]);
   if (F.watch) chips.push(["Watchlist", () => F.watch = false]);
+  if (F.recent) chips.push(["Recently viewed", () => F.recent = false]);
   if (F.category) chips.push([F.category, () => F.category = ""]);
   if (F.q) chips.push([`“${F.q}”`, () => F.q = ""]);
   if (F.pmin || F.pmax) chips.push([`${F.pmin || 0}–${F.pmax || "∞"} EGP`, () => { F.pmin = ""; F.pmax = ""; }]);
@@ -479,7 +496,7 @@ function card(d, fresh) {
     <div class="body"><div class="name" dir="auto">${esc(d.name)}</div>
       <div class="tags">${tagsFor(d)}</div>
       <div class="priceline"><div><span class="now">${fmt(d.price)} <small>EGP</small></span>${was}</div>${sparkSVG(d.spark)}</div>
-      <div class="meta">${d.hub_name ? `<span title="talabat hub">📍 ${esc(d.hub_name)}</span>` : ""}${d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : ""}${d.saving > 0 ? `<span>save ${fmt(d.saving)}</span>` : ""}${unit ? `<span>${unit}</span>` : ""}</div>
+      <div class="meta">${d.hub_name ? `<span title="talabat hub">📍 ${esc(d.hub_name)}</span>` : ""}${d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : ""}${d.saving > 0 ? `<span>save ${fmt(d.saving)}</span>` : ""}${unit ? `<span class="unit">${unit}</span>` : ""}</div>
       <div class="cta"><a href="${esc(appHref(d))}" target="_blank" rel="noopener" data-open>Open in ${esc(appLabel[d.store] || "store")} ↗</a></div>
     </div></article>`;
 }
@@ -507,6 +524,7 @@ function params(offset, limit) {
   if (F.pmin !== "") p.set("pmin", F.pmin);
   if (F.pmax !== "") p.set("pmax", F.pmax);
   if (F.watch) { p.set("ids", Object.keys(watch).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); }
+  else if (F.recent) { p.set("ids", store.get("recent", []).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); p.set("sort", "newest"); }
   return p;
 }
 async function load({ append = false, quiet = false } = {}) {
@@ -571,6 +589,7 @@ async function showProduct(id) {
   try { r = await (await fetch("/api/product/" + id)).json(); } catch { return; }
   if (r.error) return;
   const p = r.product, d = r.item && r.item.id ? r.item : null, h = r.history;
+  store.set("recent", [id, ...store.get("recent", []).filter(x => x !== id)].slice(0, 60));
   const u = new URLSearchParams(location.search); u.set("p", id); history.replaceState(null, "", "?" + u);
   const w = watch[id];
   const rows = d ? [d, ...(r.matches || [])].sort((a, b) => a.price - b.price) : [];
@@ -581,7 +600,7 @@ async function showProduct(id) {
         <div class="meta"><span style="color:var(--${esc(p.store)});font-weight:650">${esc(LABELS[p.store] || p.store)}</span><span>${esc(p.category || "")}</span><span>tracked ${ago(p.first_seen).replace(" ago", "")}</span></div>
         <div style="margin-top:8px"><span class="bigprice">${fmt(p.price)} EGP</span>
           ${d && d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : ""}
-          ${d && d.unit_text ? `<span class="meta" style="display:inline;margin-left:8px">${esc(d.unit_text)}</span>` : ""}</div>
+          ${d && d.unit_text ? `<span class="meta unit" style="display:inline;margin-inline-start:8px">${esc(d.unit_text)}</span>` : ""}</div>
         <div class="tags" style="margin-top:6px">${d ? tagsFor(d) : ""}</div></div></div>
     ${d && d.verdict ? `<div class="verdict ${d.verdict.tone}"><b>${esc(d.verdict.label)}</b><span>${esc(d.verdict.why)}</span></div>` : ""}
     ${d && d.why && d.why.length ? `<div class="why">${scoreSVG(d.score)}<ul>${d.why.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
@@ -596,11 +615,12 @@ async function showProduct(id) {
       <input id="target" type="number" inputmode="decimal" min="0" step="0.5" placeholder="${Math.floor(p.price * 0.9)}" value="${w && w.target ? w.target : ""}"> EGP
       <button class="btn" id="setTarget">${w ? "Update alert" : "Watch"}</button></div>
     <div class="row">
-      <a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener">Open in ${esc(appLabel[p.store] || "store")} app ↗</a>
+      <a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener">Open in ${esc(appLabel[p.store] || "store")}${p.store === "talabat" ? "" : " app"} ↗</a>
       ${d && (isAndroid ? d.links.browser : d.links.web) && (isAndroid ? d.links.browser : d.links.web) !== link
         ? `<a class="btn" href="${esc(isAndroid ? d.links.browser : d.links.web)}" target="_blank" rel="noopener">Open in browser</a>` : ""}
       <button class="btn" id="toBasket">🧺 ${basket[id] ? "In basket (" + basket[id] + ")" : "Add to basket"}</button>
       <button class="btn" id="share">Share</button>
+      <a class="btn" href="/p/${id}">Product page</a>
     </div>`;
   if (!$("dlg").open) $("dlg").showModal();
   drawChart(h, p.price);
@@ -615,7 +635,7 @@ async function showProduct(id) {
   $("toBasket").onclick = () => { basket[id] = (basket[id] || 0) + 1; saveBasket(); $("toBasket").textContent = `🧺 In basket (${basket[id]})`;
     toast("Added to your basket. 🧺 shows where it's cheapest."); };
   $("share").onclick = async () => {
-    const url = location.origin + "/?p=" + id, text = `${p.name}: ${fmt(p.price)} EGP`;
+    const url = location.origin + "/p/" + id, text = `${p.name}: ${fmt(p.price)} EGP`;
     try { if (navigator.share) await navigator.share({ title: text, text, url });
           else { await navigator.clipboard.writeText(url); toast("Link copied."); } } catch {}
   };

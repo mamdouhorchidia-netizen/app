@@ -113,6 +113,8 @@ def live(args, stores):
         push.start(args.db, LABELS)  # price-drop notifications, checked every minute
     except ImportError:
         print("push notifications off: the cryptography package isn't installed")
+    from . import telegram
+    telegram.start(args.db, web.PUBLIC_URL)  # big fresh deals to a Telegram channel, when its keys are set
     web.serve(args.db, args.host, args.port, args.breadfast_requests)
 
 

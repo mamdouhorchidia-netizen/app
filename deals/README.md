@@ -85,12 +85,23 @@ Notes:
 - Breadfast's terms don't mention automated collection either way. Using your own capture is your call.
 
 ## The page
-- **Every listing opens in its store's app, at that product.** On Android, the link names the app
-  (`com.talabat`, `com.amazon.mShop.android.shopping`, `com.breadfast`) and the product's address, and
-  falls back to the web page if the app isn't installed. On iPhone, the product's address opens in the app
-  when the app claims it (universal links). Breadfast uses the share or deep link from its own data when
-  the capture has one, and otherwise opens the app's home screen. Whether an app lands exactly on the
-  item is up to the app: Amazon's does; talabat's and Breadfast's depend on which links they handle.
+- **Arabic first, right to left** (Egyptian wording: "نزل دلوقتي", "🔥 أقل سعر", "من 4 د"), with English one tap
+  away (the ع / EN button, remembered per browser). `deals/i18n.js` translates what the pages show as it
+  appears; product names are left as the store wrote them.
+- **3rrood-style pages:** `/p/ID` is each product's own page (price history chart, lowest/highest in 90 days,
+  the verdict and why, the same product in other stores, more deals like it, and a store button); shared on
+  WhatsApp or Telegram it shows a preview card with the picture, price and discount in Arabic. `/stores`
+  (deals per store, "خصومات لحد X%"), `/store/ID`, `/cats` (categories with deal counts), `/coupons`
+  (tap a code to copy it; the owner keeps the list on /admin), and "كمّل من حيث وقفت" (recently viewed,
+  kept in the browser).
+- **Every listing opens at that product.** Amazon and Jumia: on Android the link names the app
+  (`com.amazon.mShop.android.shopping`, `com.jumia.android`) and the product's address, and falls back to the
+  web page if the app isn't installed; on iPhone the product's address opens in the app when the app claims
+  it. **talabat** opens its product page in Chrome: its app can't open a product from a link (its pages
+  declare only `talabat://`), so handing it one showed "We can't load this page". The web page works when
+  the link's area (`aid`) is one the item's hub delivers to, which is how every link here is built.
+  Breadfast uses the share or deep link from its own data when the capture has one, and otherwise opens
+  the app's home screen.
 - **Filters:** deals or all products; platform (with counts); discount type (platform discount or
   price drop); discount % range; availability (in stock, out, all); status (real deals only, changed in
   24 h, lowest in 90 days, store event deals, back in stock, sold in other stores too, cheapest across
@@ -221,7 +232,12 @@ release poller ignores it, because it only deploys apps built from the vorath re
 
 Settings, all optional, in Coolify › deals › Environment variables (redeploy after a change):
 `TALABAT_DELAY`, `AMAZON_DELAY`, `BREADFAST_DELAY`, `HOT_EVERY`, `DEALS_ADMIN_TOKEN` (turns on
-`/admin`), and the three `AMAZON_*` API keys.
+`/admin`), and the three `AMAZON_*` API keys. Also:
+- `PUBLIC_URL` the site's address, used in shared links and Telegram posts (`https://deals.vorath.cloud`).
+- `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`: post the big fresh deals to a Telegram channel, like 3rrood's.
+  Make a bot with @BotFather, add it to the channel as an admin, and use the channel's `@name`.
+  `TELEGRAM_MIN_PCT` (40) and `TELEGRAM_PER_HOUR` (10) tune it; a product is posted again only at a lower price.
+- `AMAZON_TAG`: your Amazon Associates tag, added to every Amazon link (`?tag=…`), as 3rrood does.
 
 Day to day: merge into the default branch and it's live within ~10 minutes (log: `/root/vorath/deals/log`). The
 container's logs are in Coolify. The data is in the `deals-data` volume.

@@ -8,6 +8,9 @@
 #     AMAZON_ACCESS_KEY / AMAZON_SECRET_KEY / AMAZON_PARTNER_TAG   use Amazon's API instead of its public pages
 #     CHROME_BIN        another Chrome/Chromium (default: the image's chromium)
 #     DEALS_ADMIN_TOKEN turns on /admin: talabat hubs to follow, adding Breadfast (16+ characters; a secret)
+#     PUBLIC_URL        the site's address in shared links (https://deals.vorath.cloud)
+#     TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID   post big fresh deals to a Telegram channel (TELEGRAM_MIN_PCT 40, _PER_HOUR 10)
+#     AMAZON_TAG        an Amazon Associates tag added to Amazon links
 #   /data also holds settings.json (hubs), talabat_hubs.json (which hub serves which area) and vapid.json (the
 #   key that signs notifications: keep it, or every phone has to turn alerts on again)
 FROM python:3.12-slim
