@@ -1217,3 +1217,12 @@ class PriceWentUp(unittest.TestCase):
         self.assertEqual(finder.query([d], status=["real"])["total"], 0)
         self.assertEqual(finder.brief([d])["deals"], 0)
         con.close()
+
+
+class BreadfastLinks(unittest.TestCase):
+    def test_products_link_to_the_apps_own_address(self):
+        from deals.applinks import links
+        o = breadfast.to_offer({"id": 27460485, "name": "Croissant", "price": 25})
+        self.assertEqual(o.url, "https://app.breadfast.com/products?id=27460485")
+        l = links("breadfast", o.url, o.extra)
+        self.assertEqual((l["web"], l["android"], l["ios"]), (o.url,) * 3)

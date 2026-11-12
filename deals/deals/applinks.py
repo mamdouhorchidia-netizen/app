@@ -66,6 +66,9 @@ def links(store: str, url: str, extra: dict = None) -> dict:
     store's web page in Chrome on Android (a way round an app that can't show the item)."""
     extra = extra or {}
     package = PACKAGES.get(store)
+    if store == "breadfast" and url.startswith("https://app.breadfast.com/products?id="):
+        # Breadfast's own product link (as shared from its app): the app opens it at the product
+        return {"web": url, "android": url, "ios": url, "browser": url}
     if store == "breadfast":
         play, appstore = STORE_PAGES["breadfast"]
         app_link = extra.get("app_link") or ""
