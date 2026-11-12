@@ -449,14 +449,12 @@ class AppLinks(unittest.TestCase):
         self.assertIn("S.browser_fallback_url=https%3A%2F%2Fwww.amazon.eg%2F-%2Fen%2Fdp%2FB0DC5F7P3N", l["android"])
         self.assertEqual(l["ios"], "https://www.amazon.eg/dp/B0DC5F7P3N")
         self.assertIn("package=com.android.chrome;", l["browser"])
-        # talabat: its app can't open a product link (its pages declare only talabat://), so Android opens the
-        # product's web page in Chrome, which works when the link's area is served by the item's hub
-        t = links("talabat", "https://www.talabat.com/egypt/x/s/1?aid=9")
-        self.assertTrue(t["android"].startswith("intent://www.talabat.com/egypt/x/s/1?aid=9#Intent;scheme=https;"
-                                                "package=com.android.chrome;"))
-        self.assertNotIn("cuisineApp", t["android"])
+        # talabat: the short product address, which its app (com.talabat) opens at the user's own address,
+        # as a plain link everywhere; the hub address (grocery/<hub>/...?aid=) made the app fail
+        t = links("talabat", "https://www.talabat.com/egypt/grocery/650270/talabat-mart/product/kitkat-42g/s/904059?aid=8025")
+        short = "https://www.talabat.com/egypt/talabat-mart/product/kitkat-42g/s/904059"
+        self.assertEqual((t["web"], t["android"], t["ios"]), (short, short, short))
         self.assertIn("package=com.android.chrome;", t["browser"])
-        self.assertEqual((t["web"], t["ios"]), ("https://www.talabat.com/egypt/x/s/1?aid=9",) * 2)
         self.assertIn("package=com.jumia.android;", links("jumia", "https://www.jumia.com.eg/x-1.html")["android"])
 
     def test_breadfast_uses_the_apps_own_link(self):
@@ -502,8 +500,8 @@ class CatalogAndFilters(unittest.TestCase):
         self.assertIn("new", tea["flags"])
         self.assertIn("lowest", tea["flags"])
         self.assertEqual((tea["unit_price"], tea["unit"]), (160.0, "kg"))
-        self.assertIn("package=com.android.chrome;", tea["links"]["android"])
-        self.assertEqual(tea["links"]["web"], TEA_URL)
+        self.assertEqual(tea["links"]["android"], "https://www.talabat.com/egypt/talabat-mart/product/tea/s/T2")
+        self.assertEqual(tea["links"]["web"], "https://www.talabat.com/egypt/talabat-mart/product/tea/s/T2")
         self.assertTrue(len(tea["spark"]) >= 2)
         self.assertIn("20% under its usual 100 EGP", tea["why"])
         self.assertNotIn("steady", self.by["a2"]["flags"])  # 10 days unchanged: not yet 14
@@ -1064,7 +1062,7 @@ class Pages(unittest.TestCase):
         self.assertIn("خصم 50%", page)
         self.assertIn("<svg class=\"chart\"", page)
         self.assertIn("📍 El Obour El Hay 9", page)
-        self.assertIn('data-android="intent://www.talabat.com/', page)  # opens talabat's page, in Chrome
+        self.assertIn('data-android="https://www.talabat.com/egypt/talabat-mart/product/tea/s/T2"', page)
         self.assertNotIn("<500", page)
 
     def test_coupons_lines(self):
@@ -1200,3 +1198,31 @@ class InflatedWasPrice(unittest.TestCase):
         self.assertEqual([d["sku"] for d in r["items"]], ["j"])
         self.assertEqual(finder.brief(list(by.values()), t0 + 2 * DAY + 60)["fake"], 1)
         con.close()
+
+
+class PriceWentUp(unittest.TestCase):
+    def test_a_struck_through_price_after_a_rise_is_not_buy_now(self):
+        # seen on the live site: Amazon showed 6,999, then 13,998.01 "30 % off 19,998.01" nine hours later
+        con = db.connect(":memory:")
+        t0 = 1_794_490_654
+        db.save_offers(con, [Offer("amazon_eg", "B0FN7FVX8N", "Nespresso Inissia", 6999)], t0)
+        for t in (t0 + 30000, t0 + 30859):  # a jump this big counts when seen twice
+            db.save_offers(con, [Offer("amazon_eg", "B0FN7FVX8N", "B0FN7FVX8N", 13998.01, 19998.01)], t)
+        d = finder.catalog(con, t0 + 33000)[0]
+        self.assertEqual(d["name"], "Nespresso Inissia")  # a bare code never replaces the name
+        self.assertIn("rose", d["flags"])
+        self.assertEqual((d["verdict"]["label"], d["prev_price"], d["recent_low"]), ("Wait", 6999, 6999))
+        self.assertIn("100% dearer", d["verdict"]["why"])
+        self.assertLess(d["score"], 20)
+        self.assertEqual(finder.query([d], status=["real"])["total"], 0)
+        self.assertEqual(finder.brief([d])["deals"], 0)
+        con.close()
+
+
+class BreadfastLinks(unittest.TestCase):
+    def test_products_link_to_the_apps_own_address(self):
+        from deals.applinks import links
+        o = breadfast.to_offer({"id": 27460485, "name": "Croissant", "price": 25})
+        self.assertEqual(o.url, "https://app.breadfast.com/products?id=27460485")
+        l = links("breadfast", o.url, o.extra)
+        self.assertEqual((l["web"], l["android"], l["ios"]), (o.url,) * 3)

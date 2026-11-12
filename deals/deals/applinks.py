@@ -13,7 +13,9 @@ import re
 from urllib.parse import quote, urlsplit
 
 PACKAGES = {
-    "talabat": "com.6alabat.cuisineApp",  # talabat's real Android app (its pages' al:android:package)
+    # talabat's Android app is com.talabat: it's the app talabat.com's /.well-known/assetlinks.json verifies for all
+    # its addresses (com.6alabat.cuisineApp, in its pages' al:android:package, is the iPhone app's id)
+    "talabat": "com.talabat",
     "amazon_eg": "com.amazon.mShop.android.shopping",
     "breadfast": "com.breadfast",
     "jumia": "com.jumia.android",
@@ -23,7 +25,7 @@ PACKAGES = {
 # opens a product link at an error page ("We can't load this page"). Its product page on the web works, when the
 # link carries an area (aid) that the item's hub delivers to, which every link here does (checked on a phone
 # browser, Nov 2026).
-WEB_FIRST = {"talabat"}
+WEB_FIRST = set()
 CHROME = "com.android.chrome"
 STORE_PAGES = {
     "breadfast": ("https://play.google.com/store/apps/details?id=com.breadfast",
@@ -53,11 +55,20 @@ def _tagged(url: str) -> str:
     return url + ("&" if "?" in url else "?") + "tag=" + tag
 
 
+def talabat_short(url: str) -> str:
+    """talabat's hub product address → the short one its app opens."""
+    m = re.search(r"talabat\.com/egypt/grocery/\d+/talabat-mart/product/([^/?#]+)/s/([^/?#]+)", url)
+    return f"https://www.talabat.com/egypt/talabat-mart/product/{m.group(1)}/s/{m.group(2)}" if m else url
+
+
 def links(store: str, url: str, extra: dict = None) -> dict:
     """{"web", "android", "ios", "browser"}: where a tap should go on each kind of device; "browser" opens the
     store's web page in Chrome on Android (a way round an app that can't show the item)."""
     extra = extra or {}
     package = PACKAGES.get(store)
+    if store == "breadfast" and url.startswith("https://app.breadfast.com/products?id="):
+        # Breadfast's own product link (as shared from its app): the app opens it at the product
+        return {"web": url, "android": url, "ios": url, "browser": url}
     if store == "breadfast":
         play, appstore = STORE_PAGES["breadfast"]
         app_link = extra.get("app_link") or ""
@@ -70,6 +81,13 @@ def links(store: str, url: str, extra: dict = None) -> dict:
         return {"web": play, "android": home, "ios": "breadfast://", "browser": play}
     if not url:
         return {"web": "", "android": "", "ios": "", "browser": ""}
+    if store == "talabat":
+        # talabat's app claims every talabat.com address (Android and iPhone). It opens a product from the short
+        # address, /egypt/talabat-mart/product/<slug>/s/<sku>, at the user's own address (as 3rrood links), but not
+        # from the hub one (/egypt/grocery/<hub>/talabat-mart/product/...?aid=...): "Sorry, we couldn't load this
+        # page". A plain link, so the phone hands it to the app, or opens the web page where there's no app.
+        url = talabat_short(url)
+        return {"web": url, "android": url, "ios": url, "browser": _intent(url, CHROME, url)}
     if store == "amazon_eg":
         url = _tagged(url)
     in_chrome = _intent(url, CHROME, url)

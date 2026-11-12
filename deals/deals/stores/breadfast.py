@@ -139,6 +139,8 @@ def to_offer(raw: dict, divisor: float = 1, category: str = "") -> Optional[Offe
         store=STORE,
         sku=str(pid),
         name=name,
+        # the app's own product address (app.breadfast.com is verified for com.breadfast: it opens the app there)
+        url=f"https://app.breadfast.com/products?id={pid}" if re.fullmatch(r"\d+", str(pid)) else "",
         price=round(price / divisor, 2),
         original_price=round(original / divisor, 2) if original else None,
         image=_image(_first(d, IMAGE_KEYS)),

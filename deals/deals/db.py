@@ -110,7 +110,7 @@ def save_offers(con: sqlite3.Connection, offers: Iterable[Offer], now: int = Non
     with con:
         for o in offers:
             seen += 1
-            row = con.execute("SELECT id, price, original_price, in_stock, category, brand, image, extra, pending_price"
+            row = con.execute("SELECT id, name, price, original_price, in_stock, category, brand, image, extra, pending_price"
                               " FROM products WHERE store=? AND sku=?", (o.store, o.sku)).fetchone()
             if (row is not None and row["price"] and o.in_stock and row["in_stock"]
                     and abs(o.price - row["price"]) / row["price"] > JUMP and row["pending_price"] != o.price):
@@ -136,7 +136,8 @@ def save_offers(con: sqlite3.Connection, offers: Iterable[Offer], now: int = Non
                 con.execute(
                     "UPDATE products SET name=?, brand=?, category=?, url=?, image=?, last_seen=?,"
                     " price=?, original_price=?, in_stock=?, extra=?, pending_price=NULL WHERE id=?",
-                    (o.name, o.brand or row["brand"], o.category or row["category"], o.url, o.image or row["image"],
+                    (row["name"] if o.name in ("", o.sku) and row["name"] else o.name,  # never a bare code over a name
+                     o.brand or row["brand"], o.category or row["category"], o.url, o.image or row["image"],
                      now, o.price, original, int(o.in_stock), json.dumps(extra, ensure_ascii=False), pid))
             if moved:
                 changed += 1
