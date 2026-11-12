@@ -371,6 +371,12 @@ class Scheduler(unittest.TestCase):
         self.assertEqual(loop.paused_until, clock.t + 30 * 60)
         loop.step()  # paused: only waits
         self.assertEqual(loop.con.execute("SELECT error FROM live_status").fetchone()[0], "bot check")
+        pauses = []
+        for _ in range(5):  # each repeat doubles the pause, up to 4 hours
+            clock.t = loop.paused_until
+            loop.step()
+            pauses.append(round((loop.paused_until - clock.t) / 60))
+        self.assertEqual(pauses, [60, 120, 240, 240, 240])
 
     def test_not_configured_waits_quietly(self):
         clock = Clock()
@@ -388,12 +394,17 @@ class AppLinks(unittest.TestCase):
     def test_android_opens_the_app_at_the_item(self):
         from deals.applinks import links
         l = links("amazon_eg", "https://www.amazon.eg/-/en/dp/B0DC5F7P3N")
-        self.assertTrue(l["android"].startswith("intent://www.amazon.eg/-/en/dp/B0DC5F7P3N#Intent;scheme=https;"
+        # the app gets the plain /dp/ address; the fallback stays the English web page
+        self.assertTrue(l["android"].startswith("intent://www.amazon.eg/dp/B0DC5F7P3N#Intent;scheme=https;"
                                                 "package=com.amazon.mShop.android.shopping;"))
         self.assertIn("S.browser_fallback_url=https%3A%2F%2Fwww.amazon.eg%2F-%2Fen%2Fdp%2FB0DC5F7P3N", l["android"])
-        self.assertEqual(l["ios"], "https://www.amazon.eg/-/en/dp/B0DC5F7P3N")
+        self.assertEqual(l["ios"], "https://www.amazon.eg/dp/B0DC5F7P3N")
+        self.assertIn("package=com.android.chrome;", l["browser"])
+        # talabat: Chrome on Android (the talabat app can't open grocery items from links), the page elsewhere
         t = links("talabat", "https://www.talabat.com/egypt/x/s/1?aid=9")
-        self.assertEqual(set(t.values()), {"https://www.talabat.com/egypt/x/s/1?aid=9"})  # its product page, everywhere
+        self.assertTrue(t["android"].startswith("intent://www.talabat.com/egypt/x/s/1?aid=9#Intent;scheme=https;"
+                                                "package=com.android.chrome;"))
+        self.assertEqual((t["web"], t["ios"]), ("https://www.talabat.com/egypt/x/s/1?aid=9",) * 2)
 
     def test_breadfast_uses_the_apps_own_link(self):
         from deals.applinks import links
@@ -438,7 +449,8 @@ class CatalogAndFilters(unittest.TestCase):
         self.assertIn("new", tea["flags"])
         self.assertIn("lowest", tea["flags"])
         self.assertEqual((tea["unit_price"], tea["unit"]), (160.0, "kg"))
-        self.assertEqual(tea["links"]["android"], TEA_URL)
+        self.assertIn("package=com.android.chrome;", tea["links"]["android"])
+        self.assertEqual(tea["links"]["web"], TEA_URL)
         self.assertTrue(len(tea["spark"]) >= 2)
         self.assertIn("20% under its usual 100 EGP", tea["why"])
         self.assertNotIn("steady", self.by["a2"]["flags"])  # 10 days unchanged: not yet 14

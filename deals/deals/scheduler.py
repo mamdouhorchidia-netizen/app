@@ -38,6 +38,7 @@ class StoreLoop:
         self.cycle_start = 0.0
         self.cycle_secs = None
         self.pages = self.changes = 0
+        self.blocks = 0  # bot checks in a row
         self.last_change = 0.0
         self.watch_mtime = self._mtime()
         self.con = None
@@ -102,7 +103,9 @@ class StoreLoop:
         try:
             offers, follow = task.run()
         except Blocked as e:
-            self._pause(BLOCKED_PAUSE, str(e))
+            # repeated bot checks mean "slow down": 30 min, then 1 h, 2 h, 4 h at most; reset after a clean page
+            self._pause(min(BLOCKED_PAUSE * 2 ** self.blocks, 4 * 3600), str(e))
+            self.blocks += 1
             self._status()
             return
         except SessionExpired as e:  # wait for a new capture (or an hour)
@@ -117,6 +120,7 @@ class StoreLoop:
                 self.tasks.pop(task.key, None)  # gone from the store; the next replan brings it back if not
             return
         done = self.clock()
+        self.blocks = 0
         stats = {}
         db.save_offers(self.con, offers, int(done), stats)
         task.last_run, task.fails = done, 0

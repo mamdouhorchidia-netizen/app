@@ -112,8 +112,8 @@ def main(argv=None):
     p.add_argument("--delay", type=float, default=1.5, help="collect: seconds between requests to a store")
     p.add_argument("--talabat-delay", type=float, default=float(os.environ.get("TALABAT_DELAY", 1.5)),
                    help="run: seconds between talabat requests (default 1.5)")
-    p.add_argument("--amazon-delay", type=float, default=float(os.environ.get("AMAZON_DELAY", 3)),
-                   help="run: seconds between Amazon requests (3 at least)")
+    p.add_argument("--amazon-delay", type=float, default=float(os.environ.get("AMAZON_DELAY", 8)),
+                   help="run: seconds between Amazon requests (default 8; Amazon limits busy addresses)")
     p.add_argument("--breadfast-delay", type=float, default=float(os.environ.get("BREADFAST_DELAY", 5)),
                    help="run: seconds between Breadfast requests (your own account: keep it gentle)")
     p.add_argument("--hot-every", type=float, default=float(os.environ.get("HOT_EVERY", 60)),

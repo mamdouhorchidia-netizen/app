@@ -550,7 +550,8 @@ async function showProduct(id) {
       <button class="btn" id="setTarget">${w ? "Update alert" : "Watch"}</button></div>
     <div class="row">
       <a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener">Open in ${esc(appLabel[p.store] || "store")} app ↗</a>
-      ${d && d.links.web && d.links.web !== link ? `<a class="btn" href="${esc(d.links.web)}" target="_blank" rel="noopener">Open on the web</a>` : ""}
+      ${d && (isAndroid ? d.links.browser : d.links.web) && (isAndroid ? d.links.browser : d.links.web) !== link
+        ? `<a class="btn" href="${esc(isAndroid ? d.links.browser : d.links.web)}" target="_blank" rel="noopener">Open in browser</a>` : ""}
       <button class="btn" id="share">Share</button>
     </div>`;
   if (!$("dlg").open) $("dlg").showModal();
