@@ -40,18 +40,27 @@ ol { padding-left: 20px; }
 
   <div class="card">
     <h2 style="margin-top:0">1. Record the app</h2>
-    <details open><summary>iPhone (easiest)</summary><ol>
+    <details open><summary>Android (with a computer, about 30–45 minutes the first time)</summary><ol>
+      <li>A normal Android phone hides apps' encrypted traffic, so this runs Breadfast in an Android emulator on your
+        computer. Install <b>Android Studio</b> (free). Open <b>Device Manager › Create device</b>, pick a phone
+        (e.g. Pixel 7), then a system image whose target says <b>"Google APIs"</b>, not "Google Play" (only those let
+        the recorder install its certificate). Start it.</li>
+      <li>Get Breadfast's APK on the computer, for example from APKMirror (com.breadfast), and drag it onto the emulator
+        window to install it. If it comes as a bundle (.apkm/.xapk), use that site's installer app in the emulator.</li>
+      <li>Install <b>HTTP Toolkit</b> (free) on the computer, click <b>"Android device via ADB"</b> and accept the
+        prompts in the emulator. It now records the emulator's traffic.</li>
+      <li>In the emulator, open Breadfast, sign in, set your delivery address (the emulator's ⋯ › Location can place
+        you in Cairo), and open a few categories, scrolling a little in each.</li>
+      <li>In HTTP Toolkit, filter by <code>breadfast</code>. Either export everything as <b>HAR</b> and upload it below,
+        or (works on the free plan) click one request that loads a category's products, choose
+        <b>Export › cURL</b>, and paste it in the second box below. Add a few categories that way.</li>
+    </ol></details>
+    <details><summary>iPhone</summary><ol>
       <li>Install <b>Proxyman</b> from the App Store and follow its setup: it installs a VPN profile and a certificate.
         Then trust that certificate in Settings › General › About › Certificate Trust Settings.</li>
       <li>Start recording in Proxyman, and turn on decryption (SSL proxying) for Breadfast's addresses when it offers.</li>
       <li>Open <b>Breadfast</b> and go through the categories you care about, scrolling a little in each.</li>
-      <li>Back in Proxyman, select the Breadfast requests and export them as <b>HAR</b>. Save the file to Files.</li>
-    </ol></details>
-    <details><summary>Android</summary><ol>
-      <li>Most Android phones don't let a recorder read an app's encrypted traffic. Use a computer with
-        <b>Android Studio</b>: create an emulator with a "Google APIs" image, not "Google Play".</li>
-      <li>Install <b>HTTP Toolkit</b> on the computer and pick "Android device via ADB". It sets up the emulator.</li>
-      <li>Install Breadfast in the emulator, sign in, browse the categories, then in HTTP Toolkit export as <b>HAR</b>.</li>
+      <li>Back in Proxyman, export the Breadfast requests as <b>HAR</b> (or copy one as cURL for the second box).</li>
     </ol></details>
     <p>If the recorder shows Breadfast's requests as failed or "certificate rejected", the app blocks recording, and this
       route won't work.</p>
@@ -72,6 +81,16 @@ ol { padding-left: 20px; }
     <button id="go">Upload and add Breadfast</button>
     <progress id="bar" max="1" value="0" hidden></progress>
     <div id="out" aria-live="polite"></div>
+  </form>
+  <form class="card" id="f2">
+    <h2 style="margin-top:0">…or paste one request</h2>
+    <p style="font-size:13px">A request that loads a category's products, copied as cURL. The site sends it once to
+      read the products, then keeps refreshing it. Add as many categories as you like, one at a time. Uses the token
+      and price unit above.</p>
+    <label for="curl">Request (starts with <code>curl</code>)</label>
+    <textarea id="curl" rows="6" required spellcheck="false" style="width:100%;font:13px ui-monospace,monospace;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px" placeholder="curl 'https://…breadfast…/products?page=1' -H 'authorization: Bearer …'"></textarea>
+    <button id="go2">Add this request</button>
+    <div id="out2" aria-live="polite"></div>
   </form>
   <p style="margin-top:16px"><a href="/?stores=breadfast&amp;deals=0">See Breadfast on the site →</a></p>
   <p style="font-size:13px">The recording holds your Breadfast session. The site reads it, keeps only what it needs to
@@ -105,6 +124,25 @@ $("f").onsubmit = e => {
   };
   xhr.onerror = () => { $("go").disabled = false; $("bar").hidden = true; $("out").innerHTML = '<p class="err">Network error: try again.</p>'; };
   xhr.send(file);
+};
+function showResult(el, r) {
+  el.innerHTML = `<p class="ok">Added ${r.products.toLocaleString()} Breadfast products.</p>
+    <p>${r.requests === 1 ? "1 product list" : r.requests + " product lists"} will be refreshed automatically, starting within a minute.</p>
+    <p>Do these prices look right?</p>
+    <table>${r.samples.map(s => `<tr><td dir="auto">${esc(s.name)}</td><td>${s.price} EGP${s.original_price ? ` <s>${s.original_price}</s>` : ""}</td></tr>`).join("")}</table>`;
+}
+$("f2").onsubmit = async e => {
+  e.preventDefault();
+  $("go2").disabled = true; $("out2").innerHTML = "<p>Asking Breadfast…</p>";
+  try {
+    const res = await fetch("/admin/breadfast-request", { method: "POST",
+      headers: { "Authorization": "Bearer " + $("token").value.trim(), "Content-Type": "application/json" },
+      body: JSON.stringify({ curl: $("curl").value, divisor: document.querySelector("input[name=div]:checked").value }) });
+    const r = await res.json().catch(() => ({}));
+    if (!res.ok) $("out2").innerHTML = `<p class="err">${esc(r.error || "Failed (" + res.status + ").")}</p>`;
+    else { try { sessionStorage.setItem("dealsAdmin", $("token").value.trim()); } catch {} showResult($("out2"), r); $("curl").value = ""; }
+  } catch { $("out2").innerHTML = '<p class="err">Network error: try again.</p>'; }
+  $("go2").disabled = false;
 };
 </script>
 </body>

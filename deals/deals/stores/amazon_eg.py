@@ -152,13 +152,18 @@ def collect_api(fetcher: Fetcher, searches: list[tuple[str, str]] = None, pages:
 # ---- best-seller lists -------------------------------------------------------------------------
 
 SITE = "https://www.amazon.eg"
-DEFAULT_DEPARTMENTS = ["grocery", "health", "beauty", "baby-products", "home", "pet-supplies", "electronics"]
+# Every amazon.eg best-seller department except gift cards (no discounts there), everyday ones first.
+DEFAULT_DEPARTMENTS = ["grocery", "health", "beauty", "baby-products", "home", "pet-supplies", "electronics",
+                       "office-products", "toys", "sporting-goods", "fashion", "home-improvement", "automotive",
+                       "garden", "videogames", "books", "musical-instruments"]
 DEPARTMENT_NAMES = {
     "grocery": "Grocery", "health": "Health & Household", "beauty": "Beauty", "baby-products": "Baby",
     "home": "Home & Kitchen", "pet-supplies": "Pet Supplies", "electronics": "Electronics",
     "office-products": "Office", "toys": "Toys", "sporting-goods": "Sports", "fashion": "Fashion",
-    "automotive": "Automotive", "home-improvement": "Tools", "videogames": "Video Games",
+    "automotive": "Automotive", "home-improvement": "Tools", "videogames": "Video Games", "garden": "Garden",
+    "books": "Books", "musical-instruments": "Musical Instruments",
 }
+MAX_DEPTH = 6  # department = 0; amazon.eg's lists go about 4 deep
 _ITEM_SPLIT = re.compile(r'<div id="gridItemRoot"')
 _SELLERS_PRICE = re.compile(r'a-price-whole">([\d,]+)<.*?a-price-fraction">(\d+)<', re.S)
 _PRICE = re.compile(r'p13n-sc-price[^"]*">\s*EGP\s*([\d,]+(?:\.\d+)?)\s*<')
@@ -251,13 +256,16 @@ def _deals_task(path: str, log) -> Task:
     return Task("deals" + path, run)
 
 
-def parse_subcategories(page: str, department: str) -> list[tuple[str, str]]:
-    """The child lists linked from a department's page: [(node id, name)]."""
-    found = re.findall(r'href="/-/en/gp/bestsellers/%s/(\d+)/ref=zg_bs_nav_%s_1"[^>]*>([^<]+)<'
+def parse_subcategories(page: str, department: str, parent: str = None) -> list[tuple[str, str]]:
+    """The lists directly under this one: [(node id, name)]. A department page links its first level as
+    ...ref=zg_bs_nav_<dept>_1; a list page links its own children as ...ref=zg_bs_nav_<dept>_<level>_<parent>
+    (links without that parent are siblings and ancestors, which are left out)."""
+    found = re.findall(r'href="/-/en/gp/bestsellers/%s/(\d+)/ref=zg_bs_nav_%s_(\d+)(?:_(\d+))?"[^>]*>([^<]+)<'
                        % (re.escape(department), re.escape(department)), page)
     seen, out = set(), []
-    for node, name in found:
-        if node not in seen:
+    for node, _level, link_parent, name in found:
+        mine = link_parent == parent if parent else not link_parent
+        if mine and node != parent and node not in seen:
             seen.add(node)
             out.append((node, html.unescape(name).strip()))
     return out
@@ -268,7 +276,12 @@ def _prepare(fetcher: Fetcher):
     fetcher.retry_statuses = {429, 500, 502, 504}  # 503 is Amazon's bot check: never retry it
 
 
-def _list_task(fetcher: Fetcher, dept: str, path: str, name: str, page_no: int, subcategories: bool, log) -> Task:
+def _list_task(fetcher: Fetcher, dept: str, node: str, name: str, page_no: int, subcategories: bool, log,
+               depth: int = 0) -> Task:
+    """One page of one best-seller list. Page 1 also adds page 2 and, with `subcategories`, the lists directly
+    under this one, which do the same in turn: every level, down to MAX_DEPTH."""
+    path = f"/-/en/gp/bestsellers/{dept}" + (f"/{node}" if node else "")
+
     def run():
         status, page = fetcher.get(f"{SITE}{path}?ie=UTF8&pg={page_no}")
         if _is_bot_check(status, page):
@@ -277,12 +290,13 @@ def _list_task(fetcher: Fetcher, dept: str, path: str, name: str, page_no: int, 
             return [], []
         follow = []
         if page_no == 1:
-            follow.append(_list_task(fetcher, dept, path, name, 2, False, log))
-            if subcategories:
-                subs = parse_subcategories(page, dept)
-                log(f"amazon_eg: {name}: {len(subs)} sub-lists")
-                follow += [_list_task(fetcher, dept, f"{path}/{node}", f"{name} / {sub}", 1, False, log)
-                           for node, sub in subs]
+            follow.append(_list_task(fetcher, dept, node, name, 2, False, log, depth))
+            if subcategories and depth < MAX_DEPTH:
+                subs = parse_subcategories(page, dept, node)
+                if subs and depth == 0:
+                    log(f"amazon_eg: {name}: {len(subs)} sub-lists")
+                follow += [_list_task(fetcher, dept, sub_node, f"{name} / {sub}", 1, True, log, depth + 1)
+                           for sub_node, sub in subs]
         return parse_bestsellers(page, name), follow
 
     return Task(f"{path}#{page_no}", run)
@@ -291,7 +305,7 @@ def _list_task(fetcher: Fetcher, dept: str, path: str, name: str, page_no: int, 
 def plan_bestsellers(fetcher: Fetcher, departments: list[str] = None, subcategories: bool = True,
                      log=print) -> list[Task]:
     _prepare(fetcher)
-    return [_list_task(fetcher, d, f"/-/en/gp/bestsellers/{d}", DEPARTMENT_NAMES.get(d, d), 1, subcategories, log)
+    return [_list_task(fetcher, d, None, DEPARTMENT_NAMES.get(d, d), 1, subcategories, log)
             for d in departments or DEFAULT_DEPARTMENTS]
 
 

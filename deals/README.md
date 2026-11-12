@@ -38,7 +38,7 @@ talabat and Amazon and your Breadfast account flagged within hours. The delays c
 | Store | Source | State |
 |---|---|---|
 | talabat mart | talabat.com's public grocery pages. Each page carries its data as JSON (`__NEXT_DATA__`): price, original price, stock. robots.txt allows it. | Works. ~10,400 products; a full run is ~550 pages, about 15 minutes. |
-| Amazon.eg | **Today's Deals**, rendered in headless Chrome: Amazon's own deal price, list price, "% off" and event label. Plus the public **best-seller lists**: 7 everyday departments by default, each with ~20 sub-lists, 60 products per list. robots.txt allows both. With API keys set, the official Product Advertising API is used instead. | Works without keys. ~70 live deals per render, and ~300 list pages at 3 s apart (about 15 minutes). |
+| Amazon.eg | **Today's Deals**, rendered in headless Chrome: Amazon's own deal price, list price, "% off" and event label. Plus the public **best-seller lists** at every level (department › list › sub-list…) in 17 departments (all but gift cards), 60 products per list. robots.txt allows both. With API keys set, the official Product Advertising API is used instead. | Works without keys. ~70 live deals per render, and a few thousand list pages at 3 s apart: a full sweep takes hours, while busy shelves are rechecked every minute. |
 | Breadfast | A **capture of the app's own traffic** from your phone, imported once and then refreshed automatically. | Ready for your first capture (steps below). |
 
 ### Amazon.eg without the API
@@ -55,9 +55,9 @@ talabat and Amazon and your Breadfast account flagged within hours. The delays c
   answers with one, the run stops, keeps what it already read, and the page shows why. It never tries to
   get past the check. Keep requests at least 3 s apart. Datacenter addresses (like a VPS) get bot checks
   more often than home connections, so watch the page's Amazon status for the first days.
-- Departments: `--amazon-department grocery --amazon-department beauty …`. The default is grocery,
-  health, beauty, baby-products, home, pet-supplies and electronics. All 18 are listed at
-  amazon.eg/gp/bestsellers.
+- Departments: `--amazon-department grocery --amazon-department beauty …`. The default is all 17 except gift
+  cards, every level of their lists (`MAX_DEPTH` in `stores/amazon_eg.py`). Fewer departments means faster
+  sweeps and fewer bot checks.
 - If you get API keys later (Amazon Associates → Product Advertising API), set `AMAZON_ACCESS_KEY`,
   `AMAZON_SECRET_KEY` and `AMAZON_PARTNER_TAG`. It then switches to the API, which includes Amazon's
   own discounts and affiliate links.
@@ -179,6 +179,9 @@ release poller ignores it, because it only deploys apps built from the vorath re
    (mark it as a secret, then Redeploy). Then open **https://deals.vorath.cloud/admin** on your phone. It
    explains how to record the app (iPhone: Proxyman; Android: an emulator with HTTP Toolkit) and takes the
    recording. Breadfast joins the page within a minute. The recording is deleted as soon as it's read.
+   On the free plan of HTTP Toolkit, where whole recordings may not export, copy single product-list requests
+   **as cURL** and paste them in the page's second box, one category at a time. Only GET requests to a
+   Breadfast address are accepted.
    From the server console instead: `bash /root/vorath/deals-src/deals/deploy/import_breadfast.sh /root/capture.har`.
 
 Settings, all optional, in Coolify › deals › Environment variables (redeploy after a change):

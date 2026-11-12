@@ -12,6 +12,7 @@
   /admin                 the owner's page for uploading a Breadfast app capture
   POST /admin/breadfast  the capture itself (?divisor=1|100), with "Authorization: Bearer $DEALS_ADMIN_TOKEN";
                          off (403) until DEALS_ADMIN_TOKEN is set
+  POST /admin/breadfast-request   {"curl": "...", "divisor": 1}: one product-list request copied as cURL
 """
 
 import hmac
@@ -197,7 +198,7 @@ def make_handler(db_path: str, requests_file: str = None):
 
         def do_POST(self):
             u = urlparse(self.path)
-            if u.path != "/admin/breadfast":
+            if u.path not in ("/admin/breadfast", "/admin/breadfast-request"):
                 return self.json({"error": "not found"}, 404)
             token = os.environ.get("DEALS_ADMIN_TOKEN", "")
             if len(token) < 16:
@@ -211,6 +212,21 @@ def make_handler(db_path: str, requests_file: str = None):
                 size = int(self.headers.get("Content-Length") or 0)
             except ValueError:
                 size = 0
+            if u.path == "/admin/breadfast-request":
+                if not 0 < size <= 1 << 20:
+                    return self.json({"error": "Paste one request (up to 1 MB)."}, 413)
+                try:
+                    body = json.loads(self.rfile.read(size))
+                    divisor = 100.0 if str(body.get("divisor")) == "100" else 1.0
+                    with _import_lock:
+                        r = breadfast.import_request(db_path, str(body.get("curl") or ""), requests_file, divisor)
+                except breadfast.BadRequest as e:
+                    return self.json({"error": str(e)[:1].upper() + str(e)[1:] + "."}, 422)
+                except (ValueError, AttributeError):
+                    return self.json({"error": "Send {\"curl\": \"...\"}."}, 400)
+                except RuntimeError as e:
+                    return self.json({"error": f"Couldn't reach Breadfast: {e}"}, 502)
+                return self.json(r)
             if not 0 < size <= MAX_UPLOAD:
                 return self.json({"error": f"Send the .har file (up to {MAX_UPLOAD // 2**20} MB)."}, 413)
             q = {k: v[0] for k, v in parse_qs(u.query).items()}
