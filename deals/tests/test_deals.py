@@ -9,7 +9,9 @@ from unittest import mock
 from deals import db, finder, sigv4
 from deals.http import Blocked, Fetcher
 from deals.models import NotConfigured, Offer
+from deals.scheduler import StoreLoop
 from deals.stores import amazon_eg, breadfast, talabat
+from deals.tasks import Task
 
 FIX = Path(__file__).with_name("fixtures")
 DAY = 86400
@@ -238,6 +240,99 @@ class Breadfast(unittest.TestCase):
             list(breadfast.collect(Fetcher(), "/nonexistent/requests.json"))
 
 
+class Clock:
+    def __init__(self):
+        self.t = 1_800_000_000.0
+
+    def __call__(self):
+        return self.t
+
+    def sleep(self, s):
+        self.t += s
+
+
+class Scheduler(unittest.TestCase):
+    """The continuous checker, on a fake clock: each page 'takes' 2 seconds."""
+
+    def make(self, pages, prices, plan_calls=None):
+        clock = Clock()
+        visits = []
+
+        def page(key):
+            def run():
+                clock.t += 2
+                visits.append(key)
+                follow = [page(f"{key}+")] if key == "a" and f"{key}+" not in visited_keys else []
+                visited_keys.update(f.key for f in follow)
+                return [Offer("talabat", key, key, prices(key, clock.t))], follow
+            return Task(key, run)
+
+        visited_keys = set()
+
+        def plan(fetcher):
+            if plan_calls is not None:
+                plan_calls.append(clock.t)
+            return [page(k) for k in pages]
+
+        loop = StoreLoop("talabat", plan, ":memory:", delay=0, hot_every=60, clock=clock, sleep=clock.sleep,
+                         log=lambda *_: None)
+        loop.con = db.connect(":memory:")
+        return loop, clock, visits
+
+    def test_round_robin_with_follow_ups(self):
+        loop, clock, visits = self.make(["a", "b", "c"], lambda k, t: 10)
+        for _ in range(8):
+            loop.step()
+        self.assertEqual(visits[:4], ["a", "b", "c", "a+"])  # the discovered page joins the round
+        self.assertEqual(visits[4:8], ["a", "b", "c", "a+"])
+        self.assertIsNotNone(loop.cycle_secs)
+        row = loop.con.execute("SELECT * FROM live_status").fetchone()
+        self.assertEqual((row["pages"], row["tasks"]), (8, 4))
+
+    def test_hot_page_is_rechecked_sooner(self):
+        many = [f"p{i}" for i in range(60)]
+        # p0's price changes on every visit; the others never do
+        loop, clock, visits = self.make(many, lambda k, t: t if k == "p0" else 10)
+        for _ in range(300):
+            loop.step()
+        gaps = []
+        last = None
+        for i, k in enumerate(visits):
+            if k == "p0":
+                if last is not None:
+                    gaps.append(i - last)
+                last = i
+        # without the hot rule p0 would come round once per 60 pages; hot, about every 30 pages (60 s at 2 s each)
+        self.assertLess(max(gaps[1:]), 45)
+        # and the cold pages still all get their turn
+        self.assertEqual(set(many) - set(visits), set())
+
+    def test_bot_check_pauses_the_store(self):
+        clock = Clock()
+
+        def blocked():
+            raise Blocked("bot check")
+
+        loop = StoreLoop("amazon_eg", lambda f: [Task("x", blocked)], ":memory:", delay=0, clock=clock,
+                         sleep=clock.sleep, log=lambda *_: None)
+        loop.con = db.connect(":memory:")
+        loop.step()
+        self.assertEqual(loop.paused_until, clock.t + 30 * 60)
+        loop.step()  # paused: only waits
+        self.assertEqual(loop.con.execute("SELECT error FROM live_status").fetchone()[0], "bot check")
+
+    def test_not_configured_waits_quietly(self):
+        clock = Clock()
+
+        def plan(f):
+            raise NotConfigured("no capture")
+
+        loop = StoreLoop("breadfast", plan, ":memory:", delay=0, clock=clock, sleep=clock.sleep, log=lambda *_: None)
+        loop.con = db.connect(":memory:")
+        loop.step()
+        self.assertGreater(loop.paused_until, clock.t)
+
+
 def offer(sku, price, original=None, in_stock=True, store="talabat"):
     return Offer(store=store, sku=sku, name=f"item {sku}", price=price, original_price=original, in_stock=in_stock)
 
@@ -259,6 +354,9 @@ class HistoryAndDeals(unittest.TestCase):
         self.assertEqual(db.save_offers(self.con, [offer("a", 8)], self.at(2)), (1, 1))
         self.assertEqual(db.save_offers(self.con, [offer("a", 8, in_stock=False)], self.at(3)), (1, 1))
         self.assertEqual([r["price"] for r in db.history(self.con, 1)], [10, 8, 8])
+        stats = {}
+        db.save_offers(self.con, [offer("a", 9), offer("b", 5), offer("c", 5)], self.at(4), stats)
+        self.assertEqual(stats, {"new": 2, "moved": 1})
 
     def test_store_discount(self):
         db.save_offers(self.con, [offer("a", 90, 100), offer("b", 98, 100), offer("c", 50)], self.at(0))

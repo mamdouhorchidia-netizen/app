@@ -24,6 +24,7 @@ from typing import Iterator, Optional
 from .. import sigv4
 from ..http import Blocked, Fetcher
 from ..models import NotConfigured, Offer
+from ..tasks import Task, run_once
 
 STORE = "amazon_eg"
 HOST = "webservices.amazon.eg"
@@ -202,47 +203,57 @@ def parse_subcategories(page: str, department: str) -> list[tuple[str, str]]:
     return out
 
 
-def collect_bestsellers(fetcher: Fetcher, departments: list[str] = None, subcategories: bool = True,
-                        max_pages: int = None, log=print) -> Iterator[Offer]:
+def _prepare(fetcher: Fetcher):
     fetcher.delay = max(fetcher.delay, 3.0)  # Amazon is the strictest of the three: go slower
     fetcher.retry_statuses = {429, 500, 502, 504}  # 503 is Amazon's bot check: never retry it
-    asked, seen = 0, set()
 
-    def fetch(path: str, page_no: int) -> str:
-        nonlocal asked
+
+def _list_task(fetcher: Fetcher, dept: str, path: str, name: str, page_no: int, subcategories: bool, log) -> Task:
+    def run():
         status, page = fetcher.get(f"{SITE}{path}?ie=UTF8&pg={page_no}")
-        asked += 1
         if _is_bot_check(status, page):
-            raise Blocked(f"Amazon answered {path} with a bot check after {asked} pages; stopped")
-        return page if status == 200 else ""
+            raise Blocked(f"Amazon answered {path} with a bot check")
+        if status != 200:
+            return [], []
+        follow = []
+        if page_no == 1:
+            follow.append(_list_task(fetcher, dept, path, name, 2, False, log))
+            if subcategories:
+                subs = parse_subcategories(page, dept)
+                log(f"amazon_eg: {name}: {len(subs)} sub-lists")
+                follow += [_list_task(fetcher, dept, f"{path}/{node}", f"{name} / {sub}", 1, False, log)
+                           for node, sub in subs]
+        return parse_bestsellers(page, name), follow
 
-    for dept in departments or DEFAULT_DEPARTMENTS:
-        dept_name = DEPARTMENT_NAMES.get(dept, dept)
-        lists = [(f"/-/en/gp/bestsellers/{dept}", dept_name)]
-        i = 0
-        while i < len(lists):
-            path, name = lists[i]
-            for page_no in (1, 2):
-                if max_pages is not None and asked >= max_pages:
-                    return
-                page = fetch(path, page_no)
-                if not page:
-                    break
-                if i == 0 and page_no == 1 and subcategories:
-                    lists += [(f"/-/en/gp/bestsellers/{dept}/{node}", f"{dept_name} / {sub}")
-                              for node, sub in parse_subcategories(page, dept)]
-                    log(f"amazon_eg: {dept_name}: {len(lists) - 1} sub-lists")
-                for o in parse_bestsellers(page, name):
-                    if o.sku not in seen:
-                        seen.add(o.sku)
-                        yield o
-            i += 1
+    return Task(f"{path}#{page_no}", run)
+
+
+def plan_bestsellers(fetcher: Fetcher, departments: list[str] = None, subcategories: bool = True,
+                     log=print) -> list[Task]:
+    _prepare(fetcher)
+    return [_list_task(fetcher, d, f"/-/en/gp/bestsellers/{d}", DEPARTMENT_NAMES.get(d, d), 1, subcategories, log)
+            for d in departments or DEFAULT_DEPARTMENTS]
+
+
+def collect_bestsellers(fetcher: Fetcher, departments: list[str] = None, subcategories: bool = True,
+                        max_pages: int = None, log=print) -> Iterator[Offer]:
+    yield from run_once(plan_bestsellers(fetcher, departments, subcategories, log), max_pages)
+
+
+def _has_keys() -> bool:
+    return all(os.environ.get(k) for k in ("AMAZON_ACCESS_KEY", "AMAZON_SECRET_KEY", "AMAZON_PARTNER_TAG"))
+
+
+def plan(fetcher: Fetcher, departments: list[str] = None, pages: int = 3, log=print) -> list[Task]:
+    if _has_keys():
+        return [Task("api", lambda: (list(collect_api(fetcher, pages=pages, log=log)), []))]
+    return plan_bestsellers(fetcher, departments, log=log)
 
 
 def collect(fetcher: Fetcher, pages: int = 3, departments: list[str] = None, max_pages: int = None,
             log=print) -> Iterator[Offer]:
     """The API when its keys are set, the best-seller lists otherwise."""
-    if all(os.environ.get(k) for k in ("AMAZON_ACCESS_KEY", "AMAZON_SECRET_KEY", "AMAZON_PARTNER_TAG")):
+    if _has_keys():
         log("amazon_eg: using the Product Advertising API")
         yield from collect_api(fetcher, pages=pages, log=log)
     else:

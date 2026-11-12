@@ -103,7 +103,7 @@ dialog .x { position: absolute; top: 10px; right: 12px; background: none; border
 </header>
 <main class="wrap">
   <div class="grid" id="grid"></div>
-  <div class="empty" id="empty" hidden>No deals match yet. Collection may still be running.</div>
+  <div class="empty" id="empty" hidden>No deals match yet. The first pass over each store takes about 15 minutes, and price-drop deals need a few days of history.</div>
 </main>
 <dialog id="dlg">
   <button class="x" aria-label="Close" onclick="this.closest('dialog').close()">×</button>
@@ -149,25 +149,49 @@ function card(d) {
       <div class="note">${why ? why + " · " : ""}save ${fmt(d.saving)} EGP</div></div></article>`;
 }
 
-let timer;
+const secAgo = t => { if (!t) return "—"; const s = Math.max(0, Math.round(Date.now() / 1000 - t));
+  return s < 60 ? s + " s ago" : s < 3600 ? Math.round(s / 60) + " min ago" : ago(t); };
+const mins = s => s < 90 ? Math.round(s) + " s" : Math.round(s / 60) + " min";
+let timer, lastStatus = [], lastChanges = 0, lastSig = "";
+
+function renderStatus() {
+  const parts = lastStatus.map(s => {
+    let t = `${esc(s.label)}: ${s.products.toLocaleString()}`;
+    if (s.paused_until) return t + ` · paused (${esc(s.error || "")}), back in ${mins(s.paused_until - Date.now() / 1000)}`;
+    if (s.live) {
+      t += ` · last change ${secAgo(s.last_change)}`;
+      if (s.cycle_secs) t += ` · every shelf rechecked ~${mins(s.cycle_secs)}`;
+      else t += " · first pass running";
+    } else t += ` · updated ${secAgo(s.updated)}`;
+    return t + (s.error && !s.paused_until ? " · ⚠" : "");
+  });
+  $("status").innerHTML = parts.length ? parts.join(" &nbsp;|&nbsp; ") + ` &nbsp;|&nbsp; ${lastChanges.toLocaleString()} price changes in the last hour`
+    : "starting: the first prices arrive in a few seconds";
+}
+setInterval(renderStatus, 1000);
+
 async function load() {
   const p = new URLSearchParams({ store: state.store, q: $("q").value.trim(), min: $("min").value, sort: $("sort").value, limit: 300 });
   try {
     const r = await fetch("/api/deals?" + p);
     const data = await r.json();
     state.labels = data.labels || {};
-    chips(data.status || []);
-    $("status").textContent = (data.status || []).map(s =>
-      `${s.label}: ${s.products.toLocaleString()} products, updated ${ago(s.finished)}${s.error ? " (last run failed)" : ""}`).join(" · ")
-      || "no collection has finished yet";
-    $("grid").innerHTML = data.deals.map(card).join("");
-    $("empty").hidden = data.deals.length > 0;
-    data.deals.forEach(d => state.seen.add(d.id));
-    state.first = false;
-    $("grid").querySelectorAll(".card").forEach(c => c.onclick = () => showProduct(+c.dataset.id));
+    lastStatus = data.status || []; lastChanges = data.changes_last_hour || 0;
+    chips(lastStatus);
+    renderStatus();
+    const sig = p + JSON.stringify(data.deals.map(d => [d.id, d.price, d.discount_pct, d.flags]));
+    if (sig !== lastSig) {  // only redraw when something changed, so pictures don't flicker
+      lastSig = sig;
+      $("grid").innerHTML = data.deals.map(card).join("");
+      $("empty").hidden = data.deals.length > 0;
+      data.deals.forEach(d => state.seen.add(d.id));
+      state.first = false;
+      $("grid").querySelectorAll(".card").forEach(c => c.onclick = () => showProduct(+c.dataset.id));
+    }
   } catch (e) { $("status").textContent = "can't reach the server, retrying…"; }
-  clearTimeout(timer); timer = setTimeout(load, 60000);
+  clearTimeout(timer); timer = setTimeout(load, document.hidden ? 60000 : 10000);
 }
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
 
 async function showProduct(id) {
   const { product: p, history: h } = await (await fetch("/api/product/" + id)).json();

@@ -6,6 +6,10 @@ class NotConfigured(Exception):
     """A store that needs something from its owner first (keys, a capture). Skipped, not failed."""
 
 
+class SessionExpired(RuntimeError):
+    """The store refused the saved sign-in (Breadfast): nothing to do until a new capture is imported."""
+
+
 @dataclass
 class Offer:
     """One product as one store shows it at one moment."""

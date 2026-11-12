@@ -1,15 +1,16 @@
-"""python -m deals collect | serve | run | import-har FILE   (python -m deals -h for the options)"""
+"""python -m deals run | collect | serve | import-har FILE   (python -m deals -h for the options)"""
 
 import argparse
+import os
 import sys
 import threading
-import time
 import traceback
 
 from . import db, web
 from .http import Blocked, Fetcher
 from .models import NotConfigured
-from .stores import STORES, breadfast
+from .scheduler import StoreLoop
+from .stores import STORES, amazon_eg, breadfast, talabat
 
 
 def _store_offers(con, offers) -> tuple[int, int]:
@@ -76,7 +77,7 @@ def import_har(args):
     seen, changed = _store_offers(con, unique)
     db.finish_run(con, run, seen, changed)
     con.close()
-    out = args.breadfast_requests or breadfast.DEFAULT_REQUESTS_FILE
+    out = args.breadfast_requests
     breadfast.save_requests(out, requests, divisor)
     print(f"breadfast: {len(unique)} products saved; {len(requests)} product requests kept in {out}"
           " (it holds your app session: keep it private)")
@@ -87,27 +88,58 @@ def import_har(args):
     return 0
 
 
+def live(args, stores):
+    """Every store checked continuously on its own thread, and the page served."""
+    def plans(store):
+        if store == "talabat":
+            return lambda f: talabat.plan(f, args.area, args.category)
+        if store == "amazon_eg":
+            return lambda f: amazon_eg.plan(f, args.amazon_department, args.amazon_pages)
+        return lambda f: breadfast.plan(f, args.breadfast_requests)
+
+    delays = {"talabat": args.talabat_delay, "amazon_eg": args.amazon_delay, "breadfast": args.breadfast_delay}
+    db.connect(args.db).close()
+    for store in stores:
+        loop = StoreLoop(store, plans(store), args.db, delay=delays[store], hot_every=args.hot_every,
+                         watch_file=_requests_file(args) if store == "breadfast" else None)
+        threading.Thread(target=loop.run_forever, name=store, daemon=True).start()
+    web.serve(args.db, args.host, args.port)
+
+
+def _requests_file(args) -> str:
+    return args.breadfast_requests or os.environ.get("BREADFAST_REQUESTS") or breadfast.DEFAULT_REQUESTS_FILE
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m deals")
-    p.add_argument("command", choices=["collect", "serve", "run", "import-har"],
-                   help="collect once; serve the live page; run = serve and collect every --every minutes;"
-                        " import-har FILE = read a Breadfast app capture")
+    p.add_argument("command", choices=["run", "collect", "serve", "import-har"],
+                   help="run = check every store continuously and serve the live page; collect = one pass and exit;"
+                        " serve = only the page; import-har FILE = read a Breadfast app capture")
     p.add_argument("har", nargs="?", help="import-har: the .har file exported from your capture tool")
-    p.add_argument("--db", default="deals.sqlite3")
+    p.add_argument("--db", default=os.environ.get("DEALS_DB", "deals.sqlite3"))
     p.add_argument("--store", action="append", choices=sorted(STORES), help="default: all stores")
-    p.add_argument("--area", type=int, default=9838, help="talabat area id (picks the talabat mart branch)")
+    p.add_argument("--area", type=int, default=int(os.environ.get("TALABAT_AREA", 9838)),
+                   help="talabat area id (picks the talabat mart branch)")
     p.add_argument("--category", action="append", help="talabat: only these top-level categories")
-    p.add_argument("--max-pages", type=int, help="talabat/amazon: stop after this many pages (for trying it out)")
+    p.add_argument("--max-pages", type=int, help="collect: stop after this many pages (for trying it out)")
     p.add_argument("--amazon-department", action="append",
                    help="amazon best-seller departments, e.g. grocery, beauty (default: everyday ones)")
     p.add_argument("--amazon-pages", type=int, default=3, help="amazon API: result pages per search (max 10)")
-    p.add_argument("--breadfast-requests", help=f"default: {breadfast.DEFAULT_REQUESTS_FILE}")
+    p.add_argument("--breadfast-requests", help=f"default: $BREADFAST_REQUESTS or {breadfast.DEFAULT_REQUESTS_FILE}")
     p.add_argument("--price-divisor", type=float, default=1, help="import-har: 100 if the app's prices are in piasters")
-    p.add_argument("--delay", type=float, default=1.5, help="seconds between requests to a store")
-    p.add_argument("--every", type=int, default=180, help="run: minutes between collections")
-    p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=8800)
+    p.add_argument("--delay", type=float, default=1.5, help="collect: seconds between requests to a store")
+    p.add_argument("--talabat-delay", type=float, default=float(os.environ.get("TALABAT_DELAY", 1.5)),
+                   help="run: seconds between talabat requests (default 1.5)")
+    p.add_argument("--amazon-delay", type=float, default=float(os.environ.get("AMAZON_DELAY", 3)),
+                   help="run: seconds between Amazon requests (3 at least)")
+    p.add_argument("--breadfast-delay", type=float, default=float(os.environ.get("BREADFAST_DELAY", 5)),
+                   help="run: seconds between Breadfast requests (your own account: keep it gentle)")
+    p.add_argument("--hot-every", type=float, default=float(os.environ.get("HOT_EVERY", 60)),
+                   help="run: recheck a page whose prices moved in the last 30 min every N seconds")
+    p.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"))
+    p.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8800)))
     args = p.parse_args(argv)
+    args.breadfast_requests = _requests_file(args)
     stores = args.store or sorted(STORES)
 
     if args.command == "import-har":
@@ -120,14 +152,7 @@ def main(argv=None):
     elif args.command == "serve":
         web.serve(args.db, args.host, args.port)
     else:
-        def loop(store):
-            while True:
-                started = time.time()
-                collect_store(args.db, store, args)
-                time.sleep(max(60, args.every * 60 - (time.time() - started)))
-        for s in stores:  # each store on its own thread, so a slow one doesn't hold the others back
-            threading.Thread(target=loop, args=(s,), daemon=True).start()
-        web.serve(args.db, args.host, args.port)
+        live(args, stores)
 
 
 if __name__ == "__main__":

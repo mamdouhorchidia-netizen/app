@@ -31,6 +31,17 @@ CREATE TABLE IF NOT EXISTS prices (
     in_stock INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS prices_by_product ON prices (product_id, at);
+CREATE TABLE IF NOT EXISTS live_status (
+    store TEXT PRIMARY KEY,
+    updated INTEGER,        -- last page checked
+    last_change INTEGER,    -- last price/stock change found
+    pages INTEGER,          -- pages checked since start
+    changes INTEGER,        -- changes found since start
+    tasks INTEGER,          -- pages in one full cycle
+    cycle_secs REAL,        -- how long the last full cycle took
+    error TEXT,
+    paused_until INTEGER
+);
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY,
     store TEXT NOT NULL,
@@ -51,10 +62,11 @@ def connect(path: str) -> sqlite3.Connection:
     return con
 
 
-def save_offers(con: sqlite3.Connection, offers: Iterable[Offer], now: int = None) -> tuple[int, int]:
-    """Stores offers. Returns (seen, changed): a price row is only written when something moved."""
+def save_offers(con: sqlite3.Connection, offers: Iterable[Offer], now: int = None, stats: dict = None) -> tuple[int, int]:
+    """Stores offers. Returns (seen, changed): a price row is only written when something moved, or the product
+    is new. `stats`, if given, also gets "new" and "moved" (an existing product's price or stock changed)."""
     now = int(now or time.time())
-    seen = changed = 0
+    seen = changed = new = 0
     with con:
         for o in offers:
             seen += 1
@@ -67,6 +79,7 @@ def save_offers(con: sqlite3.Connection, offers: Iterable[Offer], now: int = Non
                     (o.store, o.sku, o.name, o.brand, o.category, o.url, o.image, now, now,
                      o.price, o.original_price, int(o.in_stock)))
                 pid, moved = cur.lastrowid, True
+                new += 1
             else:
                 pid = row["id"]
                 moved = (row["price"] != o.price or row["original_price"] != o.original_price
@@ -80,6 +93,8 @@ def save_offers(con: sqlite3.Connection, offers: Iterable[Offer], now: int = Non
                 changed += 1
                 con.execute("INSERT INTO prices (product_id, at, price, original_price, in_stock) VALUES (?,?,?,?,?)",
                             (pid, now, o.price, o.original_price, int(o.in_stock)))
+    if stats is not None:
+        stats.update(new=new, moved=changed - new)
     return seen, changed
 
 
@@ -92,6 +107,13 @@ def finish_run(con, run_id: int, offers: int, changed: int, error: str = None):
     with con:
         con.execute("UPDATE runs SET finished=?, offers=?, changed=?, error=? WHERE id=?",
                     (int(time.time()), offers, changed, error, run_id))
+
+
+def set_live_status(con, store: str, **fields):
+    cols = ["store"] + list(fields)
+    with con:
+        con.execute(f"INSERT OR REPLACE INTO live_status ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
+                    [store] + list(fields.values()))
 
 
 def history(con, product_id: int) -> list[dict]:

@@ -27,7 +27,8 @@ from typing import Iterator, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from ..http import Fetcher
-from ..models import NotConfigured, Offer
+from ..models import NotConfigured, Offer, SessionExpired
+from ..tasks import Task, run_once
 
 STORE = "breadfast"
 DEFAULT_REQUESTS_FILE = "breadfast_requests.json"
@@ -243,31 +244,36 @@ def _with_page(url: str, param: str, n: int) -> str:
     return urlunsplit(parts._replace(query=urlencode(q)))
 
 
-def collect(fetcher: Fetcher, requests_file: str = None, log=print) -> Iterator[Offer]:
+def _request_task(fetcher: Fetcher, r: dict, divisor: float, page: int = 1, prev: frozenset = frozenset()) -> Task:
+    param = _page_param(r["url"])
+
+    def run():
+        url = _with_page(r["url"], param, page) if param else r["url"]
+        status, body = fetcher.request(url, headers=r["headers"])
+        if status in (401, 403):
+            raise SessionExpired(f"Breadfast answered {status}: the app session has expired, capture again")
+        if status != 200:
+            return [], []
+        try:
+            found = products_in(json.loads(body), divisor)
+        except ValueError:
+            return [], []
+        skus = frozenset(o.sku for o in found)
+        more = param and found and skus != prev and page < MAX_PAGES  # stop at an empty or repeated page
+        return found, [_request_task(fetcher, r, divisor, page + 1, skus)] if more else []
+
+    key = _with_page(r["url"], param, page) if param else r["url"]
+    return Task(key, run)
+
+
+def plan(fetcher: Fetcher, requests_file: str = None, log=print) -> list[Task]:
     requests, divisor = load_requests(requests_file)
     if not requests:
         raise NotConfigured("the requests file lists no product requests; capture again while browsing categories")
+    fetcher.delay = max(fetcher.delay, 2.0)  # it is your own account: stay gentle
     log(f"breadfast: refreshing {len(requests)} captured requests")
-    seen = set()
-    for r in requests:
-        param = _page_param(r["url"])
-        page = 1
-        while True:
-            url = _with_page(r["url"], param, page) if param else r["url"]
-            status, body = fetcher.request(url, headers=r["headers"])
-            if status in (401, 403):
-                raise RuntimeError(f"Breadfast answered {status}: the app session has expired, capture again")
-            if status != 200:
-                log(f"breadfast: {status} for {url}, skipped")
-                break
-            try:
-                found = products_in(json.loads(body), divisor)
-            except ValueError:
-                log(f"breadfast: {url} did not answer JSON, skipped")
-                break
-            new = [o for o in found if o.sku not in seen]
-            seen.update(o.sku for o in new)
-            yield from new
-            if not param or not new or page >= MAX_PAGES:
-                break
-            page += 1
+    return [_request_task(fetcher, r, divisor) for r in requests]
+
+
+def collect(fetcher: Fetcher, requests_file: str = None, log=print) -> Iterator[Offer]:
+    yield from run_once(plan(fetcher, requests_file, log))

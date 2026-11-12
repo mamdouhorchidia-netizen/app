@@ -1,0 +1,7 @@
+tests
+deploy
+*.sqlite3*
+*.har
+breadfast_requests*.json
+__pycache__
+README.md

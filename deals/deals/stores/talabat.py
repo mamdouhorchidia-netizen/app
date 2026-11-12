@@ -17,6 +17,7 @@ from urllib.parse import quote
 
 from ..http import Fetcher
 from ..models import Offer
+from ..tasks import Task, run_once
 
 BASE = "https://www.talabat.com"
 STORE = "talabat"
@@ -85,10 +86,8 @@ def _num(v) -> Optional[float]:
         return None
 
 
-def collect(fetcher: Fetcher, area_id: int = DEFAULT_AREA, max_pages: int = None,
-            categories: list[str] = None, log=print) -> Iterator[Offer]:
-    """Walks every subcategory of Talabat Mart for one area. `max_pages` caps the total page count
-    (for trying it out); `categories` keeps only the top-level categories with those names."""
+def plan(fetcher: Fetcher, area_id: int = DEFAULT_AREA, categories: list[str] = None, log=print) -> list[Task]:
+    """One task per subcategory (its page 1, which adds pages 2..n when it runs)."""
     status, html = fetcher.get(f"{BASE}/egypt/talabat-mart/categories?aid={area_id}")
     if status != 200:
         raise PageError(f"categories page answered {status}")
@@ -99,23 +98,26 @@ def collect(fetcher: Fetcher, area_id: int = DEFAULT_AREA, max_pages: int = None
         subs = [s for s in subs if s["parent"].lower() in wanted]
     log(f"talabat: branch {branch} ({store.get('branchName')}), {len(subs)} subcategories,"
         f" ~{sum(s['count'] for s in subs)} products")
+    return [_page_task(fetcher, branch, area_id, s, 1, log) for s in subs]
 
-    pages, seen = 0, set()
-    for s in subs:
-        page, page_count = 1, 1
-        while page <= page_count:
-            if max_pages is not None and pages >= max_pages:
-                return
-            url = (f"{BASE}/egypt/grocery/{branch}/talabat-mart/{s['parent_slug']}/{s['slug']}"
-                   f"?aid={area_id}&page={page}")
-            status, html = fetcher.get(url)
-            pages += 1
-            if status != 200:
-                log(f"talabat: {status} for {s['parent']} / {s['name']} page {page}, skipped")
-                break
-            offers, page_count = parse_items(html, branch, area_id, f"{s['parent']} / {s['name']}")
-            for o in offers:  # a product can sit in several subcategories; keep its first one
-                if o.sku not in seen:
-                    seen.add(o.sku)
-                    yield o
-            page += 1
+
+def _page_task(fetcher: Fetcher, branch, area_id, sub: dict, page: int, log) -> Task:
+    def run():
+        url = (f"{BASE}/egypt/grocery/{branch}/talabat-mart/{sub['parent_slug']}/{sub['slug']}"
+               f"?aid={area_id}&page={page}")
+        status, html = fetcher.get(url)
+        if status != 200:
+            log(f"talabat: {status} for {sub['parent']} / {sub['name']} page {page}, skipped")
+            return [], []
+        offers, page_count = parse_items(html, branch, area_id, f"{sub['parent']} / {sub['name']}")
+        follow = [_page_task(fetcher, branch, area_id, sub, n, log) for n in range(2, page_count + 1)] if page == 1 else []
+        return offers, follow
+
+    return Task(f"{sub['parent_slug']}/{sub['slug']}/{page}", run)
+
+
+def collect(fetcher: Fetcher, area_id: int = DEFAULT_AREA, max_pages: int = None,
+            categories: list[str] = None, log=print) -> Iterator[Offer]:
+    """Every subcategory of Talabat Mart for one area, once. `max_pages` caps the requests after the
+    categories page (for trying it out); `categories` keeps only those top-level categories."""
+    yield from run_once(plan(fetcher, area_id, categories, log), max_pages)
