@@ -124,6 +124,8 @@ class StoreLoop:
         if stats["moved"]:  # a price or stock really changed (a first sighting doesn't count)
             task.last_change = self.last_change = done
             self.changes += stats["moved"]
+        elif stats.get("held"):  # a big jump waiting for a second look: recheck this page within a minute
+            task.last_change = done
         for f in follow:
             self.tasks.setdefault(f.key, f)
         self.error = None

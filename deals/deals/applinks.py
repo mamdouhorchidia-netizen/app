@@ -15,6 +15,10 @@ PACKAGES = {
     "amazon_eg": "com.amazon.mShop.android.shopping",
     "breadfast": "com.breadfast",
 }
+# Stores whose product web page is the reliable way to the exact item. talabat's page lands on the product
+# with its own price and discount (checked in a real browser) and offers "OPEN in app" itself, while sending
+# its app a talabat.com product address can open the app's home screen instead of the item.
+WEB_FIRST = {"talabat"}
 STORE_PAGES = {
     "breadfast": ("https://play.google.com/store/apps/details?id=com.breadfast",
                   "https://apps.apple.com/app/breadfast/id1288436997"),
@@ -44,4 +48,6 @@ def links(store: str, url: str, extra: dict = None) -> dict:
         return {"web": play, "android": home, "ios": "breadfast://"}
     if not url:
         return {"web": "", "android": "", "ios": ""}
+    if store in WEB_FIRST:
+        return {"web": url, "android": url, "ios": url}
     return {"web": url, "android": _intent(url, package, url) if package else url, "ios": url}

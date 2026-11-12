@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS products (
     original_price REAL,    -- latest struck-through price
     in_stock INTEGER DEFAULT 1,
     extra TEXT DEFAULT '{}',  -- JSON: rank, deal label, app link, ...
+    pending_price REAL,       -- a jump of more than JUMP seen once; recorded only if the next check agrees
     UNIQUE (store, sku)
 );
 CREATE TABLE IF NOT EXISTS prices (
@@ -64,19 +65,31 @@ def connect(path: str) -> sqlite3.Connection:
     cols = {r["name"] for r in con.execute("PRAGMA table_info(products)")}
     if "extra" not in cols:  # databases made before the column existed
         con.execute("ALTER TABLE products ADD COLUMN extra TEXT DEFAULT '{}'")
+    if "pending_price" not in cols:
+        con.execute("ALTER TABLE products ADD COLUMN pending_price REAL")
     return con
+
+
+JUMP = 0.6  # a price moving by more than 60% at once must be seen twice in a row before it's recorded
 
 
 def save_offers(con: sqlite3.Connection, offers: Iterable[Offer], now: int = None, stats: dict = None) -> tuple[int, int]:
     """Stores offers. Returns (seen, changed): a price row is only written when something moved, or the product
-    is new. `stats`, if given, also gets "new" and "moved" (an existing product's price or stock changed)."""
+    is new. `stats`, if given, also gets "new", "moved" (an existing product's price or stock changed) and "held"
+    (a jump of more than JUMP seen for the first time: stores sometimes show a wrong price for a moment, such as
+    1 EGP, and one sighting isn't enough to put it in the history)."""
     now = int(now or time.time())
-    seen = changed = new = 0
+    seen = changed = new = held = 0
     with con:
         for o in offers:
             seen += 1
-            row = con.execute("SELECT id, price, original_price, in_stock, category, brand, image, extra FROM products"
-                              " WHERE store=? AND sku=?", (o.store, o.sku)).fetchone()
+            row = con.execute("SELECT id, price, original_price, in_stock, category, brand, image, extra, pending_price"
+                              " FROM products WHERE store=? AND sku=?", (o.store, o.sku)).fetchone()
+            if (row is not None and row["price"] and o.in_stock and row["in_stock"]
+                    and abs(o.price - row["price"]) / row["price"] > JUMP and row["pending_price"] != o.price):
+                con.execute("UPDATE products SET pending_price=?, last_seen=? WHERE id=?", (o.price, now, row["id"]))
+                held += 1
+                continue
             original = o.original_price
             if not o.original_known:  # keep a list price another source saw, while the price hasn't moved
                 original = row["original_price"] if row is not None and row["price"] == o.price else None
@@ -95,7 +108,7 @@ def save_offers(con: sqlite3.Connection, offers: Iterable[Offer], now: int = Non
                 extra = {**json.loads(row["extra"] or "{}"), **o.extra}
                 con.execute(
                     "UPDATE products SET name=?, brand=?, category=?, url=?, image=?, last_seen=?,"
-                    " price=?, original_price=?, in_stock=?, extra=? WHERE id=?",
+                    " price=?, original_price=?, in_stock=?, extra=?, pending_price=NULL WHERE id=?",
                     (o.name, o.brand or row["brand"], o.category or row["category"], o.url, o.image or row["image"],
                      now, o.price, original, int(o.in_stock), json.dumps(extra, ensure_ascii=False), pid))
             if moved:
@@ -103,7 +116,7 @@ def save_offers(con: sqlite3.Connection, offers: Iterable[Offer], now: int = Non
                 con.execute("INSERT INTO prices (product_id, at, price, original_price, in_stock) VALUES (?,?,?,?,?)",
                             (pid, now, o.price, original, int(o.in_stock)))
     if stats is not None:
-        stats.update(new=new, moved=changed - new)
+        stats.update(new=new, moved=changed - new, held=held)
     return seen, changed
 
 
