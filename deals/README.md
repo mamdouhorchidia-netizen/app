@@ -67,7 +67,7 @@ talabat and Amazon and your Breadfast account flagged within hours. The delays c
    via ADB" option). It shows the phone's app traffic.
 2. Open Breadfast and browse: open each category you care about and scroll a little in each.
 3. In HTTP Toolkit, select all and **Export → HAR**.
-4. `python -m deals import-har capture.har`
+4. `python -m deals import-har capture.har`, or upload it on the site's `/admin` page
    It prints the products it found with their prices so you can check them. If prices are 100x too
    big, run it again with `--price-divisor 100`.
 5. From then on, `run` refreshes Breadfast like the other stores. When the app session expires, the page
@@ -175,16 +175,15 @@ release poller ignores it, because it only deploys apps built from the vorath re
 3. **Open https://deals.vorath.cloud.** The first prices appear within a minute, and a full pass over
    talabat and Amazon takes about 15 minutes. Price-drop deals need about 3 days of history; talabat's own
    discounts show right away.
-4. **Breadfast.** Capture on your phone (above), copy the file to the server
-   (`scp capture.har root@<server>:/root/`), then:
-   ```bash
-   bash /root/vorath/deals-src/deals/deploy/import_breadfast.sh /root/capture.har
-   ```
-   Breadfast joins the page within a minute, and the capture file is deleted after the import.
+4. **Breadfast.** In Coolify › deals › Environment variables, add `DEALS_ADMIN_TOKEN` with a long random value
+   (mark it as a secret, then Redeploy). Then open **https://deals.vorath.cloud/admin** on your phone. It
+   explains how to record the app (iPhone: Proxyman; Android: an emulator with HTTP Toolkit) and takes the
+   recording. Breadfast joins the page within a minute. The recording is deleted as soon as it's read.
+   From the server console instead: `bash /root/vorath/deals-src/deals/deploy/import_breadfast.sh /root/capture.har`.
 
 Settings, all optional, in Coolify › deals › Environment variables (redeploy after a change):
-`TALABAT_AREA`, `TALABAT_DELAY`, `AMAZON_DELAY`, `BREADFAST_DELAY`, `HOT_EVERY`, and the three
-`AMAZON_*` API keys.
+`TALABAT_AREA`, `TALABAT_DELAY`, `AMAZON_DELAY`, `BREADFAST_DELAY`, `HOT_EVERY`, `DEALS_ADMIN_TOKEN` (turns on
+`/admin`), and the three `AMAZON_*` API keys.
 
 Day to day: merge into the default branch and it's live within ~10 minutes (log: `/root/vorath/deals/log`). The
 container's logs are in Coolify. The data is in the `deals-data` volume.

@@ -13,17 +13,6 @@ from .scheduler import StoreLoop
 from .stores import STORES, amazon_eg, breadfast, talabat
 
 
-def _store_offers(con, offers) -> tuple[int, int]:
-    seen = changed = 0
-    batch = []
-    for offer in offers:
-        batch.append(offer)
-        if len(batch) >= 200:
-            s, c = db.save_offers(con, batch); seen += s; changed += c; batch = []
-    s, c = db.save_offers(con, batch)
-    return seen + s, changed + c
-
-
 def collect_store(db_path: str, store: str, args) -> tuple[int, int]:
     con = db.connect(db_path)
     run = db.start_run(con, store)
@@ -65,26 +54,19 @@ def collect_store(db_path: str, store: str, args) -> tuple[int, int]:
 
 
 def import_har(args):
-    divisor = args.price_divisor
-    offers, requests = breadfast.read_har(args.har, divisor)
-    if not offers:
+    r = breadfast.import_capture(args.db, args.har, args.breadfast_requests, args.price_divisor)
+    if not r["products"]:
         print("No products found in that capture. Browse a few Breadfast categories with the capture running,"
               " then export again.")
         return 1
-    con = db.connect(args.db)
-    run = db.start_run(con, breadfast.STORE)
-    unique = list({o.sku: o for o in offers}.values())
-    seen, changed = _store_offers(con, unique)
-    db.finish_run(con, run, seen, changed)
-    con.close()
-    out = args.breadfast_requests
-    breadfast.save_requests(out, requests, divisor)
-    print(f"breadfast: {len(unique)} products saved; {len(requests)} product requests kept in {out}"
-          " (it holds your app session: keep it private)")
+    print(f"breadfast: {r['products']} products saved; {r['requests']} product requests kept in"
+          f" {args.breadfast_requests} (it holds your app session: keep it private)")
+    if not r["requests"]:
+        print("None of the product responses can be refreshed (they were cart/account requests): prices won't update.")
     print("Check that these prices look right (if they are 100x too big, import again with --price-divisor 100):")
-    for o in unique[:8]:
-        was = f" (was {o.original_price:g})" if o.original_price else ""
-        print(f"  {o.price:>9g} EGP{was}  {o.name}")
+    for o in r["samples"]:
+        was = f" (was {o['original_price']:g})" if o["original_price"] else ""
+        print(f"  {o['price']:>9g} EGP{was}  {o['name']}")
     return 0
 
 
@@ -103,7 +85,7 @@ def live(args, stores):
         loop = StoreLoop(store, plans(store), args.db, delay=delays[store], hot_every=args.hot_every,
                          watch_file=_requests_file(args) if store == "breadfast" else None)
         threading.Thread(target=loop.run_forever, name=store, daemon=True).start()
-    web.serve(args.db, args.host, args.port)
+    web.serve(args.db, args.host, args.port, args.breadfast_requests)
 
 
 def _requests_file(args) -> str:
@@ -150,7 +132,7 @@ def main(argv=None):
         for s in stores:
             collect_store(args.db, s, args)
     elif args.command == "serve":
-        web.serve(args.db, args.host, args.port)
+        web.serve(args.db, args.host, args.port, args.breadfast_requests)
     else:
         live(args, stores)
 

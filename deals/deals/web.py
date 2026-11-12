@@ -9,10 +9,16 @@
   /api/status            each store: products, last check, last change, cycle time, errors
   /manifest.webmanifest, /icon.svg   so the page installs as an app
   /healthz               200 when the database answers (Coolify's health check)
+  /admin                 the owner's page for uploading a Breadfast app capture
+  POST /admin/breadfast  the capture itself (?divisor=1|100), with "Authorization: Bearer $DEALS_ADMIN_TOKEN";
+                         off (403) until DEALS_ADMIN_TOKEN is set
 """
 
+import hmac
 import json
+import os
 import sqlite3
+import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -20,9 +26,12 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import db, finder
-from .stores import LABELS
+from .stores import LABELS, breadfast
 
 PAGE = Path(__file__).with_name("live.html")
+ADMIN_PAGE = Path(__file__).with_name("admin.html")
+MAX_UPLOAD = 300 * 1024 * 1024
+_import_lock = threading.Lock()
 CACHE_SECONDS = 5
 CATALOG_SECONDS = 15
 MANIFEST = json.dumps({
@@ -77,7 +86,8 @@ def recent_changes(con, limit: int = 30) -> list[dict]:
     return out
 
 
-def make_handler(db_path: str):
+def make_handler(db_path: str, requests_file: str = None):
+    requests_file = requests_file or breadfast.DEFAULT_REQUESTS_FILE
     cache, lock = {}, threading.Lock()
     catalog_state = {"at": 0.0, "items": [], "by_id": {}}
     catalog_lock = threading.Lock()
@@ -127,6 +137,8 @@ def make_handler(db_path: str):
                 con.row_factory = sqlite3.Row
                 if u.path in ("/", "/live"):
                     self.send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+                elif u.path in ("/admin", "/admin/"):
+                    self.send(200, ADMIN_PAGE.read_bytes(), "text/html; charset=utf-8")
                 elif u.path == "/healthz":
                     con.execute("SELECT 1").fetchone()
                     self.send(200, b"ok", "text/plain")
@@ -183,12 +195,56 @@ def make_handler(db_path: str):
                 if con:
                     con.close()
 
+        def do_POST(self):
+            u = urlparse(self.path)
+            if u.path != "/admin/breadfast":
+                return self.json({"error": "not found"}, 404)
+            token = os.environ.get("DEALS_ADMIN_TOKEN", "")
+            if len(token) < 16:
+                return self.json({"error": "Uploads are off. Set DEALS_ADMIN_TOKEN (16+ characters) in Coolify's"
+                                           " environment variables for this app and redeploy."}, 403)
+            given = (self.headers.get("Authorization") or "").removeprefix("Bearer ").strip()
+            if not hmac.compare_digest(given.encode(), token.encode()):
+                time.sleep(1.5)  # slows down guessing
+                return self.json({"error": "Wrong admin token."}, 401)
+            try:
+                size = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                size = 0
+            if not 0 < size <= MAX_UPLOAD:
+                return self.json({"error": f"Send the .har file (up to {MAX_UPLOAD // 2**20} MB)."}, 413)
+            q = {k: v[0] for k, v in parse_qs(u.query).items()}
+            divisor = 100.0 if q.get("divisor") == "100" else 1.0
+            if not _import_lock.acquire(blocking=False):
+                return self.json({"error": "Another import is running; try again in a minute."}, 409)
+            fd, tmp = tempfile.mkstemp(prefix=".capture-", suffix=".har", dir=os.path.dirname(os.path.abspath(db_path)))
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    left = size
+                    while left:
+                        chunk = self.rfile.read(min(left, 1 << 20))
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        left -= len(chunk)
+                try:
+                    r = breadfast.import_capture(db_path, tmp, requests_file, divisor)
+                except (ValueError, KeyError, UnicodeDecodeError) as e:
+                    return self.json({"error": f"That file isn't a HAR export ({type(e).__name__})."}, 400)
+                if not r["products"]:
+                    return self.json({"error": "No products in that capture. Browse a few Breadfast categories while"
+                                               " recording, then export again."}, 422)
+                self.json(r)
+            finally:
+                os.unlink(tmp)  # the capture holds the app session: never kept
+                _import_lock.release()
+
     return Handler
 
 
-def serve(db_path: str, host: str = "127.0.0.1", port: int = 8800):
+def serve(db_path: str, host: str = "127.0.0.1", port: int = 8800, requests_file: str = None):
     db.connect(db_path).close()  # create the tables
-    server = ThreadingHTTPServer((host, port), make_handler(db_path))
+    server = ThreadingHTTPServer((host, port), make_handler(db_path, requests_file))
     server.daemon_threads = True
     print(f"live deals on http://{host}:{port}/")
     server.serve_forever()

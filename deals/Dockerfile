@@ -8,6 +8,7 @@
 #     HOT_EVERY         recheck a shelf whose prices moved in the last 30 min every N seconds (60)
 #     AMAZON_ACCESS_KEY / AMAZON_SECRET_KEY / AMAZON_PARTNER_TAG   use Amazon's API instead of its public pages
 #     CHROME_BIN        another Chrome/Chromium (default: the image's chromium)
+#     DEALS_ADMIN_TOKEN turns on /admin, where the owner uploads a Breadfast app capture (16+ characters; a secret)
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=Africa/Cairo \

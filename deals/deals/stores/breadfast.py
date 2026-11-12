@@ -283,3 +283,24 @@ def plan(fetcher: Fetcher, requests_file: str = None, log=print) -> list[Task]:
 
 def collect(fetcher: Fetcher, requests_file: str = None, log=print) -> Iterator[Offer]:
     yield from run_once(plan(fetcher, requests_file, log))
+
+
+def import_capture(db_path: str, har_path: str, requests_file: str, divisor: float = 1) -> dict:
+    """Reads a HAR capture: saves its products' prices and keeps its product requests for refreshing.
+    Returns {"products", "requests", "samples"}; products is 0 when the capture had none."""
+    from .. import db
+    offers, requests = read_har(har_path, divisor)
+    unique = list({o.sku: o for o in offers}.values())
+    if not unique:
+        return {"products": 0, "requests": 0, "samples": []}
+    con = db.connect(db_path)
+    try:
+        run = db.start_run(con, STORE)
+        seen, changed = db.save_offers(con, unique)
+        db.finish_run(con, run, seen, changed)
+    finally:
+        con.close()
+    if requests:
+        save_requests(requests_file, requests, divisor)
+    return {"products": len(unique), "requests": len(requests),
+            "samples": [{"name": o.name, "price": o.price, "original_price": o.original_price} for o in unique[:8]]}

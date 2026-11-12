@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Deals Admin</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<style>
+:root { --bg: #f6f5f2; --panel: #fff; --ink: #1b1a17; --muted: #6d6a63; --line: #e4e1da; --accent: #a80080; --good: #1f7a4d; --bad: #c0362c; --chip: #efede8; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #121211; --panel: #1c1b19; --ink: #f0eee9; --muted: #a29e95; --line: #2f2d29; --accent: #e070c8; --good: #5cc98f; --bad: #ff7b6b; --chip: #262421; } }
+:root[data-theme="dark"] { --bg: #121211; --panel: #1c1b19; --ink: #f0eee9; --muted: #a29e95; --line: #2f2d29; --accent: #e070c8; --good: #5cc98f; --bad: #ff7b6b; --chip: #262421; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans Arabic", sans-serif; }
+main { max-width: 680px; margin: 0 auto; padding: 24px 16px 60px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 24px 0 8px; }
+p, li { color: var(--muted); }
+a { color: inherit; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 16px; }
+label { display: block; font-weight: 600; margin: 12px 0 6px; }
+input[type=password], input[type=file] { width: 100%; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg label { font-weight: 400; margin: 0; display: flex; gap: 6px; align-items: center; background: var(--chip); padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+button { margin-top: 16px; width: 100%; font: inherit; font-weight: 650; background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 12px; cursor: pointer; }
+button:disabled { opacity: .5; cursor: wait; }
+progress { width: 100%; margin-top: 12px; height: 8px; }
+.ok { color: var(--good); font-weight: 650; } .err { color: var(--bad); font-weight: 650; }
+table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+td { padding: 6px 4px; border-top: 1px solid var(--line); } td:last-child { text-align: right; white-space: nowrap; }
+details { margin-top: 8px; } summary { cursor: pointer; font-weight: 600; }
+ol { padding-left: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Add Breadfast</h1>
+  <p>Breadfast's prices exist only inside its app. Record the app once on your phone, upload the recording here,
+    and the site keeps Breadfast's prices fresh by itself until the app signs you out.</p>
+
+  <div class="card">
+    <h2 style="margin-top:0">1. Record the app</h2>
+    <details open><summary>iPhone (easiest)</summary><ol>
+      <li>Install <b>Proxyman</b> from the App Store and follow its setup: it installs a VPN profile and a certificate.
+        Then trust that certificate in Settings › General › About › Certificate Trust Settings.</li>
+      <li>Start recording in Proxyman, and turn on decryption (SSL proxying) for Breadfast's addresses when it offers.</li>
+      <li>Open <b>Breadfast</b> and go through the categories you care about, scrolling a little in each.</li>
+      <li>Back in Proxyman, select the Breadfast requests and export them as <b>HAR</b>. Save the file to Files.</li>
+    </ol></details>
+    <details><summary>Android</summary><ol>
+      <li>Most Android phones don't let a recorder read an app's encrypted traffic. Use a computer with
+        <b>Android Studio</b>: create an emulator with a "Google APIs" image, not "Google Play".</li>
+      <li>Install <b>HTTP Toolkit</b> on the computer and pick "Android device via ADB". It sets up the emulator.</li>
+      <li>Install Breadfast in the emulator, sign in, browse the categories, then in HTTP Toolkit export as <b>HAR</b>.</li>
+    </ol></details>
+    <p>If the recorder shows Breadfast's requests as failed or "certificate rejected", the app blocks recording, and this
+      route won't work.</p>
+  </div>
+
+  <form class="card" id="f">
+    <h2 style="margin-top:0">2. Upload it</h2>
+    <label for="token">Admin token</label>
+    <input type="password" id="token" autocomplete="current-password" required placeholder="DEALS_ADMIN_TOKEN from Coolify">
+    <label for="file">Recording (.har)</label>
+    <input type="file" id="file" accept=".har,.json,application/json" required>
+    <label>Prices in the app's data are in</label>
+    <div class="seg">
+      <label><input type="radio" name="div" value="1" checked> pounds (EGP)</label>
+      <label><input type="radio" name="div" value="100"> piasters (100 = 1 EGP)</label>
+    </div>
+    <p style="font-size:13px">Not sure? Leave pounds, check the prices shown after the upload, and upload again with piasters if they're 100× too big.</p>
+    <button id="go">Upload and add Breadfast</button>
+    <progress id="bar" max="1" value="0" hidden></progress>
+    <div id="out" aria-live="polite"></div>
+  </form>
+  <p style="margin-top:16px"><a href="/?stores=breadfast&amp;deals=0">See Breadfast on the site →</a></p>
+  <p style="font-size:13px">The recording holds your Breadfast session. The site reads it, keeps only what it needs to
+    refresh prices (on its private storage), and deletes the file straight away. It only ever repeats product-list
+    requests, never anything touching your cart, orders, payment, address or account.</p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+try { $("token").value = sessionStorage.getItem("dealsAdmin") || ""; } catch {}
+$("f").onsubmit = e => {
+  e.preventDefault();
+  const file = $("file").files[0]; if (!file) return;
+  const div = document.querySelector("input[name=div]:checked").value;
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/admin/breadfast?divisor=" + div);
+  xhr.setRequestHeader("Authorization", "Bearer " + $("token").value.trim());
+  xhr.setRequestHeader("Content-Type", "application/json");
+  $("go").disabled = true; $("bar").hidden = false; $("bar").removeAttribute("value"); $("out").innerHTML = "";
+  xhr.upload.onprogress = ev => { if (ev.lengthComputable) $("bar").value = ev.loaded / ev.total; };
+  xhr.onload = () => {
+    $("go").disabled = false; $("bar").hidden = true;
+    let r = {}; try { r = JSON.parse(xhr.responseText); } catch {}
+    if (xhr.status !== 200) { $("out").innerHTML = `<p class="err">${esc(r.error || "Upload failed (" + xhr.status + ").")}</p>`; return; }
+    try { sessionStorage.setItem("dealsAdmin", $("token").value.trim()); } catch {}
+    $("out").innerHTML = `<p class="ok">Added ${r.products.toLocaleString()} Breadfast products.</p>
+      <p>${r.requests ? `${r.requests === 1 ? "1 product list" : r.requests + " product lists"} will be refreshed automatically, starting within a minute.`
+         : "None of the product responses can be refreshed (they came from cart or account screens), so these prices won't update. Record again while browsing categories."}</p>
+      <p>Do these prices look right?</p>
+      <table>${r.samples.map(s => `<tr><td dir="auto">${esc(s.name)}</td><td>${s.price} EGP${s.original_price ? ` <s>${s.original_price}</s>` : ""}</td></tr>`).join("")}</table>`;
+  };
+  xhr.onerror = () => { $("go").disabled = false; $("bar").hidden = true; $("out").innerHTML = '<p class="err">Network error: try again.</p>'; };
+  xhr.send(file);
+};
+</script>
+</body>
+</html>
