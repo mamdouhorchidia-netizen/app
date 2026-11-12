@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The live deals site as one more Coolify app on the Vorath server: https://deals.vorath.cloud
 #
-#   sudo bash add_deals.sh [domain] [branch]       defaults: deals.vorath.cloud, main
+#   sudo bash add_deals.sh [domain] [branch]       defaults: deals.vorath.cloud, the repository's default branch
 #
 # Needs: the Vorath server scripts (/root/vorath/src, from docs/DEPLOY.md), this repository cloned at
 # /root/vorath/deals-src with /root/vorath/deals_deploy_key (see deals/README.md, "On the Vorath server"),
@@ -12,10 +12,11 @@
 set -euo pipefail
 . /root/vorath/src/scripts/server/common.sh
 DOMAIN="${1:-deals.vorath.cloud}"; DOMAIN="${DOMAIN#https://}"; DOMAIN="${DOMAIN%/}"
-BRANCH="${2:-main}"
 APPNAME=deals
 KEYFILE=$VH/deals_deploy_key
 SRC=$VH/deals-src
+DEFAULT_BRANCH=$(git -C "$SRC" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')
+BRANCH="${2:-${DEFAULT_BRANCH:-$(git -C "$SRC" rev-parse --abbrev-ref HEAD)}}"
 REPO=$(git -C "$SRC" remote get-url origin)
 [ -f "$KEYFILE" ] || { echo "No $KEYFILE: follow deals/README.md, 'On the Vorath server', step 1."; exit 1; }
 [ -n "$(app_uuid "$APPNAME")" ] && { echo "A Coolify app named $APPNAME already exists. To update it: bash $SRC/deals/deploy/update.sh"; exit 1; }

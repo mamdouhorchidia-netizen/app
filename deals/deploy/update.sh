@@ -10,7 +10,7 @@ exec 9>$S/lock
 flock -n 9 || exit 0
 log() { echo "$(date -Is) $*" >> $S/log; }
 
-BRANCH=$(cat $S/branch 2>/dev/null || echo main)
+BRANCH=$(cat $S/branch)  # written by add_deals.sh
 NEW=$(git ls-remote "$(git -C $SRC remote get-url origin)" "refs/heads/$BRANCH" 2>/dev/null | cut -f1)
 [ -n "$NEW" ] || exit 0
 [ "$NEW" = "$(cat $S/released 2>/dev/null)" ] && exit 0

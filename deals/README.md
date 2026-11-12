@@ -158,24 +158,24 @@ release poller ignores it, because it only deploys apps built from the vorath re
 
 1. **DNS.** In hPanel › Domains › vorath.cloud › DNS, add an **A record**: name `deals`, pointing at the
    server's IP (the same as panel.vorath.cloud's).
-2. **Deploy key** (server console, as root). This repository needs its own key; GitHub doesn't allow
-   reusing Vorath's.
+2. **Key, code and app** (server console, as root). Paste the first line; it prints a key:
    ```bash
-   ssh-keygen -t ed25519 -N '' -C deals-deploy -f /root/vorath/deals_deploy_key && cat /root/vorath/deals_deploy_key.pub
+   K=/root/vorath/deals_deploy_key; [ -f $K ] || ssh-keygen -t ed25519 -N '' -C deals-deploy -f $K; cat $K.pub
    ```
-   Add the printed line on GitHub › this repository › Settings › Deploy keys (read-only).
-3. **Get the code and create the app.**
+   Add the printed line on GitHub › mamdouhorchidia-netizen/app › Settings › Deploy keys (title `deals`,
+   read-only). This repository needs its own key; GitHub doesn't allow reusing Vorath's. Then paste:
    ```bash
    GIT_SSH_COMMAND="ssh -i /root/vorath/deals_deploy_key -o StrictHostKeyChecking=accept-new" \
-     git clone --depth 1 git@github.com:mamdouhorchidia-netizen/app.git /root/vorath/deals-src
-   bash /root/vorath/deals-src/deals/deploy/add_deals.sh deals.vorath.cloud main
+     git clone --depth 1 git@github.com:mamdouhorchidia-netizen/app.git /root/vorath/deals-src \
+     && bash /root/vorath/deals-src/deals/deploy/add_deals.sh deals.vorath.cloud
    ```
-   This creates the Coolify app "deals" (port 8800, `/healthz`, volume `/data`, HTTPS), deploys it, and
-   adds a 5-minute cron job that deploys every new commit on `main`.
-4. **Open https://deals.vorath.cloud.** The first prices appear within a minute, and a full pass over
+   This creates the Coolify app "deals" (port 8800, `/healthz`, volume `/data`, HTTPS), deploys it, and adds
+   a 5-minute cron job that deploys every new commit on the repository's default branch (the one GitHub
+   shows first; pass another branch name as the second argument to follow that one instead).
+3. **Open https://deals.vorath.cloud.** The first prices appear within a minute, and a full pass over
    talabat and Amazon takes about 15 minutes. Price-drop deals need about 3 days of history; talabat's own
    discounts show right away.
-5. **Breadfast.** Capture on your phone (above), copy the file to the server
+4. **Breadfast.** Capture on your phone (above), copy the file to the server
    (`scp capture.har root@<server>:/root/`), then:
    ```bash
    bash /root/vorath/deals-src/deals/deploy/import_breadfast.sh /root/capture.har
@@ -186,7 +186,7 @@ Settings, all optional, in Coolify › deals › Environment variables (redeploy
 `TALABAT_AREA`, `TALABAT_DELAY`, `AMAZON_DELAY`, `BREADFAST_DELAY`, `HOT_EVERY`, and the three
 `AMAZON_*` API keys.
 
-Day to day: push to `main` and it's live within ~10 minutes (log: `/root/vorath/deals/log`). The
+Day to day: merge into the default branch and it's live within ~10 minutes (log: `/root/vorath/deals/log`). The
 container's logs are in Coolify. The data is in the `deals-data` volume.
 
 ## Being a good guest
