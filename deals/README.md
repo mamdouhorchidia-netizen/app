@@ -8,42 +8,57 @@ cd deals
 python -m deals run                      # collect every 3 hours and serve http://127.0.0.1:8800/
 python -m deals collect --store talabat  # one collection, then exit (e.g. from cron)
 python -m deals serve                    # just the page
+python -m deals import-har capture.har   # read a Breadfast app capture (see below)
 python -m unittest discover -s tests     # tests, from saved pages; no network
 ```
 
 Useful options: `--area ID` (talabat area, which picks the branch), `--category Beverages` and
-`--max-pages 20` (to try it out on a small part), `--every 60` (minutes between runs), `--db PATH`,
+`--max-pages 20` (to try it out on a small part; talabat and amazon), `--every 60` (minutes between runs), `--db PATH`,
 `--host 0.0.0.0 --port 80` (to put it on a server).
 
 ## Stores
 
 | Store | Source | State |
 |---|---|---|
-| talabat mart | talabat.com's public grocery pages. Each page carries its data as JSON (`__NEXT_DATA__`): price, original price, stock. robots.txt allows it. | Works. ~10,400 products, a full run is ~550 pages, about 15 minutes at one request per 1.5 s. |
-| Amazon.eg | Amazon's Product Advertising API (PA-API 5). The website answers automated requests with a bot check, so it is not scraped. | Built and tested offline; needs your keys (below). |
-| Breadfast | Its prices exist only inside the phone app: breadfast.com is a marketing site and app.breadfast.com only says "download the app". | Not built. See below. |
+| talabat mart | talabat.com's public grocery pages. Each page carries its data as JSON (`__NEXT_DATA__`): price, original price, stock. robots.txt allows it. | Works. ~10,400 products; a full run is ~550 pages, about 15 minutes. |
+| Amazon.eg | Its public **best-seller lists**: 7 everyday departments by default, each with ~20 sub-lists, 60 products per list. robots.txt allows them. With API keys set, the official Product Advertising API is used instead. | Works without keys. ~300 pages at 3 s apart, about 15 minutes. |
+| Breadfast | A **capture of the app's own traffic** from your phone, imported once and then refreshed automatically. | Ready for your first capture (steps below). |
 
-### Amazon.eg keys
-Join Amazon Associates for amazon.eg, then request Product Advertising API access in Associates Central.
-Set three environment variables:
+### Amazon.eg without the API
+- Best-seller lists show today's price but no struck-through price. So Amazon deals come from the price
+  history ("usually X EGP"), and start appearing about 3 days after the first run.
+- Some products show "N offers from EGP x". That's the lowest marketplace seller's price, marked
+  `from_sellers` in the data.
+- Amazon's search pages answer automated requests with a bot check, so search isn't used. If any page
+  answers with one, the run stops, keeps what it already read, and the page shows why. It never tries to
+  get past the check. Spacing requests 3 s apart and running a few times a day keeps this rare.
+- Departments: `--amazon-department grocery --amazon-department beauty …`. The default is grocery,
+  health, beauty, baby-products, home, pet-supplies and electronics. All 18 are listed at
+  amazon.eg/gp/bestsellers.
+- If you get API keys later (Amazon Associates → Product Advertising API), set `AMAZON_ACCESS_KEY`,
+  `AMAZON_SECRET_KEY` and `AMAZON_PARTNER_TAG`. It then switches to the API, which includes Amazon's
+  own discounts and affiliate links.
 
-```
-export AMAZON_ACCESS_KEY=...  AMAZON_SECRET_KEY=...  AMAZON_PARTNER_TAG=yourtag-21
-```
+### Breadfast: capture once, then it refreshes itself
+1. Install **HTTP Toolkit** on your computer (free) and connect your Android phone (the "Android device
+   via ADB" option). It shows the phone's app traffic.
+2. Open Breadfast and browse: open each category you care about and scroll a little in each.
+3. In HTTP Toolkit, select all and **Export → HAR**.
+4. `python -m deals import-har capture.har`
+   It prints the products it found with their prices so you can check them. If prices are 100x too
+   big, run it again with `--price-divisor 100`.
+5. From then on, `collect`/`run` refresh Breadfast like the other stores. When the app session expires,
+   the page shows "capture again". Repeat steps 2–4.
 
-Links on the page then carry your tag, so purchases through it pay you commission. New accounts get about
-1 request per second and a daily limit that grows with sales. Amazon has been moving PA-API users to newer
-offer fields ("OffersV2") and a newer "Creators API". The parser reads both offer shapes. If Amazon has
-retired PA-API 5 for your account, `stores/amazon_eg.py` is the only file to change. What to search is in
-`DEFAULT_SEARCHES` in that file.
-
-### Breadfast
-There is no public page with Breadfast prices. The options are:
-1. **Ask Breadfast** for a product feed or a partnership. This is how comparison sites stay safe long-term.
-2. **Read the app's traffic on your own phone**, with a tool like HTTP Toolkit, to see what it loads.
-   Note that Breadfast's terms likely forbid automated collection. That decision, and the risk, is yours.
-   Once you know the source, a new store is one file in `deals/stores/` with `STORE` and a `collect()`
-   that yields `Offer`s.
+Notes:
+- `breadfast_requests.json` holds your app session (sign-in token). It's created private, is ignored by
+  git, and should be treated like a password.
+- Only GET requests that returned products are repeated. Nothing whose address mentions a cart, order,
+  checkout, payment, address, wallet or account is ever replayed.
+- Products are recognised by shape (an id, a name and a price), since the app's layout isn't public. If
+  the import finds nothing, send the HAR's product response (with the tokens removed) so the parser can
+  be fitted to it.
+- Breadfast's terms don't mention automated collection either way. Using your own capture is your call.
 
 ## How deals are decided (`deals/finder.py`)
 A product is a deal when it is in stock and at least N% (5 by default) under either:
@@ -60,7 +75,7 @@ changes, so history stays small) and `runs` (each collection, and any error).
 ```
 deals/
   __main__.py   the command line: collect / serve / run
-  stores/       talabat.py, amazon_eg.py: one module per store
+  stores/       talabat.py, amazon_eg.py, breadfast.py: one module per store
   models.py     Offer: one product at one store at one moment
   http.py       slow, honest fetcher: names itself, waits between requests, backs off on errors
   db.py         SQLite storage and history
@@ -68,7 +83,7 @@ deals/
   sigv4.py      AWS request signing for the Amazon API
   web.py        /, /api/deals, /api/product/ID, /api/status
   live.html     the page; refreshes every minute and highlights new deals
-tests/          parsing from saved real talabat pages, the deal rules, signing (AWS's own test vector)
+tests/          parsing saved real talabat and amazon pages, breadfast captures, the deal rules, signing
 ```
 
 ## Being a good guest

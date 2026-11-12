@@ -8,12 +8,17 @@ import urllib.request
 USER_AGENT = "deals-tracker/0.1 (price comparison)"
 
 
+class Blocked(Exception):
+    """The site answered with a bot check. Collection stops; we do not try to get past it."""
+
+
 class Fetcher:
     def __init__(self, delay: float = 1.5, retries: int = 3, timeout: float = 30, user_agent: str = USER_AGENT):
         self.delay = delay
         self.retries = retries
         self.timeout = timeout
         self.user_agent = user_agent
+        self.retry_statuses = {429, 500, 502, 503, 504}
         self._last = 0.0
 
     def _wait(self):
@@ -23,7 +28,8 @@ class Fetcher:
         self._last = time.monotonic()
 
     def request(self, url: str, data: bytes = None, headers: dict = None, method: str = None) -> tuple[int, str]:
-        """Returns (status, body). 404 is returned, not raised; other errors are retried, then raised."""
+        """Returns (status, body). Statuses in retry_statuses and network errors are retried, then raised;
+        any other error status is returned."""
         hdrs = {"User-Agent": self.user_agent, "Accept-Encoding": "gzip", "Accept-Language": "en"}
         hdrs.update(headers or {})
         err = None
@@ -35,7 +41,7 @@ class Fetcher:
                     return r.status, _body(r.read(), r.headers.get("Content-Encoding"))
             except urllib.error.HTTPError as e:
                 body = _body(e.read(), e.headers.get("Content-Encoding"))
-                if e.code == 404 or (400 <= e.code < 500 and e.code != 429):
+                if e.code not in self.retry_statuses:
                     return e.code, body
                 err = e
             except (urllib.error.URLError, TimeoutError, ConnectionError) as e:

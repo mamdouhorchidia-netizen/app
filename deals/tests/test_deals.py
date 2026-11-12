@@ -1,11 +1,15 @@
+import json
+import os
+import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest import mock
 
 from deals import db, finder, sigv4
-from deals.http import Fetcher
-from deals.models import Offer
-from deals.stores import amazon_eg, talabat
+from deals.http import Blocked, Fetcher
+from deals.models import NotConfigured, Offer
+from deals.stores import amazon_eg, breadfast, talabat
 
 FIX = Path(__file__).with_name("fixtures")
 DAY = 86400
@@ -98,6 +102,140 @@ class Amazon(unittest.TestCase):
                                                                    "SavingBasis": {"Money": {"Amount": 100}}}}]}}
         self.assertEqual(amazon_eg.parse_item(v2).original_price, 100)
         self.assertIsNone(amazon_eg.parse_item({"ASIN": "B0NONE"}))
+
+
+class AmazonBestSellers(unittest.TestCase):
+    page = (FIX / "amazon_bestsellers.html").read_text()
+
+    def test_parse(self):
+        offers = amazon_eg.parse_bestsellers(self.page, "Grocery")
+        self.assertEqual([(o.sku, o.price) for o in offers],
+                         [("B07BYPSDZV", 23.5), ("B0842HKTMQ", 56.0), ("B0BZPJ9R6S", 246.88)])
+        first = offers[0]
+        self.assertEqual(first.name, "Italiano fettucini 400gm")
+        self.assertEqual(first.url, "https://www.amazon.eg/-/en/dp/B07BYPSDZV")
+        self.assertTrue(first.image.startswith("https://images-eu.ssl-images-amazon.com/"))
+        self.assertEqual(first.extra, {"rank": 1, "from_sellers": False})
+        self.assertTrue(offers[2].extra["from_sellers"])  # "5 offers from EGP 246.88"
+
+    def test_subcategories(self):
+        self.assertEqual(amazon_eg.parse_subcategories(self.page, "grocery")[:2],
+                         [("21840237031", "Baby Foods"), ("21840233031", "Bakery")])
+
+    def fake(self, answer):
+        asked = []
+
+        class Fake(Fetcher):
+            def get(self, url, headers=None):
+                asked.append(url)
+                return answer(url)
+
+        return Fake(delay=0), asked
+
+    def test_walks_department_and_sub_lists(self):
+        f, asked = self.fake(lambda url: (200, self.page))
+        offers = list(amazon_eg.collect_bestsellers(f, ["grocery"], log=lambda *_: None))
+        self.assertEqual(len(asked), 2 * (1 + 3))  # the department + 3 sub-lists, 2 pages each
+        self.assertEqual(asked[0], "https://www.amazon.eg/-/en/gp/bestsellers/grocery?ie=UTF8&pg=1")
+        self.assertEqual(asked[2], "https://www.amazon.eg/-/en/gp/bestsellers/grocery/21840237031?ie=UTF8&pg=1")
+        self.assertEqual(len(offers), 3)  # same products everywhere: kept once
+        self.assertEqual(f.delay, 3.0)
+        self.assertNotIn(503, f.retry_statuses)
+
+    def test_bot_check_stops_the_run(self):
+        f, asked = self.fake(lambda url: (503, "<html>Enter the characters you see below (captcha)</html>"))
+        with self.assertRaises(Blocked):
+            list(amazon_eg.collect_bestsellers(f, ["grocery"], log=lambda *_: None))
+        self.assertEqual(len(asked), 1)
+
+    def test_api_only_with_keys(self):
+        f, asked = self.fake(lambda url: (200, self.page))
+        with mock.patch.dict(os.environ, {"AMAZON_ACCESS_KEY": "", "AMAZON_SECRET_KEY": "", "AMAZON_PARTNER_TAG": ""}):
+            list(amazon_eg.collect(f, departments=["grocery"], max_pages=1, log=lambda *_: None))
+        self.assertIn("/gp/bestsellers/", asked[0])
+
+
+# Breadfast's real JSON layout is only known once you capture the app. These shapes are invented to
+# cover the common ways shop APIs write products.
+BF_LIST = {"data": {"category": {"name": "Dairy"}, "products": [
+    {"id": 101, "name": {"en": "Juhayna Full Cream Milk 1L", "ar": "جهينة لبن"}, "price": 42.5,
+     "old_price": 47, "image": {"url": "https://cdn.example/milk.jpg"}, "stock": 12},
+    {"id": 102, "name": "Breadfast Croissant", "price": "25.00", "is_available": False},
+    {"id": 103, "title": "Lurpak Butter 200g", "final_price": 180, "price": 210, "images": ["https://cdn.example/b.jpg"]},
+    {"id": 9, "name": "Dairy", "slug": "dairy"},  # a category, not a product
+]}, "meta": {"page": 1}}
+
+
+def har(entries):
+    return {"log": {"entries": [
+        {"request": {"method": m, "url": u, "headers": [{"name": ":authority", "value": "x"},
+                                                       {"name": "Authorization", "value": "Bearer T"},
+                                                       {"name": "Accept-Encoding", "value": "br"}]},
+         "response": {"status": 200, "content": {"mimeType": "application/json", "text": json.dumps(body)}}}
+        for m, u, body in entries]}}
+
+
+class Breadfast(unittest.TestCase):
+    def test_recognises_products(self):
+        offers = breadfast.products_in(BF_LIST)
+        self.assertEqual([o.sku for o in offers], ["101", "102", "103"])
+        milk, croissant, butter = offers
+        self.assertEqual((milk.name, milk.price, milk.original_price, milk.image, milk.in_stock),
+                         ("Juhayna Full Cream Milk 1L", 42.5, 47, "https://cdn.example/milk.jpg", True))
+        self.assertEqual((croissant.price, croissant.in_stock), (25.0, False))
+        self.assertEqual((butter.price, butter.original_price), (180, 210))  # final price, then the list price
+        self.assertEqual(breadfast.products_in(BF_LIST, divisor=100)[0].price, 0.42)
+
+    def test_read_har(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "c.har")
+            with open(path, "w") as f:
+                json.dump(har([
+                    ("GET", "https://api.example/v3/categories/5/products?page=1", BF_LIST),
+                    ("GET", "https://api.example/v3/categories/5/products?page=2", BF_LIST),  # same list
+                    ("GET", "https://api.example/v3/cart", BF_LIST),  # products, but never replayed
+                    ("POST", "https://api.example/v3/search", BF_LIST),  # not a GET
+                    ("GET", "https://api.example/v3/banners", {"banners": [{"id": 1, "image": "x"}]}),
+                ]), f)
+            offers, requests = breadfast.read_har(path)
+        self.assertEqual(len(offers), 9)  # three GET responses with products
+        self.assertEqual([r["url"] for r in requests], ["https://api.example/v3/categories/5/products?page=1"])
+        self.assertEqual(requests[0]["headers"], {"Authorization": "Bearer T"})
+
+    def test_refresh_pages_until_nothing_new(self):
+        def page_of(n):
+            return {"products": [{"id": f"{n}-{i}", "name": f"p{n}{i}", "price": 10 + i} for i in range(2)]}
+
+        asked = []
+
+        class Fake(Fetcher):
+            def request(self, url, data=None, headers=None, method=None):
+                asked.append((url, headers))
+                n = int(url.rsplit("=", 1)[1])
+                return 200, json.dumps(page_of(n) if n <= 3 else {"products": []})
+
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "r.json")
+            breadfast.save_requests(path, [{"url": "https://api.example/p?cat=5&page=2", "headers": {"A": "1"}}])
+            offers = list(breadfast.collect(Fake(delay=0), path, log=lambda *_: None))
+        self.assertEqual(len(offers), 6)
+        self.assertEqual([u for u, _ in asked], [f"https://api.example/p?cat=5&page={n}" for n in (1, 2, 3, 4)])
+        self.assertEqual(asked[0][1], {"A": "1"})
+
+    def test_expired_session(self):
+        class Fake(Fetcher):
+            def request(self, url, data=None, headers=None, method=None):
+                return 401, "{}"
+
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "r.json")
+            breadfast.save_requests(path, [{"url": "https://api.example/p", "headers": {}}])
+            with self.assertRaisesRegex(RuntimeError, "capture again"):
+                list(breadfast.collect(Fake(delay=0), path, log=lambda *_: None))
+
+    def test_not_set_up(self):
+        with self.assertRaises(NotConfigured):
+            list(breadfast.collect(Fetcher(), "/nonexistent/requests.json"))
 
 
 def offer(sku, price, original=None, in_stock=True, store="talabat"):

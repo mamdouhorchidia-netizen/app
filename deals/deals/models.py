@@ -2,6 +2,10 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
+class NotConfigured(Exception):
+    """A store that needs something from its owner first (keys, a capture). Skipped, not failed."""
+
+
 @dataclass
 class Offer:
     """One product as one store shows it at one moment."""

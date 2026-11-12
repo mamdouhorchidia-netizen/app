@@ -1,25 +1,29 @@
-"""Amazon.eg through Amazon's Product Advertising API (PA-API 5), the approved way to read its prices.
+"""Amazon.eg, from two sources:
 
-Amazon.eg's website answers automated requests with a bot check, so this module does not touch the
-website at all. To use it you need an Amazon Associates account for amazon.eg with PA-API access, and
-three values in the environment:
+1. Best-seller lists (default, no account needed). amazon.eg/gp/bestsellers/<department>[/<node>]
+   is plain HTML that Amazon serves to ordinary requests, and robots.txt allows it. Each list shows
+   ranks 1-30 on page 1 and 51-80 on page 2 with name, price and picture. They show no struck-through
+   price, so Amazon deals come from the price history ("usually X"), starting a few days after the
+   first run. Search pages answer automated requests with a bot check; when any page does that, the
+   run stops (http.Blocked) and does not try to get past it.
 
-  AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY   from the Associates Central "Product Advertising API" page
-  AMAZON_PARTNER_TAG                     your associate tag (e.g. yourname-21)
-
-Product links carry your tag, so purchases through the deals page also earn you commission.
-Limits: new accounts get about 1 request per second and 8,640 per day, rising with sales; 10 items
-per request and 10 pages per search.
+2. The Product Advertising API (PA-API 5), when these are set in the environment:
+     AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY   from Associates Central, "Product Advertising API"
+     AMAZON_PARTNER_TAG                     your associate tag (e.g. yourname-21)
+   It returns Amazon's own savings and links that earn commission. New accounts get about 1 request
+   per second and 8,640 per day; 10 items per request and 10 pages per search.
 """
 
+import html
 import json
 import os
+import re
 from datetime import datetime, timezone
 from typing import Iterator, Optional
 
 from .. import sigv4
-from ..http import Fetcher
-from ..models import Offer
+from ..http import Blocked, Fetcher
+from ..models import NotConfigured, Offer
 
 STORE = "amazon_eg"
 HOST = "webservices.amazon.eg"
@@ -43,10 +47,6 @@ DEFAULT_SEARCHES = [
     ("HealthPersonalCare", "shampoo"), ("HealthPersonalCare", "diapers"), ("Beauty", "skin care"),
     ("HomeAndKitchen", "detergent"),
 ]
-
-
-class NotConfigured(Exception):
-    pass
 
 
 class Client:
@@ -125,8 +125,8 @@ def parse_item(item: dict, category: str = "") -> Optional[Offer]:
     )
 
 
-def collect(fetcher: Fetcher, searches: list[tuple[str, str]] = None, pages: int = 3, min_saving: int = 5,
-            log=print) -> Iterator[Offer]:
+def collect_api(fetcher: Fetcher, searches: list[tuple[str, str]] = None, pages: int = 3, min_saving: int = 5,
+                log=print) -> Iterator[Offer]:
     client = Client(fetcher)
     fetcher.delay = max(fetcher.delay, 1.1)  # stay under 1 request/second
     for index, keywords in searches or DEFAULT_SEARCHES:
@@ -142,3 +142,108 @@ def collect(fetcher: Fetcher, searches: list[tuple[str, str]] = None, pages: int
                     yield o
             if len(items) < 10:
                 break
+
+
+# ---- best-seller lists -------------------------------------------------------------------------
+
+SITE = "https://www.amazon.eg"
+DEFAULT_DEPARTMENTS = ["grocery", "health", "beauty", "baby-products", "home", "pet-supplies", "electronics"]
+DEPARTMENT_NAMES = {
+    "grocery": "Grocery", "health": "Health & Household", "beauty": "Beauty", "baby-products": "Baby",
+    "home": "Home & Kitchen", "pet-supplies": "Pet Supplies", "electronics": "Electronics",
+    "office-products": "Office", "toys": "Toys", "sporting-goods": "Sports", "fashion": "Fashion",
+    "automotive": "Automotive", "home-improvement": "Tools", "videogames": "Video Games",
+}
+_ITEM_SPLIT = re.compile(r'<div id="gridItemRoot"')
+_SELLERS_PRICE = re.compile(r'a-price-whole">([\d,]+)<.*?a-price-fraction">(\d+)<', re.S)
+_PRICE = re.compile(r'p13n-sc-price[^"]*">\s*EGP\s*([\d,]+(?:\.\d+)?)\s*<')
+
+
+def _is_bot_check(status: int, page: str) -> bool:
+    return status == 503 or "captcha" in page[:20000].lower() or "api-services-support@amazon.com" in page
+
+
+def parse_bestsellers(page: str, category: str = "") -> list[Offer]:
+    offers = []
+    for block in _ITEM_SPLIT.split(page)[1:]:
+        block = block.split("</li>")[0]
+        asin = re.search(r'data-asin="([A-Z0-9]{10})"', block)
+        price, from_sellers = _PRICE.search(block), False
+        if not price:  # "N offers from EGP x": the lowest price among marketplace sellers
+            price, from_sellers = _SELLERS_PRICE.search(block), True
+        if not asin or not price:  # no price: currently unavailable
+            continue
+        amount = price.group(1).replace(",", "") + ("." + price.group(2) if price.lastindex == 2 else "")
+        title = re.search(r'line-clamp[^"]*">([^<]+)<', block) or re.search(r'<img alt="([^"]+)"', block)
+        img = re.search(r'<img [^>]*src="([^"]+)"', block)
+        rank = re.search(r'zg-bdg-text">#(\d+)<', block)
+        offers.append(Offer(
+            store=STORE,
+            sku=asin.group(1),
+            name=html.unescape(title.group(1)).strip() if title else asin.group(1),
+            price=round(float(amount), 2),
+            url=f"{SITE}/-/en/dp/{asin.group(1)}",
+            image=html.unescape(img.group(1)) if img else "",
+            category=category,
+            extra={"rank": int(rank.group(1)) if rank else None, "from_sellers": from_sellers},
+        ))
+    return offers
+
+
+def parse_subcategories(page: str, department: str) -> list[tuple[str, str]]:
+    """The child lists linked from a department's page: [(node id, name)]."""
+    found = re.findall(r'href="/-/en/gp/bestsellers/%s/(\d+)/ref=zg_bs_nav_%s_1"[^>]*>([^<]+)<'
+                       % (re.escape(department), re.escape(department)), page)
+    seen, out = set(), []
+    for node, name in found:
+        if node not in seen:
+            seen.add(node)
+            out.append((node, html.unescape(name).strip()))
+    return out
+
+
+def collect_bestsellers(fetcher: Fetcher, departments: list[str] = None, subcategories: bool = True,
+                        max_pages: int = None, log=print) -> Iterator[Offer]:
+    fetcher.delay = max(fetcher.delay, 3.0)  # Amazon is the strictest of the three: go slower
+    fetcher.retry_statuses = {429, 500, 502, 504}  # 503 is Amazon's bot check: never retry it
+    asked, seen = 0, set()
+
+    def fetch(path: str, page_no: int) -> str:
+        nonlocal asked
+        status, page = fetcher.get(f"{SITE}{path}?ie=UTF8&pg={page_no}")
+        asked += 1
+        if _is_bot_check(status, page):
+            raise Blocked(f"Amazon answered {path} with a bot check after {asked} pages; stopped")
+        return page if status == 200 else ""
+
+    for dept in departments or DEFAULT_DEPARTMENTS:
+        dept_name = DEPARTMENT_NAMES.get(dept, dept)
+        lists = [(f"/-/en/gp/bestsellers/{dept}", dept_name)]
+        i = 0
+        while i < len(lists):
+            path, name = lists[i]
+            for page_no in (1, 2):
+                if max_pages is not None and asked >= max_pages:
+                    return
+                page = fetch(path, page_no)
+                if not page:
+                    break
+                if i == 0 and page_no == 1 and subcategories:
+                    lists += [(f"/-/en/gp/bestsellers/{dept}/{node}", f"{dept_name} / {sub}")
+                              for node, sub in parse_subcategories(page, dept)]
+                    log(f"amazon_eg: {dept_name}: {len(lists) - 1} sub-lists")
+                for o in parse_bestsellers(page, name):
+                    if o.sku not in seen:
+                        seen.add(o.sku)
+                        yield o
+            i += 1
+
+
+def collect(fetcher: Fetcher, pages: int = 3, departments: list[str] = None, max_pages: int = None,
+            log=print) -> Iterator[Offer]:
+    """The API when its keys are set, the best-seller lists otherwise."""
+    if all(os.environ.get(k) for k in ("AMAZON_ACCESS_KEY", "AMAZON_SECRET_KEY", "AMAZON_PARTNER_TAG")):
+        log("amazon_eg: using the Product Advertising API")
+        yield from collect_api(fetcher, pages=pages, log=log)
+    else:
+        yield from collect_bestsellers(fetcher, departments, max_pages=max_pages, log=log)
