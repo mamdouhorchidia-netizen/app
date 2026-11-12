@@ -407,6 +407,16 @@ function notify(title, body, id) {
     n.onclick = () => { window.focus(); showProduct(id); };
   }
 }
+// talabat's app opens at its home screen (it can't open a product from a link): copy the name to paste in its search
+const copyAttr = d => d.links && d.links.copy && (isAndroid || isIOS) ? ` data-copy-name="${esc(d.name)}"` : "";
+document.addEventListener("click", async e => {
+  const a = e.target.closest("a[data-copy-name]");
+  if (!a) return;
+  e.preventDefault(); e.stopPropagation();
+  try { await navigator.clipboard.writeText(a.dataset.copyName); } catch {}
+  toast("Name copied: in talabat, open talabat mart and paste it in the search.");
+  location.href = a.href;
+}, true);
 function toast(html, onclick, raw) {
   const t = document.createElement("div"); t.className = "toast"; t.innerHTML = raw ? html : esc(html);
   t.onclick = () => { if (onclick) onclick(); t.remove(); };
@@ -523,7 +533,7 @@ function card(d, fresh) {
       <div class="tags">${tagsFor(d)}</div>
       <div class="priceline"><div><span class="now">${fmt(d.price)} <small>EGP</small></span>${was}</div>${sparkSVG(d.spark)}</div>
       <div class="meta">${d.hub_name ? `<span title="talabat hub">📍 ${esc(d.hub_name)}</span>` : ""}${d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : ""}${d.saving > 0 ? `<span>save ${fmt(d.saving)}</span>` : ""}${unit ? `<span class="unit">${unit}</span>` : ""}</div>
-      <div class="cta"><a href="${esc(appHref(d))}" target="_blank" rel="noopener" data-open>Open in ${esc(appLabel[d.store] || "store")} ↗</a></div>
+      <div class="cta"><a href="${esc(appHref(d))}" target="_blank" rel="noopener" data-open${copyAttr(d)}>Open in ${esc(appLabel[d.store] || "store")} ↗</a></div>
     </div></article>`;
 }
 // a picture that fails to load becomes the product's first letter
@@ -638,13 +648,13 @@ async function showProduct(id) {
     ${rows.length > 1 ? `<h4>Same product in other stores</h4><table class="cmp">${rows.map((x, i) => `<tr>
       <td><span style="color:var(--${esc(x.store)});font-weight:650">${esc(LABELS[x.store] || x.store)}</span><br><span class="meta" style="display:inline" dir="auto">${esc(x.name.slice(0, 60))}</span></td>
       <td class="${i === 0 ? "best" : ""}">${fmt(x.price)} EGP${i === 0 ? "<br>cheapest" : ""}${x.in_stock ? "" : "<br>out of stock"}</td>
-      <td><a class="btn" style="padding:5px 10px" href="${esc(appHref(x))}" target="_blank" rel="noopener">Open ↗</a></td></tr>`).join("")}</table>` : ""}
+      <td><a class="btn" style="padding:5px 10px" href="${esc(appHref(x))}" target="_blank" rel="noopener"${copyAttr(x)}>Open ↗</a></td></tr>`).join("")}</table>` : ""}
     <div class="alert"><label for="target">Tell me when it's at or below</label>
       <input id="target" type="number" inputmode="decimal" min="0" step="0.5" placeholder="${Math.floor(p.price * 0.9)}" value="${w && w.target ? w.target : ""}"> EGP
       <button class="btn" id="setTarget">${w ? "Update alert" : "Watch"}</button></div>
     <div class="row">
-      <a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener">Open in ${esc(appLabel[p.store] || "store")}${p.store === "talabat" ? "" : " app"} ↗</a>
-      ${d && (isAndroid ? d.links.browser : d.links.web) && (isAndroid ? d.links.browser : d.links.web) !== link
+      <a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener"${d ? copyAttr(d) : ""}>Open in ${esc(appLabel[p.store] || "store")}${p.store === "talabat" ? "" : " app"} ↗</a>
+      ${d && !d.links.copy && (isAndroid ? d.links.browser : d.links.web) && (isAndroid ? d.links.browser : d.links.web) !== link
         ? `<a class="btn" href="${esc(isAndroid ? d.links.browser : d.links.web)}" target="_blank" rel="noopener">Open in browser</a>` : ""}
       <button class="btn" id="toBasket">🧺 ${basket[id] ? "In basket (" + basket[id] + ")" : "Add to basket"}</button>
       <button class="btn" id="share">Share</button>

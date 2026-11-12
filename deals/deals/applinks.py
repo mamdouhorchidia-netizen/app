@@ -13,7 +13,9 @@ import re
 from urllib.parse import quote, urlsplit
 
 PACKAGES = {
-    "talabat": "com.6alabat.cuisineApp",  # talabat's real Android app (its pages' al:android:package)
+    # talabat's Android app is com.talabat: it's the app talabat.com's /.well-known/assetlinks.json verifies for all
+    # its addresses (com.6alabat.cuisineApp, in its pages' al:android:package, is the iPhone app's id)
+    "talabat": "com.talabat",
     "amazon_eg": "com.amazon.mShop.android.shopping",
     "breadfast": "com.breadfast",
     "jumia": "com.jumia.android",
@@ -23,7 +25,7 @@ PACKAGES = {
 # opens a product link at an error page ("We can't load this page"). Its product page on the web works, when the
 # link carries an area (aid) that the item's hub delivers to, which every link here does (checked on a phone
 # browser, Nov 2026).
-WEB_FIRST = {"talabat"}
+WEB_FIRST = set()
 CHROME = "com.android.chrome"
 STORE_PAGES = {
     "breadfast": ("https://play.google.com/store/apps/details?id=com.breadfast",
@@ -70,6 +72,14 @@ def links(store: str, url: str, extra: dict = None) -> dict:
         return {"web": play, "android": home, "ios": "breadfast://", "browser": play}
     if not url:
         return {"web": "", "android": "", "ios": "", "browser": ""}
+    if store == "talabat":
+        # talabat's app claims every talabat.com address (Android and iPhone) but can't open a product page from
+        # one ("Sorry, we couldn't load this page"), and a link to Chrome is handed to it too. What it does open
+        # is talabat:// (its pages' al:android:url): its home screen. So phones open the app there, with the
+        # product's name copied to paste in talabat mart's search ("copy"); without the app, the product's web page,
+        # which works when its area (aid) is served by the item's hub.
+        app = f"intent://#Intent;scheme=talabat;package={package};S.browser_fallback_url={quote(url, safe='')};end"
+        return {"web": url, "android": app, "ios": "talabat://", "browser": _intent(url, CHROME, url), "copy": True}
     if store == "amazon_eg":
         url = _tagged(url)
     in_chrome = _intent(url, CHROME, url)
