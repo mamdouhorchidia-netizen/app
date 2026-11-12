@@ -365,7 +365,8 @@ class AppLinks(unittest.TestCase):
                                                 "package=com.amazon.mShop.android.shopping;"))
         self.assertIn("S.browser_fallback_url=https%3A%2F%2Fwww.amazon.eg%2F-%2Fen%2Fdp%2FB0DC5F7P3N", l["android"])
         self.assertEqual(l["ios"], "https://www.amazon.eg/-/en/dp/B0DC5F7P3N")
-        self.assertIn("package=com.talabat;", links("talabat", "https://www.talabat.com/egypt/x/s/1?aid=9")["android"])
+        t = links("talabat", "https://www.talabat.com/egypt/x/s/1?aid=9")
+        self.assertEqual(set(t.values()), {"https://www.talabat.com/egypt/x/s/1?aid=9"})  # its product page, everywhere
 
     def test_breadfast_uses_the_apps_own_link(self):
         from deals.applinks import links
@@ -410,7 +411,7 @@ class CatalogAndFilters(unittest.TestCase):
         self.assertIn("new", tea["flags"])
         self.assertIn("lowest", tea["flags"])
         self.assertEqual((tea["unit_price"], tea["unit"]), (160.0, "kg"))
-        self.assertTrue(tea["links"]["android"].startswith("intent://"))
+        self.assertEqual(tea["links"]["android"], TEA_URL)
         self.assertTrue(len(tea["spark"]) >= 2)
         self.assertIn("20% under its usual 100 EGP", tea["why"])
         self.assertNotIn("steady", self.by["a2"]["flags"])  # 10 days unchanged: not yet 14
@@ -484,6 +485,63 @@ class PackSizes(unittest.TestCase):
         self.assertIsNone(pack_size("Granzia Pionizer Compressor Nebulizer"))
 
 
+class BreadfastUpload(unittest.TestCase):
+    """The owner's upload page, on a real server in a thread."""
+
+    def setUp(self):
+        import threading
+        from http.server import ThreadingHTTPServer
+        from deals import web
+        self.dir = tempfile.TemporaryDirectory()
+        self.db = os.path.join(self.dir.name, "d.sqlite3")
+        self.req = os.path.join(self.dir.name, "breadfast_requests.json")
+        db.connect(self.db).close()
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), web.make_handler(self.db, self.req))
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
+        self.har = json.dumps(har([("GET", "https://api.example/v3/categories/5/products?page=1", BF_LIST)])).encode()
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.dir.cleanup()
+
+    def post(self, body, token=None, divisor="1"):
+        import urllib.error
+        import urllib.request
+        req = urllib.request.Request(f"{self.base}/admin/breadfast?divisor={divisor}", data=body, method="POST",
+                                     headers={"Authorization": f"Bearer {token}"} if token else {})
+        try:
+            with urllib.request.urlopen(req) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    def test_off_until_a_token_is_set(self):
+        with mock.patch.dict(os.environ, {"DEALS_ADMIN_TOKEN": ""}):
+            self.assertEqual(self.post(self.har, "x")[0], 403)
+
+    def test_upload(self):
+        token = "t" * 24
+        with mock.patch.dict(os.environ, {"DEALS_ADMIN_TOKEN": token}), mock.patch("time.sleep"):
+            self.assertEqual(self.post(self.har, "wrong-token-123456")[0], 401)
+            self.assertEqual(self.post(b"not json at all", token)[0], 400)
+            status, r = self.post(self.har, token)
+        self.assertEqual(status, 200)
+        self.assertEqual((r["products"], r["requests"]), (3, 1))
+        self.assertEqual(r["samples"][0]["name"], "Juhayna Full Cream Milk 1L")
+        self.assertTrue(os.path.exists(self.req))  # what's needed to refresh, kept privately
+        self.assertEqual([f for f in os.listdir(self.dir.name) if f.startswith(".capture-")], [])  # capture deleted
+        items = finder.query(finder.catalog(db.connect(self.db)), deals_only=False, stock="all")["items"]
+        self.assertEqual({d["store"] for d in items}, {"breadfast"})
+        self.assertEqual(len(items), 3)
+
+    def test_piasters(self):
+        with mock.patch.dict(os.environ, {"DEALS_ADMIN_TOKEN": "t" * 24}):
+            status, r = self.post(self.har, "t" * 24, divisor="100")
+        self.assertEqual((status, r["samples"][0]["price"]), (200, 0.42))
+
+
 def offer(sku, price, original=None, in_stock=True, store="talabat"):
     return Offer(store=store, sku=sku, name=f"item {sku}", price=price, original_price=original, in_stock=in_stock)
 
@@ -507,7 +565,23 @@ class HistoryAndDeals(unittest.TestCase):
         self.assertEqual([r["price"] for r in db.history(self.con, 1)], [10, 8, 8])
         stats = {}
         db.save_offers(self.con, [offer("a", 9), offer("b", 5), offer("c", 5)], self.at(4), stats)
-        self.assertEqual(stats, {"new": 2, "moved": 1})
+        self.assertEqual(stats, {"new": 2, "moved": 1, "held": 0})
+
+    def test_one_off_wild_price_is_not_recorded(self):
+        # talabat once showed a 75 EGP razor at 1 EGP for one check
+        db.save_offers(self.con, [offer("r", 75, 100)], self.at(0))
+        stats = {}
+        self.assertEqual(db.save_offers(self.con, [offer("r", 1, 100)], self.at(1), stats), (1, 0))
+        self.assertEqual(stats["held"], 1)
+        self.assertEqual(db.save_offers(self.con, [offer("r", 75, 100)], self.at(2)), (1, 0))  # back: nothing moved
+        self.assertEqual([r["price"] for r in db.history(self.con, 1)], [75])
+        # a real big drop shows up twice in a row, and is recorded on the second sighting
+        db.save_offers(self.con, [offer("r", 20, 100)], self.at(3))
+        db.save_offers(self.con, [offer("r", 20, 100)], self.at(4))
+        self.assertEqual([r["price"] for r in db.history(self.con, 1)], [75, 20])
+        # ordinary moves are recorded at once
+        db.save_offers(self.con, [offer("r", 18, 100)], self.at(5))
+        self.assertEqual([r["price"] for r in db.history(self.con, 1)], [75, 20, 18])
 
     def test_store_discount(self):
         db.save_offers(self.con, [offer("a", 90, 100), offer("b", 98, 100), offer("c", 50)], self.at(0))
