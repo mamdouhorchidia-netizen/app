@@ -6,8 +6,8 @@
   let lang = "ar";
   try { lang = localStorage.getItem(KEY) || "ar"; } catch {}
 
-  const STORE = { "talabat mart": "طلبات مارت", "Amazon.eg": "أمازون مصر", "Jumia": "جوميا", "Breadfast": "بريدفاست", "Dream 2000": "دريم 2000", "Kenzz": "كنز" };
-  const APP = { talabat: "طلبات", Amazon: "أمازون", Jumia: "جوميا", Breadfast: "بريدفاست", "Dream 2000": "دريم 2000", Kenzz: "كنز", store: "المتجر" };
+  const STORE = { "talabat mart": "طلبات مارت", "Amazon.eg": "أمازون مصر", "Jumia": "جوميا", "Breadfast": "بريدفاست", "Dream 2000": "دريم 2000", "Kenzz": "كنز", "Raya Shop": "راية شوب" };
+  const APP = { talabat: "طلبات", Amazon: "أمازون", Jumia: "جوميا", Breadfast: "بريدفاست", "Dream 2000": "دريم 2000", Kenzz: "كنز", Raya: "راية", store: "المتجر" };
   const EXACT = {
     // header and filters
     "Live deals": "عروض لحظة بلحظة", "connecting…": "بيتصل…", "Filters": "فلاتر", "Install": "تثبيت",
@@ -77,6 +77,7 @@
     "⚠️ \"was\" price looks inflated": "⚠️ السعر القديم شكله متضخم", "Check the price": "اتأكد من السعر",
     "The 'was' price looks inflated: compare with other stores before buying.": "السعر القديم شكله متضخم: قارن بمتاجر تانية قبل ما تشتري.",
     "📍 talabat hubs:": "📍 فروع طلبات:", "All hubs": "كل الفروع",
+    "⏳ Before a watched product's predicted sale": "⏳ قبل العرض المتوقع لمنتج بتابعه",
     "About": "عن الموقع", "Privacy": "الخصوصية", "Contact": "تواصل معانا", "Appliances & electronics": "أجهزة وإلكترونيات", "Kenzz deals": "عروض كنز", "🎟️ Coupons": "🎟️ كوبونات", "🧺 Add to basket": "🧺 ضيف للسلة", "Product page": "صفحة المنتج",
     "★ Watch": "★ تابع السعر", "More deals like this": "عروض شبهه", "Lowest in 90 days": "أقل سعر في 90 يوم",
     "Highest in 90 days": "أعلى سعر في 90 يوم", "Usual price": "السعر المعتاد", "Price changes": "مرات تغيير السعر",
@@ -85,8 +86,8 @@
       "الأسعار بتتحدّث طول اليوم من صفحات المتاجر نفسها. ممكن السعر يتغير في المتجر قبل ما يتغير هنا.", "Telegram channel": "قناة التليجرام", "No coupons yet.": "مفيش كوبونات لسه.",
   };
   const RX = [
-    [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|store) app ↗$/, (m, a) => `افتح في تطبيق ${APP[a]} ↗`],
-    [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|store) ↗$/, (m, a) => `افتح في ${APP[a]} ↗`],
+    [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|Raya|store) app ↗$/, (m, a) => `افتح في تطبيق ${APP[a]} ↗`],
+    [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|Raya|store) ↗$/, (m, a) => `افتح في ${APP[a]} ↗`],
     [/^changed (.+)$/, "اتغير $1"], [/^dropped (.+)$/, "نزل $1"], [/^went up (.+)$/, "زاد $1"],
     [/^was ([\d,.]+) lately$/, "كان بـ $1 قريب"],
     [/^It was ([\d.,]+) EGP lately: it's (\d+)% dearer now\.$/, "كان بـ $1 ج.م قريب: دلوقتي أغلى بـ $2%."],
@@ -132,7 +133,7 @@
     [/full sweep ([\d]+) (s|min)/g, (m, n, u) => `لفة كاملة ${n} ${u === "s" ? "ث" : "د"}`],
     [/ · first sweep/g, " · أول لفة"], [/ · watching/g, " · بيراقب"], [/ · changed /g, " · نزل "],
     [/price changes in the last hour/g, "تغيير سعر في آخر ساعة"], [/\bEGP\b/g, "ج.م"],
-    [/talabat mart|Amazon\.eg|Jumia|Breadfast|Dream 2000|Kenzz/g, m => STORE[m]],
+    [/talabat mart|Amazon\.eg|Jumia|Breadfast|Dream 2000|Kenzz|Raya Shop/g, m => STORE[m]],
   ];
   const SKIP = "[dir=auto],script,style,code,textarea,[data-noi18n],input,svg";
   const ATTRS = ["placeholder", "title", "aria-label"];

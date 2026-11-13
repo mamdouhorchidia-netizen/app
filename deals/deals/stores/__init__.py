@@ -1,6 +1,6 @@
 """One module per store. Each has STORE (its id) and collect(fetcher, ...) yielding Offers."""
 
-from . import amazon_eg, breadfast, dream2000, jumia, kenzz, talabat
+from . import amazon_eg, breadfast, dream2000, jumia, kenzz, raya, talabat
 
 STORES = {
     talabat.STORE: talabat,
@@ -9,6 +9,7 @@ STORES = {
     jumia.STORE: jumia,
     dream2000.STORE: dream2000,
     kenzz.STORE: kenzz,
+    raya.STORE: raya,
 }
 
 LABELS = {
@@ -18,4 +19,5 @@ LABELS = {
     jumia.STORE: "Jumia",
     dream2000.STORE: "Dream 2000",
     kenzz.STORE: "Kenzz",
+    raya.STORE: "Raya Shop",
 }

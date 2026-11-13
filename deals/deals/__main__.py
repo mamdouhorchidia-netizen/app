@@ -29,7 +29,7 @@ def collect_store(db_path: str, store: str, args) -> tuple[int, int]:
         elif store == "amazon_eg":
             gen = mod.collect(fetcher, pages=args.amazon_pages, departments=args.amazon_department,
                               max_pages=args.max_pages)
-        elif store in ("jumia", "dream2000", "kenzz"):
+        elif store in ("jumia", "dream2000", "kenzz", "raya"):
             gen = mod.collect(fetcher, max_pages=args.max_pages)
         else:
             gen = mod.collect(fetcher, requests_file=args.breadfast_requests)
@@ -82,14 +82,14 @@ def live(args, stores):
             return lambda f: talabat.plan(f, settings.load(settings_file)["talabat_hubs"], args.category)
         if store == "amazon_eg":
             return lambda f: amazon_eg.plan(f, args.amazon_department, args.amazon_pages)
-        if store in ("jumia", "dream2000", "kenzz"):
+        if store in ("jumia", "dream2000", "kenzz", "raya"):
             return lambda f: STORES[store].plan(f)
         return lambda f: breadfast.plan(f, args.breadfast_requests)
 
     settings_file = settings.path_for(args.db)
     delays = {"talabat": args.talabat_delay, "amazon_eg": args.amazon_delay, "breadfast": args.breadfast_delay,
               "jumia": float(os.environ.get("JUMIA_DELAY", 3)), "dream2000": float(os.environ.get("DREAM_DELAY", 3)),
-              "kenzz": float(os.environ.get("KENZZ_DELAY", 3))}
+              "kenzz": float(os.environ.get("KENZZ_DELAY", 3)), "raya": float(os.environ.get("RAYA_DELAY", 10))}
     db.connect(args.db).close()
     for store in stores:
         loop = StoreLoop(store, plans(store), args.db, delay=delays[store], hot_every=args.hot_every,
@@ -116,6 +116,9 @@ def live(args, stores):
         print("push notifications off: the cryptography package isn't installed")
     from . import telegram
     telegram.start(args.db, web.PUBLIC_URL)  # big fresh deals to a Telegram channel, when its keys are set
+    if os.environ.get("TELEGRAM_BOT", "1") != "0":  # the same bot answers people who write to it
+        from . import bot
+        bot.start(args.db, web.PUBLIC_URL, os.environ.get("TELEGRAM_BOT_TOKEN", "").strip())
     web.serve(args.db, args.host, args.port, args.breadfast_requests)
 
 

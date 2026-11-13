@@ -14,7 +14,7 @@
   --bg: #f6f5f2; --panel: #ffffff; --ink: #1b1a17; --muted: #6d6a63; --faint: #a6a29a; --line: #e4e1da;
   --accent: #d6402b; --accent-ink: #ffffff; --good: #1f7a4d; --good-bg: #e3f3ea; --warn: #9a6a00; --warn-bg: #fbf0d4;
   --chip: #efede8; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04); --drop: #1f7a4d;
-  --talabat: #ff5a00; --amazon_eg: #232f3e; --breadfast: #a80080; --jumia: #f68b1e; --dream2000: #0b4ea2; --kenzz: #7b2cbf; --radius: 14px;
+  --talabat: #ff5a00; --amazon_eg: #232f3e; --breadfast: #a80080; --jumia: #f68b1e; --dream2000: #0b4ea2; --kenzz: #7b2cbf; --raya: #c8102e; --radius: 14px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -351,8 +351,8 @@ const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? 
                 set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
 const isAndroid = /Android/i.test(navigator.userAgent), isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const appHref = d => (isAndroid ? d.links?.android : isIOS ? d.links?.ios : d.links?.web) || d.links?.web || d.url || "#";
-const appLabel = { talabat: "talabat", amazon_eg: "Amazon", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz" };
-const LABELS = { talabat: "talabat mart", amazon_eg: "Amazon.eg", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz" };
+const appLabel = { talabat: "talabat", amazon_eg: "Amazon", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz", raya: "Raya" };
+const LABELS = { talabat: "talabat mart", amazon_eg: "Amazon.eg", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz", raya: "Raya Shop" };
 
 // ---------- state, mirrored in the address so any view can be shared ----------
 document.querySelectorAll("#nav a").forEach(a => { const u = new URL(a.href);
@@ -849,7 +849,7 @@ $("installBtn").onclick = async () => {
 window.addEventListener("appinstalled", () => { $("installBtn").hidden = true; toast("Installed. Find Live deals on your home screen."); });
 
 // ---------- price-drop alerts (push) ----------
-function alertsPrefs() { return Object.assign({ enabled: false, all_drops: false, min_drop: 20, stores: [], hubs: [], categories: [], words: [], sound: true },
+function alertsPrefs() { return Object.assign({ enabled: false, all_drops: false, min_drop: 20, stores: [], hubs: [], categories: [], words: [], sound: true, predict: true },
   store.get("alerts", {})); }
 function panel(html) { $("pbody").innerHTML = `<button class="x" aria-label="Close" onclick="this.closest('dialog').close()">×</button>` + html; if (!$("panel").open) $("panel").showModal(); }
 async function pushSubscription(create) {
@@ -872,7 +872,7 @@ function syncAlerts() {  // the server needs the watchlist and choices to know w
       const sub = await pushSubscription(false); if (!sub) return;
       const targets = {}; Object.entries(watch).forEach(([k, v]) => { if (v.target) targets[k] = v.target; });
       await fetch("/api/push/subscribe", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscription: sub.toJSON(), prefs: { ...a, watch: Object.keys(watch).map(Number), targets } }) });
+        body: JSON.stringify({ subscription: sub.toJSON(), prefs: { ...a, watch: Object.keys(watch).map(Number), targets, lang: window.I18N ? I18N.lang : "en" } }) });
     } catch {}
   }, 800);
 }
@@ -886,6 +886,7 @@ $("alertsBtn").onclick = async () => {
     <div class="set">
       <label><input type="checkbox" id="aOn" ${a.enabled ? "checked" : ""} ${supported ? "" : "disabled"}> <b>Alerts on this device</b></label>
       <label><input type="checkbox" checked disabled> Products on my watchlist ★ (and their target prices)</label>
+      <label><input type="checkbox" id="aPredict" ${a.predict !== false ? "checked" : ""}> ⏳ Before a watched product's predicted sale</label>
       <label><input type="checkbox" id="aAll" ${a.all_drops ? "checked" : ""}> Any price drop of at least <input type="number" id="aMin" min="5" max="90" step="5" value="${a.min_drop}"> %</label>
       <div><div class="tip">…only at these stores (none = all)</div><div class="pick" id="aStores">${Object.entries(LABELS).map(([k, l]) =>
         `<label><input type="checkbox" value="${k}" ${a.stores.includes(k) ? "checked" : ""}> ${esc(l)}</label>`).join("")}</div></div>
@@ -903,7 +904,8 @@ $("alertsBtn").onclick = async () => {
     const pick = id => [...document.querySelectorAll(`#${id} input:checked`)].map(i => i.value);
     const next = { enabled: $("aOn").checked, all_drops: $("aAll").checked, min_drop: +$("aMin").value || 20,
       stores: pick("aStores"), hubs: document.getElementById("aHubs") ? pick("aHubs").map(Number) : [], categories: pick("aCats"),
-      words: $("aWords").value.split(",").map(x => x.trim()).filter(Boolean), sound: $("aSound").checked };
+      words: $("aWords").value.split(",").map(x => x.trim()).filter(Boolean), sound: $("aSound").checked,
+      predict: $("aPredict").checked };
     try {
       if (next.enabled) {
         if (Notification.permission !== "granted" && await Notification.requestPermission() !== "granted") {

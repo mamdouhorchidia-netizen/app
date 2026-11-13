@@ -1226,3 +1226,91 @@ class BreadfastLinks(unittest.TestCase):
         self.assertEqual(o.url, "https://app.breadfast.com/products?id=27460485")
         l = links("breadfast", o.url, o.extra)
         self.assertEqual((l["web"], l["android"], l["ios"]), (o.url,) * 3)
+
+
+class PredictedSaleAlerts(unittest.TestCase):
+    def test_a_watcher_hears_before_the_sale(self):
+        from deals import push
+        path = os.path.join(tempfile.mkdtemp(), "d.sqlite3")
+        con = db.connect(path)
+        t0 = 1_760_000_000
+        for day, price in [(0, 100), (7, 80), (9, 100), (14, 80), (16, 100)]:  # on sale every 7 days
+            for k in (0, 60):  # a jump this big counts when seen twice
+                db.save_offers(con, [Offer("talabat", "x", "Tea", price)], t0 + day * DAY + k)
+        pid = con.execute("SELECT id FROM products").fetchone()[0]
+        con.execute("INSERT INTO push_subs (endpoint, subscription, prefs, created) VALUES (?, ?, ?, ?)",
+                    ("https://fcm.googleapis.com/x", json.dumps({"endpoint": "https://fcm.googleapis.com/x"}),
+                     json.dumps({"watch": [pid], "lang": "ar"}), t0))
+        con.commit()
+        n = push.Notifier.__new__(push.Notifier)
+        n.vapid, n.log = None, print
+        sent = []
+        now = t0 + 20 * DAY + 3600  # next sale due on day 21
+        self.assertEqual(n.predicted(con, now, lambda v, s, m: sent.append(m) or 201), 1)
+        self.assertIn("عرض متوقع", sent[0]["title"])
+        self.assertIn("80", sent[0]["body"])
+        self.assertEqual(n.predicted(con, now + 3600, lambda v, s, m: sent.append(m) or 201), 0)  # once per sale
+        con.close()
+
+
+class Raya(unittest.TestCase):
+    def test_rendered_category_page(self):
+        from deals.stores import raya
+        offers = raya.parse_page((FIX / "raya_category.html").read_text(), raya.category_name("mobiles-and-tablets"))
+        self.assertEqual(len(offers), 4)  # three grid cards and one carousel card
+        o = offers[0]
+        self.assertEqual((o.store, o.price, o.original_price), ("raya", 23000.0, 29900.0))
+        self.assertTrue(o.url.startswith("https://www.rayashop.com/ar/samsung-galaxy-a18"))
+        self.assertIn("سامسونج", o.name)
+        self.assertEqual(raya.category_name("screen-protectors/mobiles-and-tablets/mobile-accessories"),
+                         "Mobiles And Tablets / Screen Protectors")
+
+
+class TelegramBot(unittest.TestCase):
+    def setUp(self):
+        from deals import bot
+        self.path = os.path.join(tempfile.mkdtemp(), "d.sqlite3")
+        con = db.connect(self.path)
+        t0 = int(datetime.now(timezone.utc).timestamp()) - 5 * DAY
+        db.save_offers(con, [
+            Offer("talabat", "650270:904059", "KitKat Chunky Caramel 42g", 30, 40,
+                  url="https://www.talabat.com/egypt/grocery/650270/talabat-mart/product/kitkat-chunky/s/904059?aid=8025",
+                  extra={"hub": 650270, "hub_name": "El Obour El Hay 9"}),
+            Offer("amazon_eg", "B0FN7FVX8N", "Nescafe Gold 200g", 400, url="https://www.amazon.eg/-/en/dp/B0FN7FVX8N"),
+            Offer("amazon_eg", "B000000001", "Nescafe Classic 100g", 150, url="https://www.amazon.eg/-/en/dp/B000000001"),
+        ], t0)
+        con.close()
+        self.sent = []
+        self.bot = bot.Bot(self.path, "t", "https://deals.example", send=lambda m, p, timeout=20: self.sent.append((m, p)) or {})
+
+    def msg(self, text, chat=7):
+        self.bot.handle({"message": {"chat": {"id": chat}, "text": text}})
+        return self.sent[-1][1]
+
+    def test_a_pasted_link_finds_the_product(self):
+        r = self.msg("شوف ده https://www.talabat.com/egypt/talabat-mart/product/kitkat-chunky/s/904059")
+        self.assertIn("KitKat Chunky", r["text"])
+        self.assertIn("−25%", r["text"])
+        self.assertIn("https://deals.example/p/", r["text"])
+        self.assertEqual(r["reply_markup"]["inline_keyboard"][0][0]["callback_data"][:2], "w:")
+        r = self.msg("https://www.amazon.eg/dp/B0FN7FVX8N?ref=x")
+        self.assertIn("Nescafe Gold", r["text"])
+
+    def test_search_and_buttons(self):
+        r = self.msg("nescafe")
+        self.assertIn("1. Nescafe", r["text"])
+        self.assertEqual(len(r["reply_markup"]["inline_keyboard"][0]), 2)
+        pid = int(r["reply_markup"]["inline_keyboard"][0][0]["callback_data"][2:])
+        self.bot.handle({"callback_query": {"id": "q", "data": f"w:{pid}", "message": {"chat": {"id": 7}}}})
+        self.assertEqual(self.sent[-1][0], "answerCallbackQuery")
+        self.assertIn("أهلًا", self.msg("/start")["text"])
+        self.assertIn("ملقيتش", self.msg("zzzz")["text"])  # nothing found: a gentle answer
+        # a followed product that drops is announced
+        con = db.connect(self.path)
+        name = con.execute("SELECT name FROM products WHERE id=?", (pid,)).fetchone()[0]
+        db.save_offers(con, [Offer("amazon_eg", "B000000001" if "Classic" in name else "B0FN7FVX8N", name,
+                                   120 if "Classic" in name else 350)])
+        con.close()
+        self.assertEqual(self.bot.check_watches(), 1)
+        self.assertIn("نزل", self.sent[-1][1]["text"])
+        self.assertEqual(self.bot.check_watches(), 0)  # once

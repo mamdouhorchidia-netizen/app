@@ -12,6 +12,7 @@
 #     TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID   post big fresh deals to a Telegram channel (TELEGRAM_MIN_PCT 40, _PER_HOUR 10)
 #     AMAZON_TAG        an Amazon Associates tag added to Amazon links
 #     CONTACT_EMAIL / TELEGRAM_CHANNEL_URL   shown on /contact · DREAM_DELAY / KENZZ_DELAY   seconds between requests (3)
+#     RAYA_DELAY        seconds between Raya pages (10; each is rendered in Chrome) · TELEGRAM_BOT=0 turns the chat bot off
 #   /data also holds settings.json (hubs), talabat_hubs.json (which hub serves which area) and vapid.json (the
 #   key that signs notifications: keep it, or every phone has to turn alerts on again)
 FROM python:3.12-slim

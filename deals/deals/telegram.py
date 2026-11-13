@@ -22,7 +22,7 @@ from . import finder
 
 API = "https://api.telegram.org"
 AR_STORE = {"talabat": "طلبات مارت", "amazon_eg": "أمازون مصر", "jumia": "جوميا", "breadfast": "بريدفاست", "dream2000": "دريم 2000",
-            "kenzz": "كنز"}
+            "kenzz": "كنز", "raya": "راية شوب"}
 
 
 def _money(n) -> str:
