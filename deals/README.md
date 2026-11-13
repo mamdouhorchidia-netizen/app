@@ -43,7 +43,8 @@ talabat and Amazon and your Breadfast account flagged within hours. The delays c
 | Breadfast | A **capture of the app's own traffic** from your phone, imported once and then refreshed automatically. | Ready for your first capture (steps below). |
 | Dream 2000 | Its public **Shopify catalogue** (`/products.json`, 250 products a page): price, compare-at ("was") price, stock, brand. robots.txt allows it. 1 request every 3 s (`DREAM_DELAY`). | Works. Thousands of appliances and electronics; a sweep is about 20 pages. |
 | Kenzz | Its public pages (`__NEXT_DATA__`): price, market price, stock, tags, and the **promo code** each product shows (e.g. KBF26), which feeds /coupons by itself. A category page lists its top 20, so it reads all ~1,080 category pages from Kenzz's sitemap plus the home page, 1 every 3 s (`KENZZ_DELAY`). robots.txt allows everything. | Works. A sweep takes about an hour. |
-| Others tried | Raya Shop, Spinneys and Seoudi answer but build their product lists in the browser (next: render them in headless Chrome, as for Amazon's deals); 2B and Hyper One block bots (Cloudflare / 403); Tawheed & Nour and Gourmet didn't answer. Noon, Carrefour and B.TECH block us: they need their affiliate programs. | Not added yet. |
+| Raya Shop | Its category pages, **rendered in headless Chrome** (Raya builds its lists with JavaScript): name, price, struck-through price, picture. robots.txt allows category pages and closes their ?p= page-2 variants, so it reads the first page (~20 products) of each of the ~800 categories in Raya's sitemap, deal lists first, 1 page every 10 s (`RAYA_DELAY`). | Works. A sweep takes a few hours. |
+| Others tried | Spinneys and Seoudi show no products until a delivery district is picked on a map; 2B and Hyper One block bots (Cloudflare / 403); Tawheed & Nour and Gourmet didn't answer. Noon, Carrefour and B.TECH block us: they need their affiliate programs. | Not added. |
 
 ### Amazon.eg without the API
 - **Today's Deals** is built by JavaScript, so it's opened in headless Chrome (`deals/browser.py`) once per
@@ -170,6 +171,12 @@ talabat sweep; up to 10 can be chosen.
 - **⏳ Sale rhythm** (`deals/forecast.py`): from each product's own history, how often it goes on sale, how far, how
   long a sale lasts, and when the next is due. The advice turns to **Wait** when a sale at least 7 % cheaper is due
   within 10 days. Shown only after two sales have actually been seen.
+- **🤖 Telegram bot** (`deals/bot.py`, on with `TELEGRAM_BOT_TOKEN`): send it a product name or a store link and it
+  answers with the price in every store we track, the advice, fake-discount warnings, the sale rhythm, codes and a
+  link; /deals, /drops, /mine. 🔔 on any answer follows the product: the bot writes when its price drops and the day
+  before a predicted sale. `TELEGRAM_BOT=0` turns it off (the channel poster keeps working).
+- **⏳ Predicted-sale alerts:** phones with alerts on hear about a watched product the day before its sale rhythm says
+  a sale is due (once per sale; a setting in 🔔).
 - **🎟️ Codes the stores show** (Kenzz) appear on the cards ("KBF26: 543") and on /coupons, counted and ranked.
 
 ## How deals are decided (`deals/finder.py`)

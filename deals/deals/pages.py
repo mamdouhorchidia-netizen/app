@@ -14,9 +14,9 @@ from .stores import LABELS
 
 CAIRO = timezone(timedelta(hours=2))
 AR_STORE = {"talabat": "طلبات مارت", "amazon_eg": "أمازون مصر", "jumia": "جوميا", "breadfast": "بريدفاست", "dream2000": "دريم 2000",
-            "kenzz": "كنز"}
+            "kenzz": "كنز", "raya": "راية شوب"}
 APP = {"talabat": "talabat", "amazon_eg": "Amazon", "jumia": "Jumia", "breadfast": "Breadfast", "dream2000": "Dream 2000",
-       "kenzz": "Kenzz"}
+       "kenzz": "Kenzz", "raya": "Raya"}
 
 
 def e(s) -> str:
@@ -32,7 +32,7 @@ def money(n) -> str:
 CSS = """
 :root { --bg:#f6f5f2; --panel:#fff; --ink:#1b1a17; --muted:#6d6a63; --faint:#a6a29a; --line:#e4e1da; --accent:#d6402b;
   --good:#1f7a4d; --good-bg:#e3f3ea; --warn:#9a6a00; --warn-bg:#fbf0d4; --chip:#efede8; --shadow:0 1px 2px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.04);
-  --talabat:#ff5a00; --amazon_eg:#232f3e; --breadfast:#a80080; --jumia:#f68b1e; --dream2000:#0b4ea2; --kenzz:#7b2cbf; }
+  --talabat:#ff5a00; --amazon_eg:#232f3e; --breadfast:#a80080; --jumia:#f68b1e; --dream2000:#0b4ea2; --kenzz:#7b2cbf; --raya:#c8102e; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#121211; --panel:#1c1b19; --ink:#f0eee9; --muted:#a29e95;
   --faint:#6f6b64; --line:#2f2d29; --accent:#ff6b55; --good:#5cc98f; --good-bg:#173326; --warn:#e6b84d; --warn-bg:#3a2f12; --chip:#262421;
   --shadow:none; --amazon_eg:#8aa0bb; } }

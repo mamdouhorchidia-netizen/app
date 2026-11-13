@@ -147,6 +147,39 @@ def message(drops: list[dict]) -> dict:
             "url": "/?sort=newest&status=new", "tag": "deals-batch", "image": top.get("image") or ""}
 
 
+def predicted_message(p: dict, r: dict, lang: str = "ar") -> dict:
+    """A watched product's sale is due (forecast.rhythm): say so before it happens."""
+    days = r["next_in_days"]
+    if lang == "ar":
+        when = "النهارده أو بكره" if days <= 1 else f"خلال {round(days)} أيام"
+        return {"title": f"⏳ عرض متوقع: {p['name'][:60]}",
+                "body": f"بيعمل عرض كل حوالي {round(r['every_days'])} يوم وغالبًا بينزل لـ {r['typical_sale']:g} ج.م "
+                        f"(دلوقتي {p['price']:g}). العرض الجاي غالبًا {when}.",
+                "url": f"/p/{p['id']}", "tag": f"due-{p['id']}", "image": p.get("image") or ""}
+    when = "today or tomorrow" if days <= 1 else f"within {round(days)} days"
+    return {"title": f"⏳ Sale due: {p['name'][:60]}",
+            "body": f"It goes on sale about every {round(r['every_days'])} days, usually to {r['typical_sale']:g} EGP "
+                    f"(now {p['price']:g}). The next one is likely {when}.",
+            "url": f"/p/{p['id']}", "tag": f"due-{p['id']}", "image": p.get("image") or ""}
+
+
+def due_sales(con, ids: list[int], now: int, within_days: float = 1.0) -> dict:
+    """{product id: (product, rhythm)} for the products whose next sale is due within `within_days`."""
+    from . import forecast
+    out = {}
+    for pid in set(ids):
+        p = con.execute("SELECT id, name, price, image, in_stock FROM products WHERE id=?", (pid,)).fetchone()
+        if not p or not p["in_stock"]:
+            continue
+        rows = [dict(r) for r in con.execute("SELECT at, price, original_price, in_stock FROM prices"
+                                             " WHERE product_id=? AND at > ? ORDER BY at", (pid, now - 120 * 86400))]
+        r = forecast.rhythm(rows, now) if len(rows) >= 3 else None
+        if r and not r["on_sale"] and r["next_in_days"] is not None and r["next_in_days"] <= within_days \
+                and r["typical_sale"] < p["price"] * 0.97:
+            out[pid] = (dict(p), r)
+    return out
+
+
 # ---- the minute-by-minute check --------------------------------------------------------------------
 
 class Notifier:
@@ -155,6 +188,7 @@ class Notifier:
         self.vapid = Vapid.load_or_create(os.path.join(os.path.dirname(os.path.abspath(db_path)), "vapid.json"))
         self.last = int(time.time())
         self.pending = {}  # endpoint -> drops waiting for that subscriber's gap
+        self.last_forecast = 0  # predicted sales are looked at once an hour
 
     def drops_since(self, con, since: int) -> list[dict]:
         rows = con.execute("""
@@ -200,8 +234,37 @@ class Notifier:
                     else:
                         con.execute("UPDATE push_subs SET fails=fails+1 WHERE endpoint=?", (sub["endpoint"],))
                         self.log(f"push: {status} from {urlsplit(sub['endpoint']).netloc}")
+            if now - self.last_forecast >= 3600:
+                self.last_forecast = now
+                self.predicted(con, now, sender)
         finally:
             con.close()
+
+    def predicted(self, con, now: int, sender=send) -> int:
+        """Tell each subscriber, once per expected sale, that a product on their watchlist is about to go on sale."""
+        con.execute("CREATE TABLE IF NOT EXISTS push_predicted (endpoint TEXT, product_id INTEGER, at INTEGER)")
+        subs = con.execute("SELECT * FROM push_subs").fetchall()
+        wanted = {}
+        for sub in subs:
+            prefs = json.loads(sub["prefs"] or "{}")
+            if prefs.get("predict", True) and prefs.get("watch"):
+                wanted[sub["endpoint"]] = (sub, prefs, [int(x) for x in prefs["watch"]])
+        due = due_sales(con, [i for _, _, ids in wanted.values() for i in ids], now)
+        sent = 0
+        for endpoint, (sub, prefs, ids) in wanted.items():
+            for pid in ids:
+                if pid not in due or con.execute("SELECT 1 FROM push_predicted WHERE endpoint=? AND product_id=? AND at>?",
+                                                 (endpoint, pid, now - 5 * 86400)).fetchone():
+                    continue
+                p, r = due[pid]
+                status = sender(self.vapid, json.loads(sub["subscription"]), predicted_message(p, r, prefs.get("lang", "ar")))
+                with con:
+                    con.execute("INSERT INTO push_predicted VALUES (?, ?, ?)", (endpoint, pid, now))
+                    if status in (404, 410):
+                        con.execute("DELETE FROM push_subs WHERE endpoint=?", (endpoint,))
+                sent += 1
+                break  # one forecast an hour per subscriber is plenty
+        return sent
 
     def run_forever(self):
         while True:
