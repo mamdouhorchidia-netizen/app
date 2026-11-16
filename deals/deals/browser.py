@@ -13,8 +13,14 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import threading
 
 from .models import NotConfigured
+
+
+# One Chrome at a time across all store threads: two at once plus the app went past the container's
+# 1.5 GB memory limit and the kernel OOM-killed the app (41 restarts).
+_one_chrome = threading.Lock()
 
 
 class BrowserUnavailable(NotConfigured):
@@ -32,6 +38,11 @@ def find_chrome() -> str:
 
 def render(url: str, budget_ms: int = 15000, timeout: float = 90) -> str:
     """The page's DOM after its scripts ran for up to `budget_ms` of page time."""
+    with _one_chrome:
+        return _render(url, budget_ms, timeout)
+
+
+def _render(url: str, budget_ms: int, timeout: float) -> str:
     chrome = find_chrome()
     # A throwaway profile per run, removed below. Without it Chrome leaves a ~100 MB scoped_dir under
     # ~/.config and ~/.cache on every run (the SIGKILL below stops it cleaning up), which filled the disk.
