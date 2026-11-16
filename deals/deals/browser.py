@@ -12,6 +12,7 @@ import os
 import shutil
 import signal
 import subprocess
+import tempfile
 
 from .models import NotConfigured
 
@@ -32,7 +33,10 @@ def find_chrome() -> str:
 def render(url: str, budget_ms: int = 15000, timeout: float = 90) -> str:
     """The page's DOM after its scripts ran for up to `budget_ms` of page time."""
     chrome = find_chrome()
-    args = [chrome, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
+    # A throwaway profile per run, removed below. Without it Chrome leaves a ~100 MB scoped_dir under
+    # ~/.config and ~/.cache on every run (the SIGKILL below stops it cleaning up), which filled the disk.
+    profile = tempfile.mkdtemp(prefix="deals-chrome-")
+    args = [chrome, "--headless=new", f"--user-data-dir={profile}", f"--disk-cache-dir={profile}/cache", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
             "--no-first-run", "--no-default-browser-check", "--mute-audio", "--hide-scrollbars",
             "--window-size=1366,2000", f"--virtual-time-budget={budget_ms}", "--dump-dom", url]
     proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
@@ -51,6 +55,7 @@ def render(url: str, budget_ms: int = 15000, timeout: float = 90) -> str:
             os.killpg(proc.pid, signal.SIGKILL)  # no stray helpers left behind
         except ProcessLookupError:
             pass
+        shutil.rmtree(profile, ignore_errors=True)
     if proc.returncode != 0 and not out:
         raise RuntimeError(f"Chrome failed ({proc.returncode}): {err.decode(errors='replace')[-300:]}")
     return out.decode("utf-8", errors="replace")
