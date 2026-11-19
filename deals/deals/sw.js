@@ -1,10 +1,41 @@
 // Live deals: makes the site installable and shows price-drop notifications, even when it's closed.
 const VIBRATE = [90, 60, 90, 60, 260];  // the deals "da-da-daaa" buzz (Android); the sound is the phone's own
 
-self.addEventListener("install", e => self.skipWaiting());
-self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
-// network first; the site needs fresh prices, so nothing is served from a cache
-self.addEventListener("fetch", () => {});
+// The page shell (and its translations) is kept as a last good copy, so the site still opens with no connection and
+// says so, instead of the browser's error page. Network first, always: the server sends these with an ETag and
+// no-cache, so a deploy shows at once; the copy is used only when the network fails. Prices (/api/*) are never cached.
+const SHELL = "deals-shell-v2";
+const SHELL_URLS = ["/", "/i18n.js"];
+const shellKey = url => url.pathname === "/live" ? "/" : url.pathname;  // "/?deals=1…" is the same page
+
+self.addEventListener("install", e => {
+  e.waitUntil(caches.open(SHELL).then(c => c.addAll(SHELL_URLS)).catch(() => {}).then(() => self.skipWaiting()));
+});
+self.addEventListener("activate", e => e.waitUntil((async () => {
+  for (const k of await caches.keys()) if (k !== SHELL && k.startsWith("deals-shell")) await caches.delete(k);
+  await self.clients.claim();
+})()));
+self.addEventListener("fetch", e => {
+  const req = e.request, url = new URL(req.url);
+  if (req.method !== "GET" || url.origin !== self.location.origin) return;
+  if (!(url.pathname === "/" || url.pathname === "/live" || url.pathname === "/i18n.js")) return;  // everything else: the network, untouched
+  e.respondWith((async () => {
+    try {
+      const res = await fetch(req);
+      if (res.ok && res.type === "basic") {
+        const copy = res.clone();
+        e.waitUntil(caches.open(SHELL).then(c => c.put(shellKey(url), copy)).catch(() => {}));
+        return res;
+      }
+      if (res.status < 500) return res;
+      return (await caches.match(shellKey(url), { cacheName: SHELL })) || res;  // the server is down behind a proxy
+    } catch (err) {
+      const hit = await caches.match(shellKey(url), { cacheName: SHELL });
+      if (hit) return hit;
+      throw err;
+    }
+  })());
+});
 
 self.addEventListener("push", e => {
   let m = {};

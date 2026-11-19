@@ -149,6 +149,12 @@ aside { position: sticky; top: 176px; align-self: start; max-height: calc(100vh 
 .card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--muted) 40%, var(--line)); }
 .card.fresh { animation: fresh 2.5s ease-out; }
 @keyframes fresh { from { box-shadow: 0 0 0 3px var(--accent); } }
+/* a card whose price just changed: its background is tinted (green down, red up) and fades back; colour only */
+.card.moved { animation: moved 8s ease-out; }
+.card.moved.up { animation-name: moved-up; }
+@keyframes moved { 0%, 30% { background-color: color-mix(in srgb, var(--drop) 15%, var(--panel)); } }
+@keyframes moved-up { 0%, 30% { background-color: color-mix(in srgb, var(--accent) 13%, var(--panel)); } }
+.marks, .sk { display: contents; }
 .card.out { opacity: .62; }
 .pic { position: relative; aspect-ratio: 1 / 1; background: var(--pic); display: grid; place-items: center; overflow: hidden; isolation: isolate; }
 /* in dark mode the photo sits on a dimmed plate inset in a dark tile; multiply melts the photo's own white
@@ -162,7 +168,13 @@ aside { position: sticky; top: 176px; align-self: start; max-height: calc(100vh 
 .score { position: absolute; top: 6px; inset-inline-end: 6px; width: 38px; height: 38px; }
 .score text { font-size: 12px; font-weight: 750; fill: #1b1a17; }
 .why .score { position: static; flex: none; width: 52px; height: 52px; }
-.store { position: absolute; bottom: 8px; inset-inline-start: 8px; color: #fff; font-size: 11px; font-weight: 650; padding: 2px 7px; border-radius: 5px; }
+.store { position: absolute; bottom: 8px; inset-inline-start: 8px; color: #fff; font-size: 11px; font-weight: 650; padding: 2px 7px; border-radius: 5px;
+  display: flex; flex-direction: column; align-items: flex-start; line-height: 1.3; max-width: calc(100% - 54px); }
+.store > span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* when the store last checked this price ("checked 40 s ago"): a second line on the store's chip, inside the
+   picture, so the card stays the same size */
+.store .chk { font-weight: 500; font-size: 10.5px; opacity: .92; font-variant-numeric: tabular-nums; }
+.store .chk:empty { display: none; }
 .watch { position: absolute; bottom: 6px; inset-inline-end: 6px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(255,255,255,.92);
   display: grid; place-items: center; cursor: pointer; color: #76736d; box-shadow: 0 1px 3px rgba(0,0,0,.15); font-size: 16px; z-index: 2; }
 .watch::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; }  /* 44px to tap */
@@ -233,6 +245,12 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
 .toasts { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; gap: 8px; width: min(420px, calc(100vw - 32px)); }
 .toast { background: var(--ink); color: var(--bg); padding: 11px 14px; border-radius: 12px; font-size: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.25); cursor: pointer; animation: up .25s ease-out; }
 @keyframes up { from { transform: translateY(10px); opacity: 0; } }
+/* "5 new deals ↑": shown instead of reshuffling the cards above someone who has scrolled down */
+.newpill { position: fixed; left: 50%; transform: translateX(-50%); top: 180px; z-index: 6; border: 0; border-radius: 999px; min-height: 44px;
+  padding: 0 18px; background: var(--ink); color: var(--bg); font-weight: 650; font-size: 14px; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,.25);
+  white-space: nowrap; animation: up .25s ease-out; }
+.newpill[hidden] { display: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .search .mic { position: absolute; inset-inline-end: 0; top: 50%; transform: translateY(-50%); border: 0; background: none; font-size: 17px; cursor: pointer;
   width: 44px; height: 44px; padding: 0; border-radius: 10px; }
@@ -307,7 +325,10 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
     transition-duration: .01ms !important; scroll-behavior: auto !important; }
-  .pulse, .mic.on, .card.fresh, .skel, .toast, .ticker-track { animation: none !important; }
+  .pulse, .mic.on, .card.fresh, .skel, .toast, .ticker-track, .newpill { animation: none !important; }
+  /* a changed price keeps a still tint while it is marked, instead of a fade */
+  .card.moved { animation: none !important; background-color: color-mix(in srgb, var(--drop) 12%, var(--panel)); }
+  .card.moved.up { background-color: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
   .card:hover { transform: none; }
   .ticker { overflow-x: auto; scrollbar-width: none; }
   .ticker::-webkit-scrollbar { display: none; }
@@ -333,7 +354,7 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
     </div>
     <nav class="nav" id="nav"><a href="/">Home</a><a href="/?deals=1&amp;sort=newest&amp;status=new">Just dropped</a><a href="/cats">Categories</a><a href="/stores">Stores</a><a href="/coupons">🎟️ Coupons</a><a href="/?recent=1">Recently viewed</a></nav>
     <div class="interp" id="interp" hidden></div>
-    <div class="status" id="status" tabindex="0">connecting…</div>
+    <div class="status" id="status" tabindex="0" data-noi18n>connecting…</div>
     <div class="offline" id="offline" role="alert" hidden><span><b>Can't reach the server.</b> <span id="offlineWhen"></span></span>
       <button type="button" class="btn" id="retry">Retry</button></div>
   </div>
@@ -406,16 +427,29 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
 <dialog id="dlg" aria-labelledby="dname"><div class="dlg" id="dbody"></div></dialog>
 <dialog id="panel"><div class="dlg" id="pbody"></div></dialog>
 <div class="toasts" id="toasts" aria-live="polite"></div>
+<button type="button" class="newpill" id="newPill" hidden data-noi18n></button>
+<div class="sr" id="announce" aria-live="polite" data-noi18n></div>
 
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = n => n == null ? "" : Number(n).toLocaleString("en-EG", { maximumFractionDigits: 2 });
-const ago = t => { if (!t) return "—"; const s = Math.max(0, Date.now() / 1000 - t);
-  return s < 60 ? Math.round(s) + " s ago" : s < 3600 ? Math.round(s / 60) + " min ago" : s < 86400 ? Math.round(s / 3600) + " h ago" : Math.round(s / 86400) + " d ago"; };
+// the server's clock: "ago" is measured from it, so a phone whose clock is off still says the right thing
+let skew = 0;
+const nowS = () => Date.now() / 1000 + skew;
+const setSkew = now => { if (now) skew = now - Date.now() / 1000; };
+const span = s => { s = Math.max(0, s);
+  return s < 60 ? [Math.round(s), "s"] : s < 3600 ? [Math.round(s / 60), "min"] : s < 86400 ? [Math.round(s / 3600), "h"] : [Math.round(s / 86400), "d"]; };
+const ago = t => { if (!t) return "—"; const [n, u] = span(nowS() - t); return `${n} ${u} ago`; };
 // dates and times in the page's language (Arabic months with the Western digits the rest of the page uses)
 const LOC = () => window.I18N && I18N.lang === "ar" ? "ar-EG-u-nu-latn" : undefined;
 const tr = s => window.I18N ? I18N.tr(s) : s;
+// text that changes by itself (times, counts) is written in the page's language here, in [data-noi18n],
+// so the translator isn't run on every tick
+const AR = () => !!(window.I18N && I18N.lang === "ar");
+const L = (en, ar) => AR() ? ar : en;
+const UNIT_AR = { s: "ث", min: "د", h: "س", d: "يوم" };
+const agoL = t => { if (!t) return "—"; const [n, u] = span(nowS() - t); return AR() ? `من ${n} ${UNIT_AR[u]}` : `${n} ${u} ago`; };
 const mins = s => s < 90 ? Math.round(s) + " s" : Math.round(s / 60) + " min";
 const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
                 set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
@@ -461,21 +495,21 @@ function toggleWatch(d, btn) {
   saveWatch();
   if (btn) btn.setAttribute("aria-pressed", String(!!watch[d.id]));
 }
-async function checkWatch() {
+async function checkWatch() {  // asked with its ETag, and only when the catalog was rebuilt
   const ids = Object.keys(watch);
   if (!ids.length) return;
-  try {
-    const r = await (await fetch(`/api/deals?deals=0&stock=all&limit=500&ids=${ids.join(",")}`)).json();
-    for (const d of r.items) {
-      const w = watch[d.id]; if (!w) continue;
-      const hitTarget = w.target && d.price <= w.target && (w.last == null || w.last > w.target);
-      const dropped = w.last != null && d.price < w.last;
-      if (hitTarget || dropped) notify(`${hitTarget ? "Target reached" : "Price drop"}: ${d.name}`,
-        `${fmt(w.last)} → ${fmt(d.price)} EGP at ${LABELS[d.store] || d.store}`, d.id);
-      w.last = d.price;
-    }
-    saveWatch();
-  } catch {}
+  const r = await getJSON(`/api/deals?deals=0&stock=all&limit=500&ids=${ids.join(",")}`);
+  if (!r) return;
+  let changed = false;
+  for (const d of r.items) {
+    const w = watch[d.id]; if (!w) continue;
+    const hitTarget = w.target && d.price <= w.target && (w.last == null || w.last > w.target);
+    const dropped = w.last != null && d.price < w.last;
+    if (hitTarget || dropped) notify(`${hitTarget ? "Target reached" : "Price drop"}: ${d.name}`,
+      `${fmt(w.last)} → ${fmt(d.price)} EGP at ${LABELS[d.store] || d.store}`, d.id);
+    if (w.last !== d.price) { w.last = d.price; changed = true; }
+  }
+  if (changed) saveWatch();
 }
 function notify(title, body, id) {
   if (typeof chime === "function") chime();
@@ -586,7 +620,8 @@ function tagsFor(d) {
   if (d.deal_label) t.push(`<span class="tag hot">${esc(d.deal_label)}</span>`);
   if (d.flags.includes("lowest")) t.push('<span class="tag good">lowest in 90 days</span>');
   if (d.flags.includes("new")) t.push(d.prev_price != null && d.price > d.prev_price
-    ? `<span class="tag warn">went up ${ago(d.since)}</span>` : `<span class="tag">dropped ${ago(d.since)}</span>`);
+    ? `<span class="tag warn">went up <span data-ago="${+d.since || 0}" data-noi18n></span></span>`
+    : `<span class="tag">dropped <span data-ago="${+d.since || 0}" data-noi18n></span></span>`);
   if (d.flags.includes("rose")) t.push(`<span class="tag warn">was ${fmt(d.recent_low)} lately</span>`);
   if (d.flags.includes("back")) t.push('<span class="tag good">back in stock</span>');
   if (d.cheapest && d.matches.length) t.push('<span class="tag good">cheapest of all stores</span>');
@@ -600,20 +635,31 @@ function tagsFor(d) {
   return t.join("");
 }
 const initial = n => esc((n || "?").trim()[0] || "?");
-function card(d, fresh) {
+// a card is made of parts; when new data arrives each part is compared on its own and only what changed is touched
+function partsOf(d) {
   const badge = d.discount_pct > 0 ? `<span class="badge ${d.kind === "drop" ? "drop" : ""}" title="${d.kind === "drop" ? "under its usual price" : "the store's own discount"}">−${Math.round(d.discount_pct)}%</span>` : "";
-  const unit = d.unit_text || "";
-  const was = d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : "";
+  const tags = tagsFor(d), sp = d.spark || [];
+  return {
+    marks: badge + (d.discount_pct > 0 ? scoreSVG(d.score) : ""),
+    tags, tagsKey: tags.replace(/ title="[^"]*"/g, ""),  // the verdict's explanation follows the clock: not a change
+    price: `<span class="now">${fmt(d.price)} <small>EGP</small></span>${d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : ""}`,
+    spark: sparkSVG(sp), sparkKey: JSON.stringify([sp.slice(0, -1), sp.length ? sp[sp.length - 1][1] : null]),  // its last point is "now"
+    meta: (d.hub_name ? `<span title="talabat hub">📍 ${esc(d.hub_name)}</span>` : "") + (d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : "")
+      + (d.saving > 0 ? `<span>save ${fmt(d.saving)}</span>` : "") + (d.unit_text ? `<span class="unit">${esc(d.unit_text)}</span>` : ""),
+    name: d.name || "", href: appHref(d), img: d.image || "",
+  };
+}
+function card(d, fresh, p = partsOf(d)) {
   return `<article class="card${fresh ? " fresh" : ""}${d.in_stock ? "" : " out"}" data-id="${d.id}">
-    <div class="pic">${d.image ? `<img loading="lazy" src="${esc(d.image)}" alt="" data-i="${initial(d.name)}">` : `<span class="ph">${initial(d.name)}</span>`}
-      ${badge}${d.discount_pct > 0 ? scoreSVG(d.score) : ""}
-      <span class="store" style="background:var(--${esc(d.store)}-bg,#555);color:var(--${esc(d.store)}-fg,#fff)">${esc(LABELS[d.store] || d.store)}</span>
+    <div class="pic">${p.img ? `<img loading="lazy" src="${esc(p.img)}" alt="" data-i="${initial(d.name)}">` : `<span class="ph">${initial(d.name)}</span>`}
+      <span class="marks">${p.marks}</span>
+      <span class="store" style="background:var(--${esc(d.store)}-bg,#555);color:var(--${esc(d.store)}-fg,#fff)"><span class="sn">${esc(LABELS[d.store] || d.store)}</span><span class="chk" data-noi18n></span></span>
       <button class="watch" aria-label="Watch this price" aria-pressed="${!!watch[d.id]}" data-watch>★</button></div>
-    <div class="body"><div class="name" dir="auto"><a href="/p/${d.id}" data-detail>${esc(d.name)}</a></div>
-      <div class="tags">${tagsFor(d)}</div>
-      <div class="priceline"><div><span class="now">${fmt(d.price)} <small>EGP</small></span>${was}</div>${sparkSVG(d.spark)}</div>
-      <div class="meta">${d.hub_name ? `<span title="talabat hub">📍 ${esc(d.hub_name)}</span>` : ""}${d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : ""}${d.saving > 0 ? `<span>save ${fmt(d.saving)}</span>` : ""}${unit ? `<span class="unit">${unit}</span>` : ""}</div>
-      <div class="cta"><a href="${esc(appHref(d))}" target="_blank" rel="noopener" data-open>Open in ${esc(appLabel[d.store] || "store")} ↗</a></div>
+    <div class="body"><div class="name" dir="auto"><a href="/p/${d.id}" data-detail>${esc(p.name)}</a></div>
+      <div class="tags">${p.tags}</div>
+      <div class="priceline"><div class="pr">${p.price}</div><span class="sk">${p.spark}</span></div>
+      <div class="meta">${p.meta}</div>
+      <div class="cta"><a href="${esc(p.href)}" target="_blank" rel="noopener" data-open>Open in ${esc(appLabel[d.store] || "store")} ↗</a></div>
     </div></article>`;
 }
 // a picture that fails to load becomes the product's first letter
@@ -621,8 +667,159 @@ document.addEventListener("error", e => { const img = e.target;
   if (img.tagName === "IMG" && img.dataset.i) { const s = document.createElement("span"); s.className = "ph"; s.textContent = img.dataset.i; img.replaceWith(s); }
 }, true);
 
+// ---------- what's on screen, and patching it ----------
+let items = [], total = 0, seen = new Set(), pending = null, countHTML = "", facetsKey = "";
+const seenAt = new Map();  // product id -> when its store last checked the price (server time)
+const noteSeen = (id, t) => { if (t && !(seenAt.get(id) >= t)) seenAt.set(id, t); };
+const onScreen = new Set();
+const visIO = new IntersectionObserver(es => es.forEach(e => e.isIntersecting ? onScreen.add(e.target) : onScreen.delete(e.target)),
+  { rootMargin: "200px 0px" });
+function bind(n, d, p) { n._d = d; n._p = p; seen.add(d.id); visIO.observe(n); tickAgo(n); }
+function makeCard(d, fresh) {
+  const p = partsOf(d), t = document.createElement("template");
+  t.innerHTML = card(d, fresh, p);
+  const n = t.content.firstElementChild;
+  bind(n, d, p);
+  if (fresh) setTimeout(() => n.classList.remove("fresh"), 3000);
+  return n;
+}
+const emptyHTML = () => `<div class="empty">${F.watch ? "Your watchlist is empty: tap ★ on any product to follow its price." :
+  "Nothing matches these filters yet. The first sweep of each store takes about 15 minutes, and price-drop deals need a few days of history."}</div>`;
+function renderAll(list) {
+  const ps = list.map(partsOf), grid = $("grid");
+  onScreen.clear(); visIO.disconnect();
+  grid.innerHTML = list.length ? list.map((d, i) => card(d, false, ps[i])).join("") : emptyHTML();
+  if (list.length) [...grid.children].forEach((n, i) => bind(n, list[i], ps[i]));
+  items = list.slice(); pending = null; hidePill();
+}
+function appendCards(list) {
+  const have = new Set(items.map(d => d.id)), add = list.filter(d => !have.has(d.id));
+  if (!items.length) return renderAll(add);
+  const frag = document.createDocumentFragment();
+  add.forEach(d => frag.append(makeCard(d, false)));
+  $("grid").append(frag);
+  items = items.concat(add);
+}
+function cue(n, dir) {  // the brief tint on a card whose price changed
+  clearTimeout(n._cueT); n.classList.remove("moved", "up", "down"); void n.offsetWidth;
+  n.classList.add("moved", dir); n._cueT = setTimeout(() => n.classList.remove("moved", "up", "down"), 8000);
+}
+function patchCard(n, d) {  // returns true when the price moved
+  const o = n._p, od = n._d, p = partsOf(d), q = s => n.querySelector(s);
+  if (o.marks !== p.marks) q(".marks").innerHTML = p.marks;
+  if (o.tagsKey !== p.tagsKey) { q(".tags").innerHTML = p.tags; tickAgo(q(".tags")); }
+  if (o.price !== p.price) q(".pr").innerHTML = p.price;
+  if (o.sparkKey !== p.sparkKey) q(".sk").innerHTML = p.spark;
+  if (o.meta !== p.meta) q(".meta").innerHTML = p.meta;
+  if (o.name !== p.name) q("[data-detail]").textContent = p.name;
+  if (o.href !== p.href) q("[data-open]").href = p.href;
+  if (o.img !== p.img) {
+    const pic = q(".pic"), old = pic.querySelector("img, .ph");
+    let nu;
+    if (p.img) { nu = document.createElement("img"); nu.loading = "lazy"; nu.alt = ""; nu.dataset.i = (d.name || "?").trim()[0] || "?"; nu.src = p.img; }
+    else { nu = document.createElement("span"); nu.className = "ph"; nu.textContent = (d.name || "?").trim()[0] || "?"; }
+    old ? old.replaceWith(nu) : pic.prepend(nu);
+  }
+  n.classList.toggle("out", !d.in_stock);
+  const w = String(!!watch[d.id]), wb = q("[data-watch]");
+  if (wb.getAttribute("aria-pressed") !== w) wb.setAttribute("aria-pressed", w);
+  n._p = p; n._d = d;
+  if (od && (od.price !== d.price || od.in_stock !== d.in_stock)) cue(n, d.price > od.price ? "up" : "down");
+  return !!od && od.price !== d.price;
+}
+// the longest run of cards already in the right order: those stay put, the rest move around them
+function lis(a) {
+  const tails = [], at = [], prev = [];
+  a.forEach((v, k) => { if (v < 0) return;
+    let lo = 0, hi = tails.length; while (lo < hi) { const m = (lo + hi) >> 1; if (tails[m] < v) lo = m + 1; else hi = m; }
+    tails[lo] = v; at[lo] = k; prev[k] = lo ? at[lo - 1] : -1; });
+  const keep = new Set(); for (let k = at[tails.length - 1]; k !== undefined && k >= 0; k = prev[k]) keep.add(k);
+  return keep;
+}
+function restructure(next, have) {  // insert, remove and reorder cards, keeping every card that stays (and focus)
+  const grid = $("grid"), focused = document.activeElement, had = grid.contains(focused);
+  const keepIds = new Set(next.map(d => d.id));
+  for (const [id, n] of have) if (!keepIds.has(id)) { visIO.unobserve(n); onScreen.delete(n); n.remove(); have.delete(id); }
+  const pos = new Map([...have.values()].map((n, i) => [n, i]));
+  let added = 0;
+  const nodes = next.map(d => { let n = have.get(d.id); if (!n) { n = makeCard(d, !seen.has(d.id)); added++; } return n; });
+  const stay = lis(nodes.map(n => pos.has(n) ? pos.get(n) : -1));
+  let ref = null;
+  for (let k = nodes.length - 1; k >= 0; k--) {
+    const n = nodes[k];
+    if (!stay.has(k)) {
+      if (n.isConnected && grid.moveBefore) { try { grid.moveBefore(n, ref); } catch { grid.insertBefore(n, ref); } }
+      else grid.insertBefore(n, ref);
+    }
+    ref = n;
+  }
+  items = next.slice(); pending = null; hidePill();
+  if (had && focused.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
+  return added;
+}
+function nearTop() {  // the first row of cards is still (half) in view below the header
+  const c = $("grid").querySelector(".card"); if (!c) return true;
+  const r = c.getBoundingClientRect();
+  return r.top >= document.querySelector("header").getBoundingClientRect().bottom - r.height / 2;
+}
+function patchGrid(next, force = false) {
+  const grid = $("grid"), have = new Map();
+  for (const n of grid.children) if (n._d) have.set(n._d.id, n);
+  if (!have.size || !next.length) { renderAll(next); return; }
+  const byId = new Map(next.map(d => [d.id, d]));
+  let changed = 0, added = 0, held = 0;
+  for (const [id, n] of have) { const d = byId.get(id); if (d && patchCard(n, d)) changed++; }  // prices: always, in place
+  items = items.map(d => byId.get(d.id) || d);
+  const same = next.length === items.length && next.every((d, i) => items[i].id === d.id);
+  if (same) { pending = null; hidePill(); }
+  else if (force || nearTop()) added = restructure(next, have);
+  else { pending = next; held = next.filter(d => !have.has(d.id)).length; showPill(held); }  // don't move what they're reading
+  announce(changed, added, held);
+}
+const noun = n => F.deals === "1" && !F.watch && !F.recent ? L(`new deal${n > 1 ? "s" : ""}`, "عرض جديد") : L(`new product${n > 1 ? "s" : ""}`, "منتج جديد");
+function showPill(n) {
+  const b = $("newPill"), t = n ? `${n} ${noun(n)} ↑` : L("Updated order ↑", "الترتيب اتحدّث ↑");
+  if (b.textContent !== t) b.textContent = t;
+  b.style.top = Math.round(document.querySelector("header").getBoundingClientRect().bottom + 10) + "px";
+  b.hidden = false;
+}
+function hidePill() { $("newPill").hidden = true; }
+$("newPill").onclick = () => {
+  const kb = document.activeElement === $("newPill");
+  if (pending) patchGrid(pending, true);
+  hidePill();
+  window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  if (kb) $("grid").querySelector("[data-detail]")?.focus({ preventScroll: true });
+};
+let scrollQ = 0;
+addEventListener("scroll", () => {  // back near the top by themselves: show what was held
+  if (pending && !scrollQ) scrollQ = requestAnimationFrame(() => { scrollQ = 0; if (pending && nearTop()) patchGrid(pending, true); });
+}, { passive: true });
+function announce(changed, added, held) {  // one short summary for screen readers, never one per card
+  const parts = [];
+  if (changed) parts.push(L(`${changed} price${changed > 1 ? "s" : ""} changed`, `${changed} سعر اتغير`));
+  if (added) parts.push(`${added} ${noun(added)}`);
+  if (held) parts.push(L(`${held} ${noun(held)} above: the button at the top shows them`, `${held} ${noun(held)} فوق: الزرار اللي فوق بيعرضهم`));
+  if (parts.length) $("announce").textContent = parts.join(" · ");
+}
+// "checked 40 s ago": when the store last checked this price (seconds in steps of 10), under the store's name
+function checkedText(t) {
+  if (!t) return "";
+  const s = Math.max(0, nowS() - t);
+  if (s < 10) return L("checked just now", "اتشيّك دلوقتي");
+  const [n, u] = s < 60 ? [Math.floor(s / 10) * 10, "s"] : span(s);
+  return AR() ? `اتشيّك من ${n} ${UNIT_AR[u]}` : `checked ${n} ${u} ago`;
+}
+function tickAgo(root = document) {  // times that count up by themselves; only text that changed is written
+  for (const n of root.querySelectorAll("[data-ago]")) { const t = agoL(+n.dataset.ago); if (n.textContent !== t) n.textContent = t; }
+  for (const c of root.querySelectorAll(".chk")) {
+    const k = c.closest(".card"), t = checkedText(k && k._d && seenAt.get(k._d.id));
+    if (c.textContent !== t) c.textContent = t;
+  }
+}
+
 // ---------- loading ----------
-let items = [], total = 0, seen = new Set(), firstLoad = true, loading = false, timer, sig = "", lastStatus = [], lastChanges = 0;
+let loading = false, gen = 0, dealsStale = false, lastStatus = [], lastChanges = 0;
 const PAGE = 48;
 function params(offset, limit) {
   const p = new URLSearchParams({ deals: F.deals, stock: F.stock, sort: F.sort, limit, offset });
@@ -643,45 +840,78 @@ function params(offset, limit) {
   else if (F.recent) { p.set("ids", store.get("recent", []).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); p.set("sort", "newest"); }
   return p;
 }
-async function load({ append = false, quiet = false } = {}) {
-  if (loading) return; loading = true;
-  const offset = append ? items.length : 0, limit = append ? PAGE : Math.max(PAGE, quiet ? items.length : PAGE);
-  if (!quiet && !append) $("grid").innerHTML = Array.from({ length: 8 }, () => '<div class="skel"></div>').join("");
+// /api answers are no-store, so the browser never revalidates them: the page keeps each ETag and asks with it.
+// null means 304 (what's on screen is still right). keep:false leaves the ETag to be kept once the answer is used.
+const etags = new Map();
+async function getJSON(url, { cond = true, keep = true } = {}) {
+  const tag = cond && etags.get(url);
+  const res = await fetch(url, tag ? { headers: { "If-None-Match": tag } } : undefined);
+  if (res.status === 304) return null;
+  if (!res.ok) { const e = new Error("HTTP " + res.status); e.status = res.status; throw e; }
+  const body = await res.json(), et = res.headers.get("ETag");
+  const save = () => { if (!et) return; etags.delete(url); etags.set(url, et); if (etags.size > 40) etags.delete(etags.keys().next().value); };
+  if (keep) save(); else Object.defineProperty(body, "keep", { value: save });
+  return body;
+}
+function facets(r, force) {
+  window.lastFacets = r.facets;
+  const k = JSON.stringify([r.facets, r.labels]);
+  if (!force && k === facetsKey) return;
+  facetsKey = k;
+  // a refresh that redraws the filters puts keyboard focus back on the same box
+  const a = document.activeElement, box = a && a.closest && a.closest("#fStores, #fHubs, #hubBar");
+  const which = box && (a.value || a.dataset.h);
+  renderFacets(r);
+  if (box) [...$(box.id).querySelectorAll("input, button")].find(x => (x.value || x.dataset.h) === which)?.focus({ preventScroll: true });
+}
+function count(r) {
+  total = r.total;
+  const h = `${total.toLocaleString()} <small>${F.deals === "1" && !F.watch ? (total === 1 ? "deal" : "deals") : "products"}</small>`;
+  if (h !== countHTML) { countHTML = h; $("count").innerHTML = h; }
+}
+function took(list) { list.forEach(d => noteSeen(d.id, d.last_seen)); }
+async function load({ append = false } = {}) {
+  if (append && loading) return;
+  const my = append ? gen : ++gen;
+  loading = true;
+  if (!append) { $("grid").innerHTML = Array.from({ length: 8 }, () => '<div class="skel"></div>').join(""); onScreen.clear(); visIO.disconnect(); pending = null; hidePill(); }
   try {
-    const res = await fetch("/api/deals?" + params(offset, limit));
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const r = await res.json();
-    lastOK = Date.now() / 1000; setOffline(false);
-    lastStatus = r.status || []; lastChanges = r.changes_last_hour || 0; renderStatus();
-    renderFacets(r); total = r.total; window.lastFacets = r.facets;
-    $("count").innerHTML = `${total.toLocaleString()} <small>${F.deals === "1" && !F.watch ? (total === 1 ? "deal" : "deals") : "products"}</small>`;
-    if (append) {
-      items = items.concat(r.items);
-      $("grid").insertAdjacentHTML("beforeend", r.items.map(d => card(d, false)).join(""));
-    } else {
-      const s = JSON.stringify(r.items.map(d => [d.id, d.price, d.score, d.in_stock, d.flags]));
-      if (s !== sig || !quiet) {  // a quiet refresh only redraws when something changed
-        sig = s; items = r.items;
-        $("grid").innerHTML = items.length ? items.map(d => card(d, !firstLoad && quiet && !seen.has(d.id))).join("")
-          : `<div class="empty">${F.watch ? "Your watchlist is empty: tap ★ on any product to follow its price." :
-             "Nothing matches these filters yet. The first sweep of each store takes about 15 minutes, and price-drop deals need a few days of history."}</div>`;
-      }
-    }
-    r.items.forEach(d => seen.add(d.id));
-    firstLoad = false;
+    // the first page is always fetched in full (it's a new view), but its ETag is kept for the refreshes
+    const r = await getJSON("/api/deals?" + params(append ? items.length : 0, PAGE), { cond: false });
+    if (my !== gen) return;  // the filters changed meanwhile
+    contact(r.now);
+    if (!append) dealsStale = false;
+    lastStatus = r.status || lastStatus; lastChanges = r.changes_last_hour ?? lastChanges; renderStatus();
+    facets(r, !append); count(r); took(r.items);
+    if (append) appendCards(r.items); else renderAll(r.items);
   } catch (e) {
+    if (my !== gen) return;
+    if (!append) dealsStale = true;
     setOffline(true);
     // never leave skeletons up: put back the last good cards, or say nothing could be loaded
-    if ($("grid").querySelector(".skel")) $("grid").innerHTML = items.length ? items.map(d => card(d, false)).join("")
-      : `<div class="empty">Couldn't load the deals. They'll show here as soon as the server answers.</div>`;
-  }
-  loading = false;
-  clearTimeout(timer); timer = setTimeout(() => load({ quiet: true }), document.hidden ? 60000 : 10000);
+    if ($("grid").querySelector(".skel")) { if (items.length) renderAll(items);
+      else $("grid").innerHTML = `<div class="empty">Couldn't load the deals. They'll show here as soon as the server answers.</div>`; }
+  } finally { if (my === gen) loading = false; }
+}
+// the cards already shown, asked again with their ETag: 304 when none changed, else patched in place
+async function refreshDeals() {
+  if (loading) return false;
+  const my = gen, url = "/api/deals?" + params(0, Math.max(PAGE, items.length));
+  const r = await getJSON(url, { cond: !dealsStale });
+  if (my !== gen || loading) return false;
+  dealsStale = false;
+  if (!r) return false;
+  setSkew(r.now);
+  if (!hasPulse) { lastStatus = r.status || []; lastChanges = r.changes_last_hour || 0; renderStatus(); }
+  facets(r); count(r); took(r.items);
+  patchGrid(r.items);
+  return true;
 }
 function apply() { writeURL(); activeChips(); load(); loadBrief(); }
 
 // ---------- can't reach the server: a banner with the age of what's on screen, and a retry ----------
 let offline = false, lastOK = 0;
+function contact(now) { setSkew(now); lastOK = Date.now() / 1000; setOffline(false); }
 function setOffline(on) {
   if (on === offline) return;
   offline = on;
@@ -696,35 +926,120 @@ function setOffline(on) {
 }
 $("retry").onclick = async () => {
   $("retry").disabled = true;
-  try { await load({ quiet: items.length > 0 }); } finally { $("retry").disabled = false; }
+  failN = 0;
+  try { if (!items.length) await load(); await poll(); } finally { $("retry").disabled = false; }
 };
 
-function renderStatus() {
-  const parts = lastStatus.map(s => {
-    let t = `<b>${esc(s.label)}</b> ${s.products.toLocaleString()}`;
-    if (s.paused_until) return t + ` · paused, back in ${mins(s.paused_until - Date.now() / 1000)}`;
-    if (s.live) t += s.last_change ? ` · changed ${ago(s.last_change)}` : " · watching";
-    t += s.cycle_secs ? ` · full sweep ${mins(s.cycle_secs)}` : s.live ? " · first sweep" : ` · ${ago(s.updated)}`;
-    return t;
-  });
-  $("status").innerHTML = parts.length ? parts.join(" &nbsp;·&nbsp; ") + ` &nbsp;·&nbsp; ${lastChanges.toLocaleString()} price changes in the last hour`
-    : !lastOK ? (offline ? "can't reach the server, retrying…" : "connecting…") : "starting: the first prices arrive within a minute";
+// ---------- refresh: a tiny pulse every ~10 s while the page is in view; the rest only when it says something moved ----------
+let pollT = 0, polling = false, failN = 0, hasPulse = true, pv = null, pbuilt = null, noSeenAPI = false;
+const jitter = (ms, j = .1) => ms * (1 - j + Math.random() * 2 * j);
+function schedule() {
+  clearTimeout(pollT); pollT = 0;
+  if (document.hidden) return;  // nothing at all while the tab is hidden
+  // after a failure: 10, 20, 40… up to 300 s
+  pollT = setTimeout(poll, failN ? jitter(Math.min(300, 10 * 2 ** (failN - 1)) * 1000, .15) : jitter(10000));
 }
-setInterval(renderStatus, 1000);
+async function poll() {
+  if (polling || document.hidden) return;
+  polling = true; clearTimeout(pollT);
+  try { if (hasPulse) await pulse(); else await fallbackPoll(); failN = 0; }
+  catch (e) { failN++; setOffline(true); }
+  polling = false;
+  schedule();
+}
+async function pulse() {
+  let r;
+  try { r = await getJSON("/api/pulse", { keep: false }); }
+  catch (e) { if (e.status === 404) { hasPulse = false; return fallbackPoll(); } throw e; }  // an older server
+  if (!r) { contact(); if (dealsStale) await refreshDeals(); return; }  // 304: nothing moved
+  contact(r.now);
+  lastStatus = r.status || []; lastChanges = r.changes_last_hour || 0; renderStatus();
+  const down = pv != null && r.v < pv;  // renumbered (a restored database): start over
+  if (down) { etags.clear(); tickerV = null; }
+  const built = r.catalog ? r.catalog.built : null, jobs = [];
+  if (built != null && (built !== pbuilt || down || dealsStale)) jobs.push(refreshDeals(), refreshBrief(), checkWatch());
+  if (r.v !== tickerV || down) jobs.push(loadTicker());
+  await Promise.all(jobs);
+  pv = r.v; pbuilt = built; r.keep();  // only now: a failed step is tried again on the next pulse
+}
+async function fallbackPoll() {  // no /api/pulse: the cards themselves, asked conditionally
+  const moved = await refreshDeals();
+  contact();
+  await Promise.all([loadTicker(), moved ? refreshBrief() : null, moved ? checkWatch() : null]);
+}
+// every 30 s while in view: when the cards on screen (and near it) were last checked, at most 60
+let seenT = 0;
+function seenIds() {
+  const cards = [...$("grid").children].filter(n => n._d);
+  let a = cards.findIndex(n => onScreen.has(n)), b = a;
+  for (let k = cards.length - 1; k > a; k--) if (onScreen.has(cards[k])) { b = k; break; }
+  if (a < 0) a = b = 0;
+  return cards.map((n, k) => [k < a ? a - k : k > b ? k - b : 0, n._d.id]).sort((x, y) => x[0] - y[0]).slice(0, 60).map(x => x[1]);
+}
+async function refreshSeen() {
+  clearTimeout(seenT); seenT = 0;
+  if (document.hidden || noSeenAPI) return;
+  const ids = seenIds();
+  if (ids.length && !failN) {
+    try {
+      const r = await getJSON("/api/seen?ids=" + ids.join(","), { cond: false });
+      setSkew(r.now);
+      for (const [id, t] of Object.entries(r.seen || {})) noteSeen(+id, t);
+      tickAgo($("grid"));
+    } catch (e) { if (e.status === 404) noSeenAPI = true; }
+  }
+  if (!document.hidden && !noSeenAPI) seenT = setTimeout(refreshSeen, jitter(30000, .05));
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { clearTimeout(pollT); clearTimeout(seenT); pollT = seenT = 0; return; }
+  renderStatus(); tickAgo(); poll(); refreshSeen();  // back in view: catch up at once
+});
+addEventListener("online", () => { failN = 0; poll(); });
 
+let statusKey = "";
+function renderStatus() {  // the status line: built once, then only its changed text is rewritten
+  const el = $("status"), sep = "  ·  ";
+  const segs = lastStatus.length ? lastStatus.map((s, i) => {
+    let t = ` ${s.products.toLocaleString()}`;
+    if (s.paused_until) t += ` · paused, back in ${mins(s.paused_until - nowS())}`;
+    else {
+      if (s.live) t += s.last_change ? ` · changed ${ago(s.last_change)}` : " · watching";
+      t += s.cycle_secs ? ` · full sweep ${mins(s.cycle_secs)}` : s.live ? " · first sweep" : ` · ${ago(s.updated)}`;
+    }
+    return [tr(s.label), tr(t) + sep];
+  }).concat([[null, tr(`${lastChanges.toLocaleString()} price changes in the last hour`)]])
+    : [[null, tr(!lastOK ? (offline ? "can't reach the server, retrying…" : "connecting…") : "starting: the first prices arrive within a minute")]];
+  const key = segs.map(s => s[0] == null ? "t" : "b").join("");
+  if (key !== statusKey) {
+    statusKey = key;
+    el.replaceChildren(...segs.map(([b]) => { const sp = document.createElement("span");
+      if (b != null) sp.append(document.createElement("b")); sp.append(document.createTextNode("")); return sp; }));
+  }
+  segs.forEach(([b, t], i) => { const sp = el.children[i];
+    if (b != null && sp.firstChild.textContent !== b) sp.firstChild.textContent = b;
+    if (sp.lastChild.nodeValue !== t) sp.lastChild.nodeValue = t; });
+}
+let secs = 0;
+setInterval(() => { if (document.hidden) return; renderStatus(); if (++secs % 5 === 0) tickAgo(); }, 1000);
+
+// ---------- the "just dropped" ticker: only the moves newer than the last one shown ----------
+let tickerV = null, ticks = [];
 async function loadTicker() {
-  try {
-    const r = await (await fetch("/api/changes?limit=24")).json();
-    const ch = r.changes.filter(c => c.before != null && c.before !== c.price);
-    $("ticker").hidden = !ch.length;
-    if (!ch.length) return;
-    const rtl = document.documentElement.dir === "rtl";
-    $("tickerTrack").innerHTML = ch.map(c => { const down = c.price < c.before;
-      return `<span class="tick" data-id="${c.id}"><b dir="auto">${esc(c.name.slice(0, 42))}</b> ${fmt(c.before)} ${rtl ? "←" : "→"} <span class="${down ? "down" : "up"}">${fmt(c.price)} ${down ? "▼" : "▲"}</span> · ${esc(c.label)} · ${ago(c.at)}</span>`;
-    }).join("");
-    $("tickerTrack").style.animationDuration = Math.max(30, ch.length * 6) + "s";
-    $("tickerTrack").querySelectorAll(".tick").forEach(t => t.onclick = () => showProduct(+t.dataset.id));
-  } catch {}
+  const r = await getJSON(tickerV == null ? "/api/changes?limit=24" : `/api/changes?limit=24&after=${tickerV}`);
+  if (!r) return;
+  const got = (r.changes || []).filter(c => c.before != null && c.before !== c.price), reset = tickerV == null || r.reset;
+  tickerV = r.v ?? null;
+  if (!reset && !got.length) return;
+  const ids = new Set(got.map(c => c.rowid));
+  ticks = (reset ? got : got.concat(ticks.filter(c => !ids.has(c.rowid)))).slice(0, 24);
+  $("ticker").hidden = !ticks.length;
+  if (!ticks.length) return;
+  const rtl = document.documentElement.dir === "rtl";
+  $("tickerTrack").innerHTML = ticks.map(c => { const down = c.price < c.before;
+    return `<span class="tick" data-id="${c.id}"><b dir="auto">${esc(c.name.slice(0, 42))}</b> ${fmt(c.before)} ${rtl ? "←" : "→"} <span class="${down ? "down" : "up"}">${fmt(c.price)} ${down ? "▼" : "▲"}</span> · ${esc(c.label)} · <span data-ago="${+c.at || 0}" data-noi18n>${agoL(c.at)}</span></span>`;
+  }).join("");
+  $("tickerTrack").style.animationDuration = Math.max(30, ticks.length * 6) + "s";
+  $("tickerTrack").querySelectorAll(".tick").forEach(t => t.onclick = () => showProduct(+t.dataset.id));
 }
 
 // ---------- product detail ----------
@@ -768,6 +1083,7 @@ async function showProduct(id) {
       <button class="btn" id="share">Share</button>
       <a class="btn" href="/p/${id}">Product page</a>
     </div>`;
+  tickAgo($("dbody"));
   if (!$("dlg").open) $("dlg").showModal();
   drawChart(h, p.price);
   $("setTarget").onclick = () => {
@@ -868,7 +1184,6 @@ document.addEventListener("keydown", e => {
   if (e.key === "/" && !["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) { e.preventDefault(); $("q").focus(); }
   if (e.key === "Escape" && $("filters").classList.contains("open")) sheet(false);
 });
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { load({ quiet: true }); loadTicker(); } });
 
 
 // ---------- understanding plain-language searches (English and Arabic) ----------
@@ -1065,10 +1380,13 @@ $("basketBtn").onclick = showBasket;
 
 // ---------- today in 30 seconds (the home page, before any filter) ----------
 const isHome = () => { const p = new URLSearchParams(location.search); p.delete("hubs"); return !p.toString(); };
-async function loadBrief() {
+let briefOn = false;
+async function refreshBrief() {  // asked with its ETag: on the home page, when the catalog was rebuilt
   if (!isHome()) { $("brief").hidden = true; return; }
-  let b; try { b = await (await fetch("/api/brief")).json(); } catch { return; }
-  if (!b.deals) return;
+  const b = await getJSON("/api/brief");
+  if (!b) { $("brief").hidden = !briefOn; return; }  // 304: the brief already drawn is still right
+  briefOn = !!b.deals;
+  if (!b.deals) { $("brief").hidden = true; return; }
   const st = (n, label, act) => `<button class="st" data-act="${act}"><b>${n.toLocaleString()}</b><span>${label}</span></button>`;
   const best = b.biggest_saving;
   $("brief").innerHTML = `<h2>⚡ Today in 30 seconds</h2><div class="sub">What the stores changed while you weren't looking</div>
@@ -1082,9 +1400,11 @@ async function loadBrief() {
     F.sort = x.dataset.act === "new" ? "newest" : "score"; syncControls(); apply(); $("brief").hidden = true; });
   const bs = $("brief").querySelector(".best"); if (bs) bs.onclick = () => showProduct(+bs.dataset.id);
 }
-readURL(); syncControls(); saveWatch(); saveBasket(); activeChips(); showUnderstood(); load(); loadTicker(); loadBrief();
-setInterval(loadBrief, 60000);
-setInterval(loadTicker, 15000); setInterval(checkWatch, 60000); checkWatch();
+const loadBrief = () => refreshBrief().catch(() => {});
+readURL(); syncControls(); saveWatch(); saveBasket(); activeChips(); showUnderstood(); renderStatus();
+// first the page, then the pulse every ~10 s (it starts the 30 s "checked" refresh once there are cards)
+load().then(() => { poll(); refreshSeen(); });
+loadTicker().catch(() => {}); loadBrief(); checkWatch().catch(() => {});
 const pid = new URLSearchParams(location.search).get("p"); if (pid) showProduct(+pid);
 </script>
 </body>

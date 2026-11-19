@@ -25,7 +25,7 @@ MIN_REBUILD = 15
 FORCE_REBUILD = 300
 IDLE = 600  # nobody has asked for the catalog this long: stop rebuilding it until someone does
 # fields that follow the clock rather than the prices: left out of an item's digest (and so out of ETags)
-VOLATILE = frozenset({"spark", "tracked_days", "days_at_price", "why", "rhythm", "verdict"})
+VOLATILE = frozenset({"last_seen", "spark", "tracked_days", "days_at_price", "why", "rhythm", "verdict"})
 RHYTHM_VOLATILE = frozenset({"next_in_days", "ends_in_days", "text"})
 
 

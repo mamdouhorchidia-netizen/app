@@ -24,6 +24,7 @@
     "Price: high to low": "السعر: من الأعلى", "Price per kg / L / piece": "سعر الكيلو / اللتر / القطعة",
     "Best sellers": "الأكثر مبيعًا", "Name": "الاسم", "deals": "عرض", "deal": "عرض", "products": "منتج", "EGP": "ج.م",
     // tags and cards
+    "dropped": "نزل", "went up": "زاد",  // tags whose time ("from 5 min") is written by the page itself
     "lowest in 90 days": "🔥 أقل سعر", "back in stock": "رجع تاني", "cheapest of all stores": "الأرخص في كل المتاجر",
     "discount never moves": "خصم ثابت (مش حقيقي)", "out of stock": "خلصان", "Buy now": "اشتري دلوقتي",
     "Good price": "سعر كويس", "Fair price": "سعره العادي", "Wait": "استنى", "Cheaper elsewhere": "أرخص في مكان تاني",
@@ -145,8 +146,18 @@
   const ATTRS = ["placeholder", "title", "aria-label"];
   const originals = new WeakMap();
 
+  // the same strings come back again and again (tags, prices, the status line): each is worked out once
+  const memo = new Map();
   function tr(s) {
     if (lang !== "ar" || !s || !/[A-Za-z]/.test(s)) return s;
+    let r = memo.get(s);
+    if (r === undefined) {
+      if (memo.size > 4000) memo.clear();
+      memo.set(s, r = translate(s));
+    }
+    return r;
+  }
+  function translate(s) {
     const k = s.trim();
     if (EXACT[k]) return s.replace(k, EXACT[k]);
     let o = k;
@@ -177,7 +188,10 @@
     if (root.nodeType !== 1) return;
     element(root);
     root.querySelectorAll("[placeholder],[title],[aria-label]").forEach(element);
-    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    if (root.closest(SKIP)) return;
+    // whole subtrees that are never translated (product names, [data-noi18n], svg…) are skipped, not walked
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+      { acceptNode: n => n.nodeType === 1 ? (n.matches(SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP) : NodeFilter.FILTER_ACCEPT });
     const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
     nodes.forEach(textNode);
   }
@@ -195,7 +209,7 @@
   const mo = new MutationObserver(list => {
     if (lang !== "ar") return;
     for (const m of list) {
-      if (m.type === "characterData") textNode(m.target);
+      if (m.type === "characterData") { if (!(m.target.parentElement && m.target.parentElement.closest("[data-noi18n]"))) textNode(m.target); }
       else if (m.type === "attributes") element(m.target);
       else m.addedNodes.forEach(walk);
     }
