@@ -18,7 +18,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 and resource shrinking. The libraries bring their own keep rules (Compose, WorkManager's workers made
+            // by class name, the ViewModel made by its constructor); proguard-rules.pro adds nothing beyond them.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
     compileOptions {

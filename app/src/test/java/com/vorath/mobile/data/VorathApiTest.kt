@@ -1,6 +1,5 @@
 package com.vorath.mobile.data
 
-import com.sun.net.httpserver.HttpServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -8,46 +7,39 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
-import java.net.InetSocketAddress
 import java.util.Collections
 
 /** The client against a small HTTP server on this machine: conditional reads, 304, keep-alive. */
 class VorathApiTest {
-    private lateinit var server: HttpServer
+    private lateinit var server: TinyHttpServer
     private val ports = Collections.synchronizedList(mutableListOf<Int>())
     private val conditional = Collections.synchronizedList(mutableListOf<String?>())
     @Volatile private var deck = """{"state":"flying","word":"Flying","needs":[],"alarms":[],"today":[]}"""
     @Volatile private var withEtag = true
-    private val base get() = "http://127.0.0.1:${server.address.port}"
+    private val base get() = "http://127.0.0.1:${server.port}"
 
     @Before
     fun start() {
-        server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/api/autopilot/deck") { x ->
-            ports += x.remoteAddress.port
+        server = TinyHttpServer { x ->
+            if (x.path != "/api/autopilot/deck") return@TinyHttpServer TinyHttpServer.Response(404)
+            ports += x.remotePort
             val tag = "\"" + deck.hashCode() + "\""
-            val asked = x.requestHeaders.getFirst("If-None-Match")
+            val asked = x.header("If-None-Match")
             conditional += asked
-            if (x.requestHeaders.getFirst("Cookie") != "vorath_sid=sid") {
-                val b = """{"error":"Sign in first."}""".toByteArray()
-                x.sendResponseHeaders(401, b.size.toLong())
-                x.responseBody.use { it.write(b) }
+            if (x.header("Cookie") != "vorath_sid=sid") {
+                TinyHttpServer.Response(401, """{"error":"Sign in first."}""".toByteArray())
             } else if (withEtag && asked == tag) {
-                x.sendResponseHeaders(304, -1)
-                x.close()
+                TinyHttpServer.Response(304)
             } else {
-                val b = deck.toByteArray()
-                if (withEtag) x.responseHeaders.add("ETag", tag)
-                x.responseHeaders.add("Content-Type", "application/json")
-                x.sendResponseHeaders(200, b.size.toLong())
-                x.responseBody.use { it.write(b) }
+                val h = mutableMapOf("Content-Type" to "application/json")
+                if (withEtag) h["ETag"] = tag
+                TinyHttpServer.Response(200, deck.toByteArray(), h)
             }
         }
-        server.start()
     }
 
     @After
-    fun stop() = server.stop(0)
+    fun stop() = server.close()
 
     @Test
     fun anUnchangedAnswerComesBackAs304WithTheBodyItHad() {
@@ -103,12 +95,11 @@ class VorathApiTest {
     @Test
     fun aServerThatIsNotThereIsOffline() {
         val gone = base
-        server.stop(0)
+        server.close()
         try {
             VorathApi(gone, "sid").deckRaw()
             fail("read from nothing")
         } catch (e: VorathError.Offline) {
         }
-        server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply { start() }   // for stop()
     }
 }

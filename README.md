@@ -69,11 +69,17 @@ VORATH_HOME=/tmp/vhome VORATH_SECRET_KEY=dev-only python tools/vorath_devserver.
 
 ## Not done yet
 
-- Never compiled or run as an Android app: the machine this was written on cannot download the Android SDK. The
-  parts with no Android code (client, parsing, cache file, freshness rules) are tested on a plain JVM; the screens,
-  the 30-second loop, the Keystore and the notifications are unproven until built and run on a phone or emulator.
+- Never run on a phone or emulator. It now compiles for Android (`assembleDebug`, and a minified `assembleRelease`
+  that passes lint's release checks), and the unit tests for the client, parsing, cache file and freshness rules pass
+  under the Android build. The screens, the 30-second loop, the Keystore, the notifications and the 15-minute check
+  are still unproven until run on a phone or emulator.
+- The pictures of the screens (`ScreensTest`) have not been drawn yet: Robolectric's native graphics jar could not be
+  downloaded on the build machine (its download host was blocked), so the plain `testDebugUnitTest` stops before the
+  tests run there. On a machine with normal access to Maven Central it should run as written.
+- Release builds are minified with R8 and resource shrinking (about 1.3 MB against 7.4 MB without); the library keep
+  rules cover what is made by class name, but the minified build has not been run on a device either. Keep
+  `app/build/outputs/mapping/release/mapping.txt` from each release to read its crash reports.
 - The APK in `release/` is a debug build signed with a throwaway key; a permanent signing key is needed for updates.
-  It predates the cache and the 30-second reads. Release builds are not minified yet (R8 is off until a release
-  build can be checked).
+  It predates the cache and the 30-second reads.
 - Alarms are checked every 15 minutes at best; instant push needs a change in Vorath. English only. File downloads
   inside the in-app pages are not handled.
