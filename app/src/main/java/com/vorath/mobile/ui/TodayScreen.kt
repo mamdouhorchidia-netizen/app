@@ -36,7 +36,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,12 +55,15 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import com.vorath.mobile.TodayState
 import com.vorath.mobile.data.Alarm
 import com.vorath.mobile.data.Deck
 import com.vorath.mobile.data.Figure
+import com.vorath.mobile.data.Freshness
 import com.vorath.mobile.data.Money
 import com.vorath.mobile.data.Need
+import com.vorath.mobile.data.RowKeys
 import com.vorath.mobile.data.Session
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,8 +76,13 @@ fun TodayScreen(
     onOpen: (path: String) -> Unit,
     onAllowNotifications: () -> Unit,
     onSignOut: () -> Unit,
+    /** A fixed clock for the pictures of the screens; null: the freshness line ticks with the real time. */
+    clock: (() -> Long)? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
+    val money = state.money.value
+    val deck = state.deck.value
+    val needKeys = remember(deck) { deck?.let { RowKeys.needs(it.needs) } ?: emptyList() }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -84,7 +94,7 @@ fun TodayScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onRefresh, enabled = !state.loading) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh") }
+                    IconButton(onClick = onRefresh, enabled = !state.spinning) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh") }
                     IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text("Open the full Vorath") }, onClick = { menu = false; onOpen("/") })
@@ -94,56 +104,103 @@ fun TodayScreen(
             )
         },
     ) { pad ->
-        PullToRefreshBox(isRefreshing = state.loading, onRefresh = onRefresh, modifier = Modifier.padding(pad).fillMaxSize()) {
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                state.problem?.let { item("problem") { Notice(it, LocalTones.current.bad, LocalTones.current.badBg, "Try again", onRefresh) } }
-                state.deck?.let { d ->
-                    item("status") { Status(d) }
-                    items(d.needs.size, key = { "need$it" }) { NeedRow(d.needs[it], onOpen) }
-                }
-                state.money?.let { m ->
-                    item("window") { Heading("Last ${m.days} days", "${Format.day(m.from)} – ${Format.day(m.to)}") }
-                    item("four") { Four(m) }
-                    if (m.cash.size > 1) item("cash") { CashLine(m) }
-                    if (m.missingInputs > 0) item("missing") {
-                        Notice("${m.missingInputs} costs are not entered yet, so net profit is an estimate.", LocalTones.current.warn, LocalTones.current.warnBg, "Enter them") { onOpen("/money#inputs") }
+        Column(Modifier.padding(pad).fillMaxSize()) {
+            FreshLine(state, clock)
+            PullToRefreshBox(isRefreshing = state.spinning, onRefresh = onRefresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    state.problem?.let { p ->
+                        val text = p.message ?: "Vorath did not answer."
+                        // With data on screen the problem is a slim line; the page stays as it was last read.
+                        if (state.hasData) item("problem") { Slim(text, LocalTones.current.warn, LocalTones.current.warnBg, "Try again", onRefresh) }
+                        else item("problem") { Notice(text, LocalTones.current.bad, LocalTones.current.badBg, "Try again", onRefresh) }
                     }
-                }
-                state.moneyNote?.let { item("moneyNote") { Quiet(it) } }
-                state.deck?.let { d ->
-                    if (d.alarms.isNotEmpty()) {
-                        item("alarmsHead") { Heading("Alarms", "${d.alarms.count { it.firing && it.on }} firing") }
-                        item("alarms") { Panel { d.alarms.forEachIndexed { i, a -> AlarmRow(a, first = i == 0) } } }
+                    deck?.let { d ->
+                        item("status") { Status(d) }
+                        items(d.needs.size, key = { needKeys[it] }) { NeedRow(d.needs[it], onOpen) }
                     }
-                    if (d.today.isNotEmpty()) {
-                        item("planHead") { Heading("Autopilot today", "") }
-                        item("plan") {
-                            Panel {
-                                d.today.forEachIndexed { i, p ->
-                                    Row(Modifier.fillMaxWidth().topLine(i > 0, LocalTones.current.line).padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(p.at, Modifier.width(56.dp), color = LocalTones.current.muted)
-                                        Text(p.label, Modifier.weight(1f))
-                                        if (p.done) Text("done", color = LocalTones.current.ok, style = MaterialTheme.typography.bodySmall)
+                    money?.let { m ->
+                        item("window") { Heading("Last ${m.days} days", "${Format.day(m.from)} – ${Format.day(m.to)}") }
+                        item("four") { Four(m) }
+                        if (m.cash.size > 1) item("cash") { CashLine(m) }
+                        if (m.missingInputs > 0) item("missing") {
+                            Notice("${m.missingInputs} costs are not entered yet, so net profit is an estimate.", LocalTones.current.warn, LocalTones.current.warnBg, "Enter them") { onOpen("/money#inputs") }
+                        }
+                    }
+                    state.money.refused?.let { item("moneyNote") { Quiet(it) } }
+                    deck?.let { d ->
+                        if (d.alarms.isNotEmpty()) {
+                            item("alarmsHead") { Heading("Alarms", "${d.alarms.count { it.firing && it.on }} firing") }
+                            item("alarms") { Panel { d.alarms.forEachIndexed { i, a -> AlarmRow(a, first = i == 0) } } }
+                        }
+                        if (d.today.isNotEmpty()) {
+                            item("planHead") { Heading("Autopilot today", "") }
+                            item("plan") {
+                                Panel {
+                                    d.today.forEachIndexed { i, p ->
+                                        Row(Modifier.fillMaxWidth().topLine(i > 0, LocalTones.current.line).padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Text(p.at, Modifier.width(56.dp), color = LocalTones.current.muted)
+                                            Text(p.label, Modifier.weight(1f))
+                                            if (p.done) Text("done", color = LocalTones.current.ok, style = MaterialTheme.typography.bodySmall)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-                state.deckNote?.let { item("deckNote") { Quiet(it) } }
-                if (state.deck != null && !notificationsOn) item("notify") {
-                    Notice("Notifications are off, so the phone cannot tell you when an alarm starts.", LocalTones.current.warn, LocalTones.current.warnBg, "Turn on", onAllowNotifications)
-                }
-                if (state.checkedAt > 0) item("foot") {
-                    Quiet("Read at ${Format.clock(state.checkedAt)}. In the background the phone checks the alarms about once an hour.")
+                    if (state.deck.refused != null) item("deckNote") { Quiet("Your role does not open the Autopilot, so alarms are not shown here.") }
+                    if (deck != null && !notificationsOn) item("notify") {
+                        Notice("Notifications are off, so the phone cannot tell you when an alarm starts.", LocalTones.current.warn, LocalTones.current.warnBg, "Turn on", onAllowNotifications)
+                    }
+                    if (deck != null) item("foot") { Quiet("In the background the phone checks the alarms about every 15 minutes.") }
                 }
             }
         }
     }
+}
+
+/**
+ * "Updated 12 s ago" / "Updating…" / "Can't reach Vorath · showing 14:05", under the top bar. It reads the clock
+ * itself, once a second, so only this line redraws as the seconds pass, not the list.
+ */
+@Composable
+private fun FreshLine(state: TodayState, clock: (() -> Long)?) {
+    val now = if (clock != null) clock() else ticking()
+    val f = state.freshness(now)
+    val t = LocalTones.current
+    val tone = when (f) {
+        is Freshness.Unreachable -> t.warn
+        is Freshness.Updated -> t.ok
+        else -> t.muted
+    }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (f != Freshness.Never) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(tone))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            Format.freshness(f, now),
+            color = if (f is Freshness.Unreachable) t.warn else MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun ticking(): Long {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1_000)
+            now = System.currentTimeMillis()
+        }
+    }
+    return now
 }
 
 @Composable
@@ -301,6 +358,18 @@ private fun Notice(text: String, fg: Color, bg: Color, action: String, onAction:
     ) {
         Text(text, Modifier.weight(1f), color = fg, style = MaterialTheme.typography.bodyMedium)
         TextButton(onClick = onAction) { Text(action, color = fg, fontWeight = FontWeight.SemiBold) }
+    }
+}
+
+/** A one-line problem above data that is still shown. */
+@Composable
+private fun Slim(text: String, fg: Color, bg: Color, action: String, onAction: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(bg).padding(start = 12.dp, end = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, Modifier.weight(1f), color = fg, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        TextButton(onClick = onAction) { Text(action, color = fg, style = MaterialTheme.typography.labelLarge) }
     }
 }
 

@@ -7,7 +7,21 @@ The phone app for [Vorath](https://github.com/mamdouhorchidia-netizen/vorath). I
   (encrypted with an Android Keystore key), never the password.
 - **Today**: the Autopilot's one answer, what needs you, the four numbers against the previous period, cash in per
   day, every alarm, and the Autopilot's plan for the day.
-- **Notifications**: about once an hour the phone reads the Autopilot and tells you when an alarm starts firing.
+- **Opens on the last answers**: the phone keeps the last answers from Vorath (encrypted with the same Keystore key,
+  in a file that is never backed up, for that server and person only, deleted on sign-out or when the session ends),
+  so the Today page shows them at once and then updates.
+- **Says how current it is**: a line under the title reads "Updated 12 s ago", "Updating…" or
+  "Can't reach Vorath · showing 14:05". When a read fails the page keeps what it last read and shows a slim line
+  with the reason; the numbers and the Autopilot are read separately, so one failing does not blank the other.
+- **Stays current while open**: while the Today page is on screen the phone reads again quietly every 30 seconds
+  (no spinner; the spinner is for pull-to-refresh and the first read). A slow server is read at most once per ten of
+  its answer times; failures back off to 60 s, 120 s, then every 5 minutes, and retry as soon as the network comes
+  back. These reads stop when the app leaves the screen or the full Vorath page opens (a read already under way
+  finishes); only the 15-minute alarm check below runs in the background.
+- **Light on the server**: one connection is kept open and reused; if Vorath sends ETag or Last-Modified, an
+  unchanged answer comes back as an empty 304 (Vorath does not need to: it works the same without them).
+- **Notifications**: about every 15 minutes (Android's shortest background period; it may wait longer when the phone
+  sleeps) the phone reads the Autopilot and tells you when an alarm starts firing.
 - **The full Vorath** opens inside the app, already signed in.
 
 The app only reads (`/api/me`, `/api/state`, `/api/autopilot/deck`) and never computes money: every figure is the
@@ -19,7 +33,7 @@ Needs JDK 17+ and the Android SDK (platform 35).
 
 ```
 ./gradlew :app:assembleDebug          # app/build/outputs/apk/debug/app-debug.apk
-./gradlew :app:testDebugUnitTest      # parsing and alarm rules, from recorded answers
+./gradlew :app:testDebugUnitTest      # parsing, alarm rules, cache, freshness and the client's 304 / keep-alive
 ```
 
 Two more tests are skipped unless asked for:
@@ -35,8 +49,10 @@ Two more tests are skipped unless asked for:
 
 ```
 app/src/main/java/com/vorath/mobile/
-  data/   VorathApi (the server's routes), Models (parsing), Signals (what is worth a notification), SessionStore
-  work/   AlarmWorker (hourly check), Notifier
+  data/   VorathApi (the server's routes), Models (parsing), Signals (what is worth a notification), SessionStore,
+          TodayCache (the last answers on the phone), Keystore (the encryption), Freshness (sections, the 30 s pacing)
+  AppModel  the session, the cache and the quiet foreground reads
+  work/   AlarmWorker (15-minute check), Notifier
   ui/     SignInScreen, TodayScreen, WebScreen, Theme (Vorath's own colours)
 ```
 
@@ -53,6 +69,11 @@ VORATH_HOME=/tmp/vhome VORATH_SECRET_KEY=dev-only python tools/vorath_devserver.
 
 ## Not done yet
 
-- Never run on a real phone or emulator: notifications, the encrypted session and the in-app pages are unproven.
+- Never compiled or run as an Android app: the machine this was written on cannot download the Android SDK. The
+  parts with no Android code (client, parsing, cache file, freshness rules) are tested on a plain JVM; the screens,
+  the 30-second loop, the Keystore and the notifications are unproven until built and run on a phone or emulator.
 - The APK in `release/` is a debug build signed with a throwaway key; a permanent signing key is needed for updates.
-- Alarms are checked hourly; instant push needs a change in Vorath. English only. File downloads inside the in-app pages are not handled.
+  It predates the cache and the 30-second reads. Release builds are not minified yet (R8 is off until a release
+  build can be checked).
+- Alarms are checked every 15 minutes at best; instant push needs a change in Vorath. English only. File downloads
+  inside the in-app pages are not handled.

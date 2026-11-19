@@ -136,26 +136,30 @@ class StoreLoop:
         done = self.clock()
         self.blocks = 0
         stats = {}
-        db.save_offers(self.con, offers, int(done), stats)
-        task.last_run, task.fails = done, 0
-        self.pages += 1
-        if stats["moved"]:  # a price or stock really changed (a first sighting doesn't count)
-            task.last_change = self.last_change = done
-            self.changes += stats["moved"]
-        elif stats.get("held"):  # a big jump waiting for a second look: recheck this page within a minute
-            task.last_change = done
-        for f in follow:
-            self.tasks.setdefault(f.key, f)
-        self.error = None
-        if all(t.last_run >= self.cycle_start for t in self.tasks.values()):
-            self.cycle_secs = done - self.cycle_start
-            self.cycle_start = done
-        self._status()
+        with self.con:  # the page's prices and the store's status in one commit
+            db.write_offers(self.con, offers, int(done), stats)
+            task.last_run, task.fails = done, 0
+            self.pages += 1
+            if stats["moved"]:  # a price or stock really changed (a first sighting doesn't count)
+                task.last_change = self.last_change = done
+                self.changes += stats["moved"]
+            elif stats.get("held"):  # a big jump waiting for a second look: recheck this page within a minute
+                task.last_change = done
+            for f in follow:
+                self.tasks.setdefault(f.key, f)
+            self.error = None
+            if all(t.last_run >= self.cycle_start for t in self.tasks.values()):
+                self.cycle_secs = done - self.cycle_start
+                self.cycle_start = done
+            db.write_live_status(self.con, self.store, **self._status_fields())
+
+    def _status_fields(self) -> dict:
+        return dict(updated=int(self.clock()), last_change=int(self.last_change), pages=self.pages, changes=self.changes,
+                    tasks=len(self.tasks), cycle_secs=self.cycle_secs, error=self.error,
+                    paused_until=int(self.paused_until))
 
     def _status(self):
-        db.set_live_status(self.con, self.store, updated=int(self.clock()), last_change=int(self.last_change),
-                           pages=self.pages, changes=self.changes, tasks=len(self.tasks), cycle_secs=self.cycle_secs,
-                           error=self.error, paused_until=int(self.paused_until))
+        db.set_live_status(self.con, self.store, **self._status_fields())
 
     def run_forever(self):
         self.con = db.connect(self.db_path)

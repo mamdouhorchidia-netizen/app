@@ -18,7 +18,7 @@ import traceback
 import urllib.error
 import urllib.request
 
-from . import finder
+from . import finder, livedata
 
 API = "https://api.telegram.org"
 AR_STORE = {"talabat": "طلبات مارت", "amazon_eg": "أمازون مصر", "jumia": "جوميا", "breadfast": "بريدفاست", "dream2000": "دريم 2000",
@@ -74,6 +74,7 @@ class Poster:
             return json.loads(r.read())
 
     def once(self, now: float = None) -> int:
+        own_clock = now is None
         now = now or time.time()
         con = sqlite3.connect(self.db_path, timeout=30)
         con.row_factory = sqlite3.Row
@@ -86,7 +87,13 @@ class Poster:
             last = {r["product_id"]: r["price"] for r in con.execute(
                 "SELECT product_id, MIN(price) price FROM telegram_posts WHERE at > ? GROUP BY product_id",
                 (now - 30 * 86400,))}
-            fresh = [d for d in finder.catalog(con, int(now))
+            keeper = livedata.existing(self.db_path) if own_clock else None
+            if keeper is not None:  # running next to the web server: share its copy, and read on from its time
+                snap = keeper.get()
+                items, upto = snap.items, snap.built
+            else:
+                items, upto = finder.catalog(con, int(now)), now
+            fresh = [d for d in items
                      if d["since"] >= self.since and worth_posting(d, self.min_pct)
                      and (d["id"] not in last or d["price"] < last[d["id"]] - 0.01)]
             fresh.sort(key=lambda d: (-d["score"], -d["discount_pct"]))
@@ -110,7 +117,7 @@ class Poster:
                 with con:
                     con.execute("INSERT INTO telegram_posts VALUES (?, ?, ?)", (d["id"], d["price"], int(now)))
                 posted += 1
-            self.since = now
+            self.since = upto  # the next round starts where this copy of the data ends
             return posted
         finally:
             con.close()

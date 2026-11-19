@@ -5,7 +5,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.vorath.mobile.data.Parse
+import com.vorath.mobile.data.Section
 import com.vorath.mobile.data.Session
+import com.vorath.mobile.data.VorathError
 import com.vorath.mobile.ui.SignInScreen
 import com.vorath.mobile.ui.TodayScreen
 import com.vorath.mobile.ui.VorathTheme
@@ -24,7 +26,11 @@ class ScreensTest {
     private val folder = System.getProperty("vorath.shots").orEmpty()
     private fun recorded(name: String) = JSONObject(javaClass.getResource("/$name")!!.readText())
     private val session = Session("https://vorath.example.com", "sid", "owner", "Owner", "ANJA")
-    private val today get() = TodayState(money = Parse.money(recorded("state.json")), deck = Parse.deck(recorded("deck.json")), checkedAt = 1_800_000_000_000)
+    private val readAt = 1_800_000_000_000
+    private val today get() = TodayState(
+        money = Section(Parse.money(recorded("state.json")), fetchedAt = readAt),
+        deck = Section(Parse.deck(recorded("deck.json")), fetchedAt = readAt),
+    )
 
     private fun shot(name: String, content: @Composable () -> Unit) {
         assumeTrue(folder.isNotEmpty())
@@ -32,7 +38,8 @@ class ScreensTest {
     }
 
     @Composable
-    private fun Today(state: TodayState, notificationsOn: Boolean = true) = TodayScreen(session, state, notificationsOn, {}, {}, {}, {})
+    private fun Today(state: TodayState, notificationsOn: Boolean = true, secondsLater: Long = 12) =
+        TodayScreen(session, state, notificationsOn, {}, {}, {}, {}, clock = { readAt + secondsLater * 1000 })
 
     @Test
     @Config(sdk = [34], qualifiers = "w411dp-h2200dp-xxhdpi")
@@ -48,7 +55,20 @@ class ScreensTest {
 
     @Test
     @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
-    fun todayOffline() = shot("today-offline") { Today(today.copy(problem = "Cannot reach the server. Check the connection and the address.")) }
+    fun todayOffline() = shot("today-offline") {
+        val offline = VorathError.Offline("Cannot reach the server. Check the connection and the address.")
+        Today(today.let { it.copy(money = it.money.copy(error = offline), deck = it.deck.copy(error = offline)) }, secondsLater = 20 * 60)
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+    fun todayFirstRead() = shot("today-first-read") { Today(TodayState(spinning = true, busySince = readAt)) }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-night-xxhdpi")
+    fun todayNothingAndOffline() = shot("today-nothing-offline") {
+        Today(TodayState(money = Section(error = VorathError.Offline("Cannot reach the server. Check the connection and the address."))))
+    }
 
     @Test
     @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")

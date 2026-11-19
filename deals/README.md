@@ -23,8 +23,28 @@ talabat every 1.5 s, Amazon every 3 s, Breadfast every 5 s.
   for talabat's ~550 pages and about 15 for Amazon's ~300.
 - **Hot shelves**, where a price moved in the last 30 minutes, are rechecked **every 60 seconds**
   (`HOT_EVERY`). Hot and normal shelves take turns, so a busy day slows a pass down but never stalls it.
+- Each checked page is **one commit**: its prices and the store's status line together (WAL, `synchronous=NORMAL`).
+- A **data version** `v` (the newest price row's number) moves only when a price or stock really changed, since
+  that is the only time a price row is written. The server reads it at most once a second.
+- The **catalog** (every product judged: deal, score, flags, matches; ~2–3 s at 28k products) is rebuilt on a
+  thread of its own, never on a request: when `v` has moved and the last copy is 15 s old or more, and every
+  5 minutes anyway, because "changed in 24 h" or "back in stock" follow the clock and names, pictures and ranks
+  change without a price row. Requests always get the last finished copy at once. The page, the Telegram bot and
+  the channel poster share it (`deals/livedata.py`).
+- **Filtered lists** are kept per filter set and catalog copy, so "more" and refreshes only slice them; the
+  counts next to each filter come from the same single pass.
+- **Cheap refreshes:** `/api/pulse` is a ~1 KB answer with `v`, the server's time, each store's status and the
+  changes in the last hour. `/api/deals`, `/api/pulse`, `/api/changes`, `/api/brief`, `/api/product/ID` and
+  `/api/status` carry an ETag and answer `304` to `If-None-Match` while what they show is unchanged (the
+  time fields `now`, ages and sparkline end points don't count). `/api/changes?after=ROWID` gives only newer
+  moves for the ticker, and `/api/seen?ids=…` when each card's product was last checked.
+- **Transport:** HTTP/1.1 keep-alive, gzip for text and JSON when the browser takes it (a 60-card page is
+  ~104 KB, ~14 KB gzipped), and the page, scripts and icons kept in memory with an ETag and `no-cache`
+  (the browser keeps them but asks every time, so a deploy shows at once). API answers stay `no-store`.
 - The **page** asks for news every 10 seconds, redraws only when something changed, and shows each store's
   last change ("last change 8 s ago"), its pass time and the price changes in the last hour.
+- **Price-drop alerts** look for drops within ~15 s of a price row being written (and at least once a
+  minute); each phone still hears at most one bundle every 5 minutes.
 - A **bot check** (Amazon) pauses that store for 30 minutes. An **expired Breadfast session** pauses it until
   a new capture is imported.
 
@@ -207,9 +227,10 @@ deals/
   applinks.py   links that open a product in its store's app
   units.py      pack sizes from names, for price per kg / L / piece
   matching.py   the same product in different stores
-  web.py        /, /api/deals (filters, sorts, counts), /api/changes, /api/product/ID, /api/status, /healthz,
-                /admin (hubs, Breadfast), /api/push/* (alerts), /sw.js, icons
-  push.py       Web Push: VAPID keys, RFC 8291 encryption, the minute-by-minute alert sender
+  web.py        /, /api/deals (filters, sorts, counts), /api/pulse, /api/changes, /api/seen, /api/product/ID,
+                /api/status, /healthz, /admin (hubs, Breadfast), /api/push/* (alerts), /sw.js, icons
+  livedata.py   the data version and the catalog rebuilt in the background, shared by the page and the bots
+  push.py       Web Push: VAPID keys, RFC 8291 encryption, the alert sender (wakes when a price moves)
   settings.py   the owner's settings (talabat hubs), kept next to the database
   live.html     the page
 tests/          saved real talabat and amazon pages (best sellers and Today's Deals), breadfast captures,

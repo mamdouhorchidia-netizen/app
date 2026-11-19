@@ -44,10 +44,12 @@ class MainActivity : ComponentActivity() {
                     var asked by remember { mutableStateOf(false) }
                     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notificationsOn = it }
 
-                    LifecycleResumeEffect(session) {
+                    val web = model.webPath
+                    // The quiet 30-second reads run only while this screen is resumed and the in-app Vorath page is closed.
+                    LifecycleResumeEffect(session, web) {
                         notificationsOn = Notifier.allowed(context)
-                        model.refreshIfOld()
-                        onPauseOrDispose { }
+                        model.startLoop()
+                        onPauseOrDispose { model.stopLoop() }
                     }
                     LaunchedEffect(session) {                    // once signed in, ask once; after a refusal the Today page offers the settings
                         if (session != null && !notificationsOn && !asked && Build.VERSION.SDK_INT >= 33) {
@@ -56,10 +58,9 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    val web = model.webPath
                     when {
                         session == null -> SignInScreen(model.lastBase, model.lastUser, model.signingIn, model.signInProblem, model::signIn)
-                        web != null -> WebScreen(session, web, onClose = { model.webPath = null; model.refresh() })
+                        web != null -> WebScreen(session, web, onClose = { model.webPath = null })
                         else -> TodayScreen(
                             session = session,
                             state = model.today,

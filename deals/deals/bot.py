@@ -21,7 +21,7 @@ import urllib.error
 import urllib.request
 from urllib.parse import parse_qs, urlsplit
 
-from . import finder
+from . import finder, livedata
 
 API = "https://api.telegram.org"
 AR_STORE = {"talabat": "طلبات مارت", "amazon_eg": "أمازون مصر", "jumia": "جوميا", "breadfast": "بريدفاست",
@@ -179,6 +179,10 @@ class Bot:
         return con
 
     def catalog(self, con) -> tuple[list, dict]:
+        keeper = livedata.existing(self.db_path)
+        if keeper is not None:  # running next to the web server: share its copy (rebuilt off this thread)
+            snap = keeper.get()
+            return snap.items, snap.by_id
         at, items, by_id = self._cat
         if time.monotonic() - at > 60:
             items = finder.catalog(con)

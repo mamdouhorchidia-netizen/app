@@ -4,7 +4,7 @@
   database (vapid.json). Browsers subscribe with the public key.
 - Each subscription stores what its owner wants (see `wants`): their watchlist, and/or any drop of at least
   N %, optionally only some stores, hubs, categories or words.
-- `Notifier` looks at the price changes every minute and sends each subscriber one notification per batch
+- `Notifier` looks at the price changes within ~15 s of one being written (and at least every minute) and sends each subscriber one notification per batch
   (at most one every `min_gap` seconds), so a busy minute doesn't buzz a phone ten times.
 - Encryption is RFC 8291 (aes128gcm) and the authorization header RFC 8292 (VAPID, ES256), on the
   `cryptography` package. Push services answer 404/410 for a subscription that is gone; it is then deleted.
@@ -15,6 +15,7 @@ import hashlib
 import hmac
 import json
 import os
+import sqlite3
 import struct
 import threading
 import time
@@ -180,7 +181,7 @@ def due_sales(con, ids: list[int], now: int, within_days: float = 1.0) -> dict:
     return out
 
 
-# ---- the minute-by-minute check --------------------------------------------------------------------
+# ---- the check: soon after a price moves, and at least once a minute ----------------------------
 
 class Notifier:
     def __init__(self, db_path: str, labels: dict, min_gap: int = 300, log=print):
@@ -189,6 +190,8 @@ class Notifier:
         self.last = int(time.time())
         self.pending = {}  # endpoint -> drops waiting for that subscriber's gap
         self.last_forecast = 0  # predicted sales are looked at once an hour
+        self.check_every, self.every = 15, 60  # look at the data version every 15 s; tick at least once a minute
+        self.seen_v, self.ticked = None, time.monotonic()
 
     def drops_since(self, con, since: int) -> list[dict]:
         rows = con.execute("""
@@ -266,11 +269,23 @@ class Notifier:
                 break  # one forecast an hour per subscriber is plenty
         return sent
 
-    def run_forever(self):
+    def due(self, v: int, mono: float) -> bool:
+        """Look for drops when a price row was written since the last look (v moved), and at least every
+        `every` seconds anyway, for bundles waiting for a subscriber's gap and the hourly sale forecasts."""
+        return v != self.seen_v or mono - self.ticked >= self.every
+
+    def run_forever(self, sleep=time.sleep, clock=time.monotonic):
         while True:
-            time.sleep(60)
+            sleep(self.check_every)
             try:
-                self.tick()
+                con = sqlite3.connect(self.db_path, timeout=30)  # a bare look: no schema or migration work
+                try:
+                    v = dbm.data_version(con)
+                finally:
+                    con.close()
+                if self.due(v, clock()):
+                    self.tick()
+                    self.seen_v, self.ticked = v, clock()
             except Exception:
                 traceback.print_exc()
 

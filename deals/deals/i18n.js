@@ -56,6 +56,8 @@
     "Couldn't hear that: try again, or type.": "مسمعتش كويس: جرب تاني أو اكتب.",
     "starting: the first prices arrive within a minute": "بيبدأ: أول الأسعار هتوصل خلال دقيقة",
     "can't reach the server, retrying…": "مش قادر يوصل للسيرفر، بيحاول تاني…",
+    "Can't reach the server.": "مش قادرين نوصل للسيرفر.", "Retry": "حاول تاني", "No prices loaded yet.": "لسه مفيش أسعار اتحمّلت.",
+    "Couldn't load the deals. They'll show here as soon as the server answers.": "مقدرناش نحمّل العروض. هتظهر هنا أول ما السيرفر يرد.",
     "Nothing matches these filters yet. The first sweep of each store takes about 15 minutes, and price-drop deals need a few days of history.":
       "مفيش نتايج للفلاتر دي لسه. أول لفة على كل متجر بتاخد حوالي ربع ساعة، وعروض نزول السعر محتاجة كام يوم تاريخ.",
     "Your watchlist is empty: tap ★ on any product to follow its price.": "قايمة المتابعة فاضية: دوس ★ على أي منتج عشان تتابع سعره.",
@@ -86,6 +88,10 @@
       "الأسعار بتتحدّث طول اليوم من صفحات المتاجر نفسها. ممكن السعر يتغير في المتجر قبل ما يتغير هنا.", "Telegram channel": "قناة التليجرام", "No coupons yet.": "مفيش كوبونات لسه.",
   };
   const RX = [
+    // the offline banner (the time is already written in Arabic by the page), the chart's tip, the deal score
+    [/^Prices shown are from (.+)\.$/, "الأسعار اللي قدامك من $1."],
+    [/^([\d,.]+) EGP on (.+)$/, "$1 ج.م يوم $2"],
+    [/^Deal score (\d+) of 100$/, "تقييم العرض $1 من 100"],
     [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|Raya|store) app ↗$/, (m, a) => `افتح في تطبيق ${APP[a]} ↗`],
     [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|Raya|store) ↗$/, (m, a) => `افتح في ${APP[a]} ↗`],
     [/^changed (.+)$/, "اتغير $1"], [/^dropped (.+)$/, "نزل $1"], [/^went up (.+)$/, "زاد $1"],

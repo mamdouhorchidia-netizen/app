@@ -259,64 +259,92 @@ def query(items: list[dict], deals_only: bool = True, stores: list[str] = None, 
           offset: int = 0, hubs: list[int] = None) -> dict:
     """Returns {"items", "total", "facets"}. Facets count the matches per store, category and kind,
     each ignoring its own filter, so the page can show "(123)" next to every choice."""
+    hits, facets = select(items, deals_only=deals_only, stores=stores, kind=kind, min_pct=min_pct, max_pct=max_pct,
+                          stock=stock, status=status, category=category, q=q, price_min=price_min,
+                          price_max=price_max, ids=ids, best=best, sort=sort, hubs=hubs)
+    return {"items": hits[offset:offset + limit], "total": len(hits), "facets": facets}
+
+
+def select(items: list[dict], deals_only: bool = True, stores: list[str] = None, kind: str = None,
+           min_pct: float = 0, max_pct: float = None, stock: str = "in", status: list[str] = None,
+           category: str = None, q: str = None, price_min: float = None, price_max: float = None,
+           ids: list[int] = None, best: bool = False, sort: str = "score", hubs: list[int] = None) -> tuple[list, dict]:
+    """query() before the page is cut: (every match, sorted; facets), in one pass over the items. The web server
+    keeps this per filter set, so "more" and the 10-second refresh only slice it."""
     words = [w for w in (q or "").lower().split() if w]
     status = set(status or [])
     stores = set(stores or [])
+    hubs = set(hubs) if hubs else None
+    flag_needs = [f for f in ("new", "lowest", "label", "back") if f in status]
+    min_pct = min_pct or 0
 
-    def keep(d, skip=None):
-        if ids is not None:
-            return d["id"] in ids and (skip == "store" or not stores or d["store"] in stores)
+    def common(d) -> bool:
+        """The filters no facet ignores."""
         if deals_only and not (d["kind"] and d["discount_pct"] > 0):
             return False
-        if skip != "kind" and kind and d["kind"] != kind:
-            return False
-        if d["discount_pct"] < (min_pct or 0) and (deals_only or min_pct):
+        if d["discount_pct"] < min_pct and (deals_only or min_pct):
             return False
         if max_pct is not None and d["discount_pct"] > max_pct:
             return False
         if stock == "in" and not d["in_stock"] or stock == "out" and d["in_stock"]:
             return False
-        if skip != "store" and stores and d["store"] not in stores:
-            return False
-        if skip != "hub" and hubs and d["store"] == "talabat" and d["hub"] not in hubs:
-            return False
-        if skip != "category" and category and d["top_category"] != category:
-            return False
         if price_min is not None and d["price"] < price_min or price_max is not None and d["price"] > price_max:
             return False
         if best and not d["cheapest"]:
             return False
-        if "real" in status and {"steady", "inflated", "rose"} & set(d["flags"]):
-            return False
-        for f in ("new", "lowest", "label", "back"):
-            if f in status and f not in d["flags"]:
+        if status:
+            flags = d["flags"]
+            if "real" in status and ("steady" in flags or "inflated" in flags or "rose" in flags):
                 return False
-        if "compare" in status and not d["matches"]:
-            return False
-        if "fake" in status and "steady" not in d["flags"] and "inflated" not in d["flags"]:  # the discounts that never move
-            return False
-        if "promo" in status and not d.get("promo_code"):
-            return False
-        if "soon" in status and not (d.get("rhythm") and d["rhythm"]["next_in_days"] is not None
-                                     and d["rhythm"]["next_in_days"] <= 3):
-            return False
+            for f in flag_needs:
+                if f not in flags:
+                    return False
+            if "compare" in status and not d["matches"]:
+                return False
+            if "fake" in status and "steady" not in flags and "inflated" not in flags:  # discounts that never move
+                return False
+            if "promo" in status and not d.get("promo_code"):
+                return False
+            if "soon" in status and not (d.get("rhythm") and d["rhythm"]["next_in_days"] is not None
+                                         and d["rhythm"]["next_in_days"] <= 3):
+                return False
         if words:
             text = (d["name"] + " " + (d["brand"] or "") + " " + (d["category"] or "")).lower()
             if not all(w in text for w in words):
                 return False
         return True
 
-    hits = [d for d in items if keep(d)]
+    hits = []
+    f_store, f_cat, f_kind, f_hub = Counter(), Counter(), Counter(), Counter()
+    for d in items:
+        if ids is not None:  # a list of products: only the store filter applies
+            if d["id"] not in ids:
+                continue
+            miss_kind = miss_hub = miss_cat = False
+        else:
+            if not common(d):
+                continue
+            miss_kind = bool(kind) and d["kind"] != kind
+            miss_hub = bool(hubs) and d["store"] == "talabat" and d["hub"] not in hubs
+            miss_cat = bool(category) and d["top_category"] != category
+        miss_store = bool(stores) and d["store"] not in stores
+        misses = miss_kind + miss_hub + miss_cat + miss_store
+        if misses > 1:
+            continue
+        # a facet counts the items that pass every filter but its own
+        if not misses or miss_store:
+            f_store[d["store"]] += 1
+        if not misses or miss_cat:
+            f_cat[d["top_category"]] += 1
+        if (not misses or miss_kind) and d["kind"]:
+            f_kind[d["kind"]] += 1
+        if (not misses or miss_hub) and d["store"] == "talabat" and d["hub"]:
+            f_hub[f'{d["hub"]}|{d["hub_name"]}'] += 1
+        if not misses:
+            hits.append(d)
     hits.sort(key=SORTS.get(sort, SORTS["score"]))
-    facets = {
-        "store": Counter(d["store"] for d in items if keep(d, "store")),
-        "category": Counter(d["top_category"] for d in items if keep(d, "category")),
-        "kind": Counter(d["kind"] for d in items if keep(d, "kind") and d["kind"]),
-        "hub": Counter(f'{d["hub"]}|{d["hub_name"]}' for d in items if d["store"] == "talabat" and d["hub"]
-                       and keep(d, "hub")),
-    }
-    return {"items": hits[offset:offset + limit], "total": len(hits),
-            "facets": {k: dict(v.most_common()) for k, v in facets.items()}}
+    facets = {"store": f_store, "category": f_cat, "kind": f_kind, "hub": f_hub}
+    return hits, {k: dict(v.most_common()) for k, v in facets.items()}
 
 
 def find_deals(con, min_pct: float = 5, store: str = None, q: str = None, category: str = None,
