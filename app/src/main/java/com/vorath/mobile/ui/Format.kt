@@ -13,6 +13,16 @@ object Format {
 
     fun money(egp: Double): String = (if (egp < 0) "−" else "") + "EGP " + whole.format(Math.round(Math.abs(egp)))
 
+    /** The same figure as TalkBack should say it: "minus EGP 1,200" rather than a dash read as a symbol. */
+    fun moneySpoken(egp: Double): String = (if (egp < 0) "minus " else "") + "EGP " + whole.format(Math.round(Math.abs(egp)))
+
+    /** The change against the previous period, in words (the server's figures; only the whole percent is rounded). */
+    fun changeSpoken(pct: Int): String = when {
+        pct > 0 -> "up $pct percent versus previous period"
+        pct < 0 -> "down ${-pct} percent versus previous period"
+        else -> "no change versus previous period"
+    }
+
     /** "2026-10-10" -> "10 Oct"; anything else comes back as it is. */
     fun day(iso: String): String = try {
         SimpleDateFormat("d MMM", Locale.ENGLISH).format(SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(iso)!!)

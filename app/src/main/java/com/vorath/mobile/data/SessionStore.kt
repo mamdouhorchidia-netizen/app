@@ -40,6 +40,19 @@ class SessionStore(context: Context) {
         get() = prefs.getBoolean("told_signed_out", false)
         set(v) = prefs.edit().putBoolean("told_signed_out", v).apply()
 
+    /**
+     * The notification permission was asked once (Android shows its dialog at most twice; after that only the
+     * settings can turn it on). Kept across restarts and sign-outs: it is about the phone, not the person.
+     */
+    var notifyAsked: Boolean
+        get() = prefs.getBoolean("notify_asked", false)
+        set(v) = prefs.edit().putBoolean("notify_asked", v).apply()
+
+    /** "Not now" on the Today page's notifications card; the menu still offers to turn them on. */
+    var notifyDeclined: Boolean
+        get() = prefs.getBoolean("notify_declined", false)
+        set(v) = prefs.edit().putBoolean("notify_declined", v).apply()
+
     private fun seal(plain: String): String = Base64.encodeToString(Keystore.seal(plain.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
 
     /** null when the stored value cannot be opened (a restored backup, a reset keystore): the person signs in again. */

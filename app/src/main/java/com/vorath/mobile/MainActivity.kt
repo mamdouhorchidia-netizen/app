@@ -13,7 +13,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,7 +40,6 @@ class MainActivity : ComponentActivity() {
                     val context = LocalContext.current
                     val session = model.session
                     var notificationsOn by remember { mutableStateOf(Notifier.allowed(context)) }
-                    var asked by remember { mutableStateOf(false) }
                     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notificationsOn = it }
 
                     val web = model.webPath
@@ -51,10 +49,14 @@ class MainActivity : ComponentActivity() {
                         model.startLoop()
                         onPauseOrDispose { model.stopLoop() }
                     }
-                    LaunchedEffect(session) {                    // once signed in, ask once; after a refusal the Today page offers the settings
-                        if (session != null && !notificationsOn && !asked && Build.VERSION.SDK_INT >= 33) {
-                            asked = true
+                    // Not asked at sign-in: the Today page explains why next to the alarms, and asks when the person taps
+                    // "Allow". The first tap shows Android's dialog (remembered across restarts); later taps open the settings.
+                    val allow = {
+                        if (Build.VERSION.SDK_INT >= 33 && !model.notifyAsked) {
+                            model.markNotifyAsked()
                             ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
                         }
                     }
 
@@ -67,10 +69,10 @@ class MainActivity : ComponentActivity() {
                             notificationsOn = notificationsOn,
                             onRefresh = model::refresh,
                             onOpen = { model.webPath = it },
-                            onAllowNotifications = {
-                                startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
-                            },
+                            onAllowNotifications = allow,
                             onSignOut = { forgetWebSession(); model.signOut() },
+                            offerNotifications = !model.notifyDeclined,
+                            onNotNow = model::declineNotify,
                         )
                     }
                 }

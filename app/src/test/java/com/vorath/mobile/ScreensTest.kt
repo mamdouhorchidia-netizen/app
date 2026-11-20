@@ -3,6 +3,9 @@ package com.vorath.mobile
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.vorath.mobile.data.Parse
 import com.vorath.mobile.data.Section
@@ -38,8 +41,8 @@ class ScreensTest {
     }
 
     @Composable
-    private fun Today(state: TodayState, notificationsOn: Boolean = true, secondsLater: Long = 12) =
-        TodayScreen(session, state, notificationsOn, {}, {}, {}, {}, clock = { readAt + secondsLater * 1000 })
+    private fun Today(state: TodayState, notificationsOn: Boolean = true, secondsLater: Long = 12, alarmsOpen: Boolean = false) =
+        TodayScreen(session, state, notificationsOn, {}, {}, {}, {}, clock = { readAt + secondsLater * 1000 }, alarmsOpen = alarmsOpen)
 
     @Test
     @Config(sdk = [34], qualifiers = "w411dp-h2200dp-xxhdpi")
@@ -90,6 +93,61 @@ class ScreensTest {
     fun todayNothingAndOffline() = shot("today-nothing-offline") {
         Today(TodayState(money = Section(error = VorathError.Offline("Cannot reach the server. Check the connection and the address."))))
     }
+
+    /** The first read with nothing cached: grey shapes of the page, not a spinner over nothing. */
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-night-xxhdpi")
+    fun todaySkeleton() = shot("today-skeleton-dark") { Today(TodayState(spinning = true, busySince = readAt)) }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w840dp-h1300dp-xhdpi")
+    fun todaySkeletonTablet() = shot("today-skeleton-tablet") { Today(TodayState(spinning = true, busySince = readAt)) }
+
+    /** Android's largest font size (200 %): nothing clips, the figures shrink or wrap. */
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h3600dp-xxhdpi")
+    fun todayFontScale200() = shot("today-font-200") {
+        CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale = 2f)) { Today(today, notificationsOn = false) }
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w360dp-h2400dp-night-xhdpi")
+    fun todayFontScale200SmallDark() = shot("today-font-200-small-dark") {
+        CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale = 2f)) { Today(today) }
+    }
+
+    /** A tablet: content capped at 840 dp, two columns (needs and alarms | numbers, cash, plan). */
+    @Test
+    @Config(sdk = [34], qualifiers = "w840dp-h1300dp-xhdpi")
+    fun todayTablet() = shot("today-tablet") { Today(today, notificationsOn = false) }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-night-mdpi")
+    fun todayTabletWideDark() = shot("today-tablet-wide-dark") { Today(today) }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h1500dp-xxhdpi")
+    fun todayAlarmsOpen() = shot("today-alarms-open") { Today(today, alarmsOpen = true) }
+
+    /** Notifications off: the card that explains why sits after the alarms. */
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h1200dp-xxhdpi")
+    fun todayNotifyCard() = shot("today-notify-card") { Today(today, notificationsOn = false) }
+
+    /** The role does not open the Autopilot: a quiet note where it would be; the numbers still show. */
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+    fun todayDeckRefused() = shot("today-deck-refused") {
+        Today(today.copy(deck = Section(refused = "Your role does not open this.", fetchedAt = readAt)))
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+    fun todayLightPhone() = shot("today-main-light") { Today(today) }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-night-xxhdpi")
+    fun todayDarkPhone() = shot("today-main-dark") { Today(today) }
 
     @Test
     @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")

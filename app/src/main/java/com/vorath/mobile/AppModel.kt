@@ -72,6 +72,22 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /** The page of the full Vorath open inside the app, or null. While it is open the 30-second reads pause. */
     var webPath by mutableStateOf<String?>(null)
 
+    /** Whether the notification permission was asked before (persisted), and whether its card was put away. */
+    var notifyAsked by mutableStateOf(store.notifyAsked)
+        private set
+    var notifyDeclined by mutableStateOf(store.notifyDeclined)
+        private set
+
+    fun markNotifyAsked() {
+        store.notifyAsked = true
+        notifyAsked = true
+    }
+
+    fun declineNotify() {
+        store.notifyDeclined = true
+        notifyDeclined = true
+    }
+
     val lastBase get() = store.lastBase
     val lastUser get() = store.lastUser
 
