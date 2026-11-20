@@ -5,10 +5,16 @@ at a time at its own delay (see scheduler.py).
 
 - A shelf's *target* is how often it should ideally be rechecked: hot (a price moved in the last 30 min)
   every `hot_every` (60 s); watched (one of its products is on a web-push ★ watchlist or followed in the
-  Telegram bot, or has a sale predicted within a day) every 5 min; volatile (its checks keep finding changes:
-  1 every 2 h or more) every 15 min down to 5 min at 2 an hour; anything else has no target and just comes round in the sweep.
+  Telegram bot) every 5 min; volatile (its checks keep finding changes: 1 every 2 h or more) every 15 min
+  down to 5 min at 2 an hour; anything else has no target and just comes round in the sweep.
+- A predicted sale (a sale due within a day) counts only for watched products, the only ones anyone is told
+  about (push and bot "sale due" alerts go to watchers). Counting every product's predicted sale crowded out
+  the watched shelves: forecast.rhythm keeps an overdue sale "due now" until the next sale actually starts,
+  so that set only grows with history, while a store's priority turns serve few 5-minute shelves (half its
+  requests: ~15 per 5 min at Raya's 10 s, ~19 at Amazon's 8 s, ~50 at 3 s); past that every watched shelf
+  slips in proportion.
 - The watch set is read from the database at most once a minute, shared by every store thread; the
-  predicted sales (forecast.rhythm over every product with some history) at most once an hour.
+  predicted sales of watched products (forecast.rhythm over their history) at most once an hour.
 """
 
 import json
@@ -85,12 +91,17 @@ def watched_ids(con) -> set:
     return ids
 
 
-def due_ids(con, now: int, within_days: float = 1.0) -> set:
+def due_ids(con, now: int, within_days: float = 1.0, ids=None) -> set:
     """Product ids whose next sale is predicted within `within_days`, by the same rule as push.due_sales
     (in stock, not on sale now, the typical sale at least 3 % under today's price), in one pass over the
-    last 120 days of price rows (push.due_sales does one product at a time and needs the push package)."""
+    last 120 days of price rows (push.due_sales does one product at a time and needs the push package).
+    ids: only these products (the watched ones); None: every product."""
     since = now - 120 * DAY
+    if ids is not None and not ids:
+        return set()
     prices = {r[0]: r[1] for r in con.execute("SELECT id, price FROM products WHERE in_stock = 1 AND price > 0")}
+    if ids is not None:
+        prices = {k: v for k, v in prices.items() if k in ids}
     out, cur, rows = set(), None, []
 
     def judge(pid, rows):
@@ -100,11 +111,17 @@ def due_ids(con, now: int, within_days: float = 1.0) -> set:
                     and r["typical_sale"] < prices[pid] * 0.97:
                 out.add(pid)
 
-    for pid, at, price, orig, stock in con.execute(
+    if ids is not None:
+        rows_q = con.execute("""SELECT product_id, at, price, original_price, in_stock FROM prices
+                                WHERE at > ? AND product_id IN (SELECT value FROM json_each(?))
+                                ORDER BY product_id, at""", (since, json.dumps(sorted(prices))))
+    else:
+        rows_q = con.execute(
             """SELECT product_id, at, price, original_price, in_stock FROM prices
                WHERE at > ? AND product_id IN (SELECT product_id FROM prices WHERE at > ?
                                                GROUP BY product_id HAVING COUNT(*) >= 3)
-               ORDER BY product_id, at""", (since, since)):
+               ORDER BY product_id, at""", (since, since))
+    for pid, at, price, orig, stock in rows_q:
         if pid != cur:
             if cur is not None:
                 judge(cur, rows)
@@ -126,9 +143,10 @@ def skus_by_store(con, ids) -> dict:
 
 
 class Watchlist:
-    """{store: skus} that are watched or have a sale due, reloaded at most every `every` seconds (predicted
-    sales every `due_every`). Safe to share between store threads: one reloads while the others keep the last
-    copy. `version` moves whenever the set changed, so a store knows when to mark its shelves again."""
+    """{store: skus} that are watched (a watched product with a sale due among them), reloaded at most every
+    `every` seconds (the predicted sales of the watched products every `due_every`). Safe to share between
+    store threads: one reloads while the others keep the last copy. `version` moves whenever the set changed,
+    so a store knows when to mark its shelves again."""
 
     def __init__(self, db_path: str = None, con=None, every: float = 60, due_every: float = 3600, log=print):
         self.db_path, self.con, self.every, self.due_every, self.log = db_path, con, every, due_every, log
@@ -162,9 +180,11 @@ class Watchlist:
     def _reload(self, now: float):
         con = self._open()
         try:
+            watched = watched_ids(con)
             if self.due_loaded is None or now - self.due_loaded >= self.due_every:
-                self.due, self.due_loaded = due_ids(con, int(now)), now
-            by_store = skus_by_store(con, watched_ids(con) | self.due)
+                self.due, self.due_loaded = due_ids(con, int(now), ids=watched), now
+            # a predicted sale counts only while its product is watched (see the module's notes)
+            by_store = skus_by_store(con, watched | (self.due & watched))
         finally:
             if con is not self.con:
                 con.close()

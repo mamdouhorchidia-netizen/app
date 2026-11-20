@@ -5,7 +5,7 @@ Every grocery page on talabat.com is rendered on the server and carries its data
 
   /egypt/talabat-mart/categories?aid=AREA          the branch serving that area, and its category tree
   /egypt/grocery/BRANCH/talabat-mart/CAT/SUB?aid=AREA&page=N   20 products per page, with
-                                                                price, originalPrice and stockAmount
+                                                                price, originalPrice and inStock (stockAmount on older pages)
 
 The site's robots.txt allows all of it. Prices are per branch, and the area picks the branch.
 """
@@ -116,10 +116,18 @@ def parse_items(html: str, branch_id, area_id, category: str = "", hub: str = No
             url=f"{base}/product/{quote(it.get('slug') or '')}/s/{quote(it['sku'])}?aid={area_id}",
             image=it.get("image") or "",
             category=category,
-            in_stock=(it.get("stockAmount") or 0) > 0,
+            in_stock=_in_stock(it),
             extra={"stock": it.get("stockAmount"), "hub": int(branch_id), "hub_name": hub},
         ))
     return offers, int(data.get("pageCount") or 1)
+
+
+def _in_stock(it: dict) -> bool:
+    """talabat's items say `inStock` (true/false) since late 2026; older pages gave a `stockAmount` count instead.
+    Reading only stockAmount marked every product out of stock on the new pages."""
+    if it.get("inStock") is not None:
+        return bool(it["inStock"])
+    return (it.get("stockAmount") or 0) > 0
 
 
 def _num(v) -> Optional[float]:

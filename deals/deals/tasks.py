@@ -19,7 +19,7 @@ class Task:
     skus: frozenset = field(default_factory=frozenset, repr=False)  # the products its last check returned
     change_rate: float = field(default=0.0, repr=False)  # running average: checks finding a change, per hour
     rate_at: float = field(default=0.0, repr=False)  # the time change_rate is as of
-    watched: bool = field(default=False, repr=False)  # one of its products is watched or has a sale due
+    watched: bool = field(default=False, repr=False)  # one of its products is watched
 
 
 def run_once(tasks: list[Task], max_pages: int = None) -> Iterator[Offer]:

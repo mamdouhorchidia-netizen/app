@@ -3,13 +3,14 @@
 - Cold pages: whichever was checked longest ago goes next, so every shelf comes round in one cycle
   (talabat ~550 pages at 1.5 s = ~14 min).
 - Pages that matter more get a target interval (priority.py): hot (a price moved in the last 30 minutes)
-  every `hot_every` seconds (default 60), watched (a product on it is watched or has a sale due) every 5 min,
+  every `hot_every` seconds (default 60), watched (a product on it is watched) every 5 min,
   volatile (its checks keep finding changes) every 5-15 min. Turns alternate: a priority turn takes the page
   most overdue for its target ((now - last check) / target, only pages at or past it), the next turn the page
   checked longest ago of all. So a busy day can at most double the cycle, never stall it, and the store is
   asked exactly as often as before: only the order of pages changes.
 - A bot check pauses that store for 30 minutes; an expired Breadfast session pauses it until a new
-  capture is imported. Each store runs on its own thread with its own Fetcher.
+  capture is imported; "429 Too Many Requests" that outlasts the fetcher's retries pauses it 5 minutes
+  (Dream 2000's Shopify catalogue answered so now and then at one request every 3 s). Each store runs on its own thread with its own Fetcher.
 """
 
 import os
@@ -17,7 +18,7 @@ import time
 import traceback
 
 from . import db, priority
-from .http import Blocked, Fetcher
+from .http import Blocked, Fetcher, RateLimited
 from .models import NotConfigured, SessionExpired
 from .tasks import Task
 
@@ -43,6 +44,8 @@ class StoreLoop:
         self.cycle_secs = None
         self.pages = self.changes = 0
         self.blocks = 0  # bot checks in a row
+        self.blocked_key = None  # the page the last bot check came on
+        self.clean = 0  # clean pages since then
         self.last_change = 0.0
         self.watch_mtime = self._mtime()
         self.replan_file = replan_file  # when this file changes (settings), the store's pages are listed afresh
@@ -157,9 +160,14 @@ class StoreLoop:
         try:
             offers, follow = task.run()
         except Blocked as e:
-            # repeated bot checks mean "slow down": 30 min, then 1 h, 2 h, 4 h at most; reset after a clean page
+            # repeated bot checks mean "slow down": 30 min, then 1 h, 2 h, 4 h at most; reset once that page is clean
             self._pause(min(BLOCKED_PAUSE * 2 ** self.blocks, 4 * 3600), str(e))
             self.blocks += 1
+            self.blocked_key, self.clean = task.key, 0
+            self._status()
+            return
+        except RateLimited as e:  # still "too many requests" after the fetcher's retries: give the site a rest
+            self._pause(ERROR_PAUSE, f"{task.key}: {e}")
             self._status()
             return
         except SessionExpired as e:  # wait for a new capture (or an hour)
@@ -175,7 +183,12 @@ class StoreLoop:
             return
         offers = list(offers)  # read twice: saved, then remembered as this page's products
         done = self.clock()
-        self.blocks = 0
+        # the pause stops doubling once the page that was bot-checked comes back clean (or 20 others in a row
+        # do): at Amazon, Today's Deals (rendered in Chrome) passed after every pause while the next best-seller
+        # list was bot-checked again, so "any clean page" kept the pause at 30 min forever
+        self.clean += 1
+        if task.key == self.blocked_key or self.clean >= 20:
+            self.blocks, self.blocked_key = 0, None
         stats = {}
         with self.con:  # the page's prices and the store's status in one commit
             db.write_offers(self.con, offers, int(done), stats)

@@ -174,6 +174,34 @@ class Restarts(unittest.TestCase):
         self.assertEqual(k.render("fine", 10000, 90), "ok")
         self.assertEqual((len(FakeSession.made), k.restarts), (2, {"hang": 1}))
 
+    def test_a_page_that_eats_memory_is_stopped_mid_render(self):
+        """Raya pages that never finish grew Chrome ~45 MB/s, to 5.7 GB before the 120 s limit: past kill_mb,
+        Chrome is killed at once (the between-pages max_mb check comes too late)."""
+        class Greedy(FakeSession):
+            def __init__(self, chrome):
+                super().__init__(chrome)
+                self.killed = threading.Event()
+
+            def render(self, url, budget_ms, deadline):
+                if url != "greedy":
+                    return super().render(url, budget_ms, deadline)
+                self.mb = 5000  # what the watchdog sees on its next look
+                if not self.killed.wait(5):
+                    return "finished"
+                raise browser.ProtocolError("Chrome exited")
+
+            def kill(self):
+                self.killed.set()
+
+        k = self.keeper(factory=Greedy, kill_mb=900, watch_every=0.02)
+        started = time.monotonic()
+        with self.assertRaisesRegex(RuntimeError, "passed 900 MB on greedy"):
+            k.render("greedy", 10000, 120)
+        self.assertLess(time.monotonic() - started, 2)
+        self.assertEqual(k.restarts, {"memory kill": 1})
+        self.assertEqual(k.render("fine", 10000, 120), "<html>fine</html>")  # a fresh Chrome
+        self.assertEqual(len(FakeSession.made), 2)
+
     def test_a_protocol_error_restarts_too(self):
         def behave(url):
             raise browser.ProtocolError("bad")

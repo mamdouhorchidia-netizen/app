@@ -117,6 +117,17 @@ def status(con) -> list[dict]:
     return out
 
 
+# what a live store's status row carries but the page never shows: `updated` moves with every page checked, so
+# in it the pulse's ETag changed on every poll (no 304s at all on real stores), and `pages_per_cycle` with
+# every page discovered. Left out of the pulse's ETag (still in the answer); an idle store's `updated` counts.
+PULSE_UNSHOWN = frozenset({"updated", "pages_per_cycle"})
+
+
+def pulse_etag_view(value: dict) -> dict:
+    return {**value, "status": [{k: x for k, x in s.items() if not (s.get("live") and k in PULSE_UNSHOWN)}
+                                for s in value.get("status") or []]}
+
+
 def etag_of(*parts) -> str:
     """A weak ETag (W/"…") over JSON-able parts: weak because a 200 may differ in its time fields."""
     h = hashlib.blake2b(digest_size=12)
@@ -333,7 +344,7 @@ def make_handler(db_path: str, requests_file: str = None, keeper: livedata.Catal
             keeper.start()  # builds the first catalog in the background if nobody asked for one yet
             value = {"v": version.get(con), "status": status(con), "changes_last_hour": changes_last_hour(con),
                      "catalog": {"v": snap.v, "built": snap.built} if snap else None}
-            value["etag"] = etag_of("pulse", value)
+            value["etag"] = etag_of("pulse", pulse_etag_view(value))
             pulse_box.update(at=time.monotonic(), value=value)
             return value
 

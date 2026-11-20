@@ -25,8 +25,9 @@ never how often a store is asked.
   for talabat's ~550 pages.
 - Some shelves have a **target** for how often they should be rechecked (`deals/priority.py`):
   - **hot**, a price moved in the last 30 minutes: every **60 seconds** (`HOT_EVERY`);
-  - **watched**, one of its products is on someone's ★ alert watchlist, followed in the Telegram bot, or
-    has a sale predicted within a day: every **5 minutes**;
+  - **watched**, one of its products is on someone's ★ alert watchlist or followed in the Telegram bot:
+    every **5 minutes**. A predicted sale counts only for watched products (the only ones anyone is told
+    about): counted for every product, the "sale due" set only grows with history and crowded them out;
   - **busy**, its checks keep finding changes (a fading average of changes found per hour, over ~4 h):
     every 15 minutes at one change every 2 hours, down to every 5 minutes at two an hour.
 - **Turns alternate:** one request goes to the shelf most overdue for its target (time since its last check
@@ -34,7 +35,7 @@ never how often a store is asked.
   day slows a pass down (at most to double) but never stalls it, and when nothing is due both turns sweep.
   When more shelves are due than the priority turns can serve, they all slip in proportion to their target.
 - Which products a shelf holds is remembered from its last check; the watch lists are read again about
-  once a minute and the predicted sales about once an hour, shared by all the stores.
+  once a minute and the watched products' predicted sales about once an hour, shared by all the stores.
 - Each checked page is **one commit**: its prices and the store's status line together (WAL, `synchronous=NORMAL`).
 - A **data version** `v` (the newest price row's number) moves only when a price or stock really changed, since
   that is the only time a price row is written. The server reads it at most once a second.
@@ -73,13 +74,13 @@ talabat and Amazon and your Breadfast account flagged within hours. The delays c
 
 | Store | Source | State |
 |---|---|---|
-| talabat mart | talabat.com's public grocery pages. Each page carries its data as JSON (`__NEXT_DATA__`): price, original price, stock. robots.txt allows it. | Works. ~10,400 products; a full run is ~550 pages, about 15 minutes. |
+| talabat mart | talabat.com's public grocery pages. Each page carries its data as JSON (`__NEXT_DATA__`): price, original price, stock (`inStock`). robots.txt allows it. | Works. ~10,400 products; a full run is ~550 pages, about 15 minutes. |
 | Amazon.eg | **Today's Deals**, rendered in headless Chrome: Amazon's own deal price, list price, "% off" and event label. Plus the public **best-seller lists** at every level (department › list › sub-list…) in 17 departments (all but gift cards), 60 products per list. robots.txt allows both. With API keys set, the official Product Advertising API is used instead. | Works without keys. ~70 live deals per render, and a few thousand list pages at 3 s apart: a full sweep takes hours, while busy shelves are rechecked every minute. |
 | Jumia | Its public **Flash Sales** and main category pages (JSON in each page). Jumia's robots.txt allows bots that identify themselves with an owner address and stay under 200 requests a minute; this one sends 1 every 3 s (`JUMIA_DELAY`). Jumia sits behind Cloudflare: a "Just a moment…" check pauses it like Amazon's bot check. | Built; from this sandbox Cloudflare challenged it after a few pages, so whether it runs from the server shows on the site's status line. |
 | Breadfast | A **capture of the app's own traffic** from your phone, imported once and then refreshed automatically. | Ready for your first capture (steps below). |
 | Dream 2000 | Its public **Shopify catalogue** (`/products.json`, 250 products a page): price, compare-at ("was") price, stock, brand. robots.txt allows it. 1 request every 3 s (`DREAM_DELAY`). | Works. Thousands of appliances and electronics; a sweep is about 20 pages. |
 | Kenzz | Its public pages (`__NEXT_DATA__`): price, market price, stock, tags, and the **promo code** each product shows (e.g. KBF26), which feeds /coupons by itself. A category page lists its top 20, so it reads all ~1,080 category pages from Kenzz's sitemap plus the home page, 1 every 3 s (`KENZZ_DELAY`). robots.txt allows everything. | Works. A sweep takes about an hour. |
-| Raya Shop | Its category pages, **rendered in headless Chrome** (Raya builds its lists with JavaScript): name, price, struck-through price, picture. robots.txt allows category pages and closes their ?p= page-2 variants, so it reads the first page (~20 products) of each of the ~800 categories in Raya's sitemap, deal lists first, 1 page every 10 s (`RAYA_DELAY`). | Works. A sweep takes a few hours. |
+| Raya Shop | Its category pages, **rendered in headless Chrome** (Raya builds its lists with JavaScript): name, price, struck-through price, picture. robots.txt allows category pages and closes their ?p= page-2 variants, so it reads the first page (~20 products) of each of the ~1,080 categories in Raya's sitemap (the entries without a product picture), deal lists first, 1 page every 10 s (`RAYA_DELAY`). | Works. A sweep takes a few hours. |
 | Others tried | Spinneys and Seoudi show no products until a delivery district is picked on a map; 2B and Hyper One block bots (Cloudflare / 403); Tawheed & Nour and Gourmet didn't answer. Noon, Carrefour and B.TECH block us: they need their affiliate programs. | Not added. |
 
 ### Amazon.eg without the API
@@ -87,12 +88,12 @@ talabat and Amazon and your Breadfast account flagged within hours. The delays c
   sweep. Chrome runs as itself: its own headless identity, no disguise, TLS checks on. A bot check stops it
   like any other page. The Docker image includes Chromium. Elsewhere, set `CHROME_BIN` or install Chrome;
   without Chrome, this part is skipped.
-- **One Chrome, kept running.** Raya's ~800 pages and Today's Deals share one headless Chrome, one page at
+- **One Chrome, kept running.** Raya's ~1,100 pages and Today's Deals share one headless Chrome, one page at
   a time, driven over the DevTools protocol on a pipe (`--remote-debugging-pipe`, standard library only)
   instead of a Chrome launch per page. Each page gets a fresh browser context (no cookies or cache from
   earlier pages) and the same `--virtual-time-budget` page time and time limit as before; the stores' own
   delays are unchanged, so no store is asked more often. Chrome is restarted after `CHROME_MAX_PAGES`
-  pages (200), past `CHROME_MAX_MB` of memory (700; it sits near 350 MB), after any protocol error, and
+  pages (200), past `CHROME_MAX_MB` of memory (700; it sits near 350 MB and peaks near 730 MB on a real Raya page), at once in the middle of a page that passes `CHROME_KILL_MB` (900: a few of Raya's category pages never finish and grow Chrome by 100–200 MB/s, to 5.7 GB in their 120 s, on either path), after any protocol error, and
   after a page outruns its time limit (killed outright, with a watchdog for anything stuck); it is shut
   down after `CHROME_IDLE` s without a page (120), and its profile directory is removed every time it
   stops. If the pipe won't start, pages fall back to a launch each (`--dump-dom`) for 30 minutes before it

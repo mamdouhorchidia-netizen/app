@@ -4,7 +4,7 @@ Raya builds its product lists with JavaScript, so each category page is rendered
 Amazon's Today's Deals) and read from the page: name, price, struck-through price, picture. Its robots.txt
 allows category pages and closes their page-2+ variants (?p=), search, cart and accounts, so this reads the
 first page (about 20 products) of every category in Raya's own sitemap, deal lists first. One page every
-10 s at least (`RAYA_DELAY`); a sweep of ~800 categories takes a few hours, busy pages come back sooner.
+10 s at least (`RAYA_DELAY`); a sweep of ~1,100 categories takes about 3 hours, busy pages come back sooner.
 """
 
 import html
@@ -87,13 +87,23 @@ def _page_task(path: str, render) -> Task:
     return Task(path, run)
 
 
+def sitemap_categories(xml: str) -> list[str]:
+    """Category paths from Raya's sitemap. Categories, products and brand pages all sit there; categories were
+    once nested paths (a/b/c) and are now one segment like products (/ar/laptops), so an entry counts as a
+    category when it carries no <image:image> (every product entry has its picture) and isn't a brand page."""
+    out = []
+    for block in re.findall(r"<url>(.*?)</url>", xml, re.S):
+        m = re.search(r"<loc>https://www\.rayashop\.com/ar/([a-z0-9-]+(?:/[a-z0-9-]+)*)/?</loc>", block)
+        if m and "<image:" not in block and not m.group(1).startswith("brands/"):
+            out.append(m.group(1))
+    return list(dict.fromkeys(out))
+
+
 def plan(fetcher: Fetcher, log=print, render=None) -> list[Task]:
     fetcher.delay = max(fetcher.delay, 10.0)
     render = render or (lambda url: (fetcher._wait(), browser.render(url, budget_ms=10000, timeout=120))[1])
     status, xml = fetcher.get(SITE + "/ar-sitemap.xml")
-    paths = re.findall(r"<loc>https://www\.rayashop\.com/ar/([a-z0-9-]+(?:/[a-z0-9-]+)+)</loc>", xml) \
-        if status == 200 else []
-    paths = [p for p in dict.fromkeys(paths) if not p.startswith("brands/")]
+    paths = sitemap_categories(xml) if status == 200 else []
     log(f"raya: {len(LISTS)} deal lists and departments, {len(paths)} categories")
     return [_page_task(p, render) for p in LISTS + [p for p in paths if p not in LISTS]]
 

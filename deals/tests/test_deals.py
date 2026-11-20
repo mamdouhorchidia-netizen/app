@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -40,6 +41,17 @@ class TalabatParsing(unittest.TestCase):
         self.assertEqual((cola.extra["hub"], cola.extra["hub_name"]), (619848, "Maadi Old"))
         undiscounted = offers[-1]
         self.assertIsNone(undiscounted.original_price)  # originalPrice == price is not a discount
+
+    def test_in_stock_flag(self):
+        """talabat's pages (Nov 2026) carry `inStock` instead of `stockAmount`; reading only stockAmount marked
+        every product out of stock, so none of talabat showed as a deal."""
+        page = (FIX / "talabat_items.html").read_text()
+        self.assertTrue(all(o.in_stock for o in talabat.parse_items(page, "619848", 9838)[0]))  # stockAmount > 0
+        new, n = re.subn(r'"stockAmount":\s*\d+', '"inStock":true', page)
+        self.assertGreater(n, 1)
+        new = new.replace('"inStock":true', '"inStock":false', 1)
+        offers = talabat.parse_items(new, "619848", 9838)[0]
+        self.assertEqual([o.in_stock for o in offers], [False] + [True] * (len(offers) - 1))
 
     def test_layout_change_is_reported(self):
         with self.assertRaises(talabat.PageError):
@@ -426,6 +438,72 @@ class Scheduler(unittest.TestCase):
             loop.step()
             pauses.append(round((loop.paused_until - clock.t) / 60))
         self.assertEqual(pauses, [60, 120, 240, 240, 240])
+
+    def test_bot_check_pause_still_doubles_when_another_page_passes(self):
+        """Amazon from a datacenter: Today's Deals (rendered in Chrome, its prices moving, so hot and first after
+        each pause) passes, the best-seller list right after it is bot-checked every time. The pause must still
+        double; a clean Today's Deals reset it to 30 min each time."""
+        clock, seen = Clock(), []
+
+        def deals():
+            seen.append("deals")
+            return [Offer("amazon_eg", "D1", "Deal", 100 + len(seen) % 7)], []
+
+        def blocked():
+            seen.append("list")
+            raise Blocked("bot check")
+
+        tasks = [Task("deals", deals), Task("list", blocked, last_run=clock.t + 30)]  # deals seen a few times first
+        loop = StoreLoop("amazon_eg", lambda f: tasks, ":memory:", delay=0, hot_every=60,
+                         clock=clock, sleep=clock.sleep, log=lambda *_: None)
+        loop.con = db.connect(":memory:")
+        pauses = []
+        for _ in range(40):
+            before = loop.paused_until
+            clock.t += 8
+            loop.step()
+            if loop.paused_until != before and loop.paused_until > clock.t:
+                pauses.append(round((loop.paused_until - clock.t) / 60))
+                clock.t = loop.paused_until
+            if len(pauses) == 4:
+                break
+        self.assertIn("deals", seen[seen.index("list"):])  # the clean page did come in between
+        self.assertEqual(pauses, [30, 60, 120, 240])
+
+    def test_too_many_requests_pauses_the_store(self):
+        """429s that outlast the fetcher's retries pause the store 5 minutes, instead of the next page 3 s later."""
+        from deals.http import RateLimited
+        clock, calls = Clock(), []
+
+        def limited():
+            calls.append(clock.t)
+            raise RateLimited("https://dream2000.com/products.json?page=2: HTTP Error 429: Too Many Requests")
+
+        loop = StoreLoop("dream2000", lambda f: [Task("a", limited), Task("b", limited)], ":memory:", delay=0,
+                         clock=clock, sleep=clock.sleep, log=lambda *_: None)
+        loop.con = db.connect(":memory:")
+        loop.step()
+        self.assertEqual(loop.paused_until, clock.t + 5 * 60)
+        for _ in range(5):
+            loop.step()  # paused: no request
+        self.assertEqual(len(calls), 1)
+        self.assertIn("429", loop.con.execute("SELECT error FROM live_status").fetchone()[0])
+        clock.t = loop.paused_until
+        loop.step()
+        self.assertEqual(len(calls), 2)
+
+    def test_fetcher_says_when_it_was_rate_limited(self):
+        import io
+        import urllib.error
+        from deals import http as dhttp
+
+        def answer(req, timeout):
+            raise urllib.error.HTTPError(req.full_url, 429, "Too Many Requests", {}, io.BytesIO(b""))
+
+        f = Fetcher(delay=0)
+        with mock.patch.object(dhttp.urllib.request, "urlopen", answer), mock.patch.object(dhttp.time, "sleep"):
+            with self.assertRaises(dhttp.RateLimited):
+                f.get("https://example.com/x")
 
     def test_not_configured_waits_quietly(self):
         clock = Clock()
@@ -1267,6 +1345,22 @@ class Raya(unittest.TestCase):
         self.assertIn("سامسونج", o.name)
         self.assertEqual(raya.category_name("screen-protectors/mobiles-and-tablets/mobile-accessories"),
                          "Mobiles And Tablets / Screen Protectors")
+
+    def test_sitemap_categories_one_segment(self):
+        """Raya's sitemap (Nov 2026) lists categories as /ar/<slug>, like products; products carry a picture.
+        The old two-segment-only pattern read 0 categories from it."""
+        from deals.stores import raya
+        xml = """<urlset xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+ <url><loc>https://www.rayashop.com/ar</loc></url>
+ <url><loc>https://www.rayashop.com/ar/laptops</loc><changefreq>daily</changefreq></url>
+ <url><loc>https://www.rayashop.com/ar/screen-protectors/mobiles-and-tablets</loc></url>
+ <url><loc>https://www.rayashop.com/ar/hp-mouse-z3700-dragonfly-wireless-blue-v0l81aa-18591</loc>
+  <image:image><image:loc>https://cdn.rayashop.com/x.jpg</image:loc></image:image></url>
+ <url><loc>https://www.rayashop.com/ar/brands/apple</loc></url>
+ <url><loc>https://www.rayashop.com/ar/laptops</loc></url>
+</urlset>"""
+        self.assertEqual(raya.sitemap_categories(xml), ["laptops", "screen-protectors/mobiles-and-tablets"])
+        self.assertEqual(raya.category_name("laptops"), "Laptops")
 
 
 class TelegramBot(unittest.TestCase):

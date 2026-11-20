@@ -244,8 +244,10 @@ def parse_deals(page: str) -> list[Offer]:
     return offers
 
 
-def _deals_task(path: str, log) -> Task:
+def _deals_task(path: str, log, fetcher: Fetcher = None) -> Task:
     def run():
+        if fetcher is not None:  # the render is an Amazon request too: keep the store's gap before it
+            fetcher._wait()
         page = browser.render(SITE + path)
         if _is_bot_check(200, page) or "validateCaptcha" in page:
             raise Blocked("Amazon answered Today's Deals with a bot check")
@@ -326,7 +328,7 @@ def plan(fetcher: Fetcher, departments: list[str] = None, pages: int = 3, use_br
     if use_browser:
         try:
             browser.find_chrome()
-            tasks = [_deals_task(p, log) for p in DEALS_PATHS]
+            tasks = [_deals_task(p, log, fetcher) for p in DEALS_PATHS]
         except browser.BrowserUnavailable:
             log("amazon_eg: no Chrome here, so Today's Deals is skipped (best-seller lists only)")
     return tasks + plan_bestsellers(fetcher, departments, log=log)

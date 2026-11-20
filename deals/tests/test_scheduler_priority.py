@@ -115,7 +115,9 @@ class WatchedShelves(Base):
         sim.run(61 + 2 * STEP)
         self.assertFalse(sim.loop.tasks["shelf/42"].watched)
 
-    def test_a_predicted_sale_counts_as_watched(self):
+    def test_a_predicted_sale_counts_only_for_a_watched_product(self):
+        """A sale due within a day brings a shelf forward only when its product is watched: counted for every
+        product, overdue predictions (which stay "due now") crowded the watched shelves out."""
         sim = self.sim(50)
         sim.run(200)
         con, now = sim.loop.con, int(sim.clock.t)
@@ -130,9 +132,40 @@ class WatchedShelves(Base):
             con.executemany("INSERT INTO prices (product_id, at, price, original_price, in_stock) VALUES (?,?,?,NULL,1)",
                             [(pid, at, p) for at, p in [(now - 40 * day, 10.0)] + history])
         self.assertEqual(priority.due_ids(con, now), {pid})
-        sim.loop.watchlist.loaded = sim.loop.watchlist.due_loaded = None  # read it again now
+        self.assertEqual(priority.due_ids(con, now, ids=set()), set())
+        self.assertEqual(priority.due_ids(con, now, ids={pid + 1}), set())
+        wl = sim.loop.watchlist
+        wl.loaded = wl.due_loaded = None  # read it again now
+        sim.run(2 * STEP)
+        self.assertFalse(sim.loop.tasks["shelf/9"].watched)  # nobody watches it: only the sweep
+        self.assertEqual(wl.due, set())
+        sim.watch("s9-1")
+        wl.loaded = wl.due_loaded = None
         sim.run(2 * STEP)
         self.assertTrue(sim.loop.tasks["shelf/9"].watched)
+        self.assertEqual(wl.due, {pid})  # watched, and its sale is due
+
+    def test_predicted_sales_dont_crowd_out_watched_shelves(self):
+        """80 shelves each hold a product whose (overdue) sale is predicted for today, and nobody watches them;
+        one shelf is watched. The watched shelf still comes round every 5 minutes."""
+        sim = self.sim(200)
+        sim.run(700)
+        con, now, day = sim.loop.con, int(sim.clock.t), 86400
+        rows = []
+        for shelf in range(100, 180):
+            pid = con.execute("SELECT id FROM products WHERE sku=?", (f"s{shelf}-0",)).fetchone()[0]
+            rows += [(pid, now - 40 * day, 10.0)] + [(pid, now - int(d * day), p) for start in (39, 29, 19)
+                                                    for d, p in ((start, 7.0), (start - 2, 10.0))]
+        with con:
+            con.executemany("INSERT INTO prices (product_id, at, price, original_price, in_stock) VALUES (?,?,?,NULL,1)",
+                            rows)
+        self.assertEqual(len(priority.due_ids(con, now)), 80)
+        sim.watch("s7-2")
+        sim.loop.watchlist.loaded = sim.loop.watchlist.due_loaded = None
+        start = sim.clock.t + 2 * STEP
+        sim.run(3600)
+        self.assertEqual(sim.loop.watched_shelves, 1)
+        self.assertLessEqual(max(gaps(sim.times(7, start))), priority.WATCH_EVERY + 2 * STEP)
 
 
 N = 600  # shelves in the busy store: a 30-minute cold cycle at 3 s

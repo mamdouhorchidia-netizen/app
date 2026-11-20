@@ -11,8 +11,8 @@ JSON messages, each ended by a NUL byte, on fds 3 and 4), so a page no longer pa
 Each render gets a fresh browser context (no cookies, cache or storage from earlier pages, as with the old
 throwaway profile), runs the page's scripts for `budget_ms` of virtual page time exactly as
 --virtual-time-budget did, and reads the DOM. Chrome is restarted after CHROME_MAX_PAGES renders (200),
-when its memory passes CHROME_MAX_MB (700), after any protocol error, and after a page outruns its time
-limit (then it is killed outright); it is shut down after CHROME_IDLE seconds without a render (120). Its
+when its memory passes CHROME_MAX_MB (700), at once mid-page past CHROME_KILL_MB (900), after any protocol
+error, and after a page outruns its time limit (then it is killed outright); it is shut down after CHROME_IDLE seconds without a render (120). Its
 profile directory is removed every time it stops and when the app exits. If the pipe session can't start,
 render falls back to one Chrome launch per page (--dump-dom) for a while; CHROME_PIPE=0 always does that.
 """
@@ -84,12 +84,20 @@ def _render_once(url: str, budget_ms: int, timeout: float) -> str:
     args = _base_args(chrome, profile) + [f"--virtual-time-budget={budget_ms}", "--dump-dom", url]
     # Its own process group, so a timeout ends Chrome's helper processes too (they hold the output open).
     proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    kill_mb, end = float(os.environ.get("CHROME_KILL_MB", 900)), time.monotonic() + timeout
     try:
-        out, err = proc.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGKILL)
-        proc.communicate()
-        raise RuntimeError(f"Chrome took longer than {timeout:.0f} s on {url}")
+        while True:  # looked at 5 times a second: past the time limit or kill_mb (see Policy), it is killed
+            try:
+                out, err = proc.communicate(timeout=max(0.01, min(0.2, end - time.monotonic())))
+                break
+            except subprocess.TimeoutExpired:
+                over = time.monotonic() >= end
+                if not over and not (kill_mb and _group_memory_kb(proc.pid) / 1024 > kill_mb):
+                    continue
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.communicate()
+                raise RuntimeError(f"Chrome took longer than {timeout:.0f} s on {url}" if over else
+                                   f"Chrome passed {kill_mb:.0f} MB on {url}, so it was stopped")
     finally:
         try:
             os.killpg(proc.pid, signal.SIGKILL)  # no stray helpers left behind
@@ -340,13 +348,21 @@ def _group_memory_kb(pgid: int) -> int:
 # ---- when to restart -------------------------------------------------------------------------------
 
 class Policy:
-    def __init__(self, max_pages: int = 200, max_mb: float = 700, idle: float = 120, retry_pipe_after: float = 1800):
+    """kill_mb: Chrome is killed mid-page past this (checked every `watch_every` s while a page renders). Some of
+    Raya's category pages (seen: laptops-microsoft, air-conditioners-zanussi, -york) never finish and grow Chrome
+    by 100-200 MB/s at first, to 5.7 GB in their 120 s, far past the container's 1.5 GB; max_mb is only looked
+    at between pages. A normal page peaked at ~730 MB. A look costs ~1 ms."""
+
+    def __init__(self, max_pages: int = 200, max_mb: float = 700, idle: float = 120, retry_pipe_after: float = 1800,
+                 kill_mb: float = 900, watch_every: float = 0.2):
         self.max_pages, self.max_mb, self.idle, self.retry_pipe_after = max_pages, max_mb, idle, retry_pipe_after
+        self.kill_mb, self.watch_every = kill_mb, watch_every
 
     @classmethod
     def from_env(cls) -> "Policy":
         e = os.environ.get
-        return cls(int(e("CHROME_MAX_PAGES", 200)), float(e("CHROME_MAX_MB", 700)), float(e("CHROME_IDLE", 120)))
+        return cls(int(e("CHROME_MAX_PAGES", 200)), float(e("CHROME_MAX_MB", 700)), float(e("CHROME_IDLE", 120)),
+                   kill_mb=float(e("CHROME_KILL_MB", 900)))
 
     def restart_reason(self, pages: int, mb: float):
         """Why a Chrome that has done `pages` renders and uses `mb` should be replaced now: "pages", "memory"
@@ -404,20 +420,37 @@ class Keeper:
             self.session, self.pipe_failed_at = s, None
             self._start_reaper()
         # The watchdog: whatever the render is blocked on, Chrome is SIGKILLed a little after the page's time
-        # is up, which ends the wait with an error (the reads also stop at the deadline on their own).
-        session = self.session
-        dog = threading.Timer(max(0.0, deadline - time.monotonic()) + 5, lambda: session.kill())
-        dog.daemon = True
+        # is up, or as soon as its memory passes kill_mb, which ends the wait with an error (the reads also stop
+        # at the deadline on their own).
+        session, done, killed = self.session, threading.Event(), []
+
+        def watch():
+            end = deadline + 5
+            while not done.wait(self.policy.watch_every):
+                if time.monotonic() >= end:
+                    killed.append("hang")
+                elif self.policy.kill_mb and session.memory_mb() > self.policy.kill_mb:
+                    killed.append("memory")
+                else:
+                    continue
+                session.kill()
+                return
+
+        dog = threading.Thread(target=watch, name="chrome-watchdog", daemon=True)
         dog.start()
         try:
             try:
                 html = session.render(url, budget_ms, deadline)
             finally:
-                dog.cancel()
-        except Hang:
-            self.stop("hang", gently=False)
-            raise RuntimeError(f"Chrome took longer than {timeout:.0f} s on {url}")
-        except (ProtocolError, OSError, KeyError, TypeError) as e:
+                done.set()
+                dog.join()
+        except (Hang, ProtocolError, OSError, KeyError, TypeError) as e:
+            if killed == ["memory"]:
+                self.stop("memory kill", gently=False)
+                raise RuntimeError(f"Chrome passed {self.policy.kill_mb:.0f} MB on {url}, so it was stopped") from e
+            if isinstance(e, Hang):
+                self.stop("hang", gently=False)
+                raise RuntimeError(f"Chrome took longer than {timeout:.0f} s on {url}")
             self.stop("protocol error", gently=False)
             raise RuntimeError(f"Chrome failed on {url}: {e}")
         finally:

@@ -12,6 +12,10 @@ class Blocked(Exception):
     """The site answered with a bot check. Collection stops; we do not try to get past it."""
 
 
+class RateLimited(RuntimeError):
+    """The site still answered 429 (Too Many Requests) after the retries: the live loop pauses the store."""
+
+
 class Fetcher:
     def __init__(self, delay: float = 1.5, retries: int = 3, timeout: float = 30, user_agent: str = USER_AGENT):
         self.delay = delay
@@ -47,6 +51,8 @@ class Fetcher:
             except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
                 err = e
             time.sleep(min(60, 5 * 2**attempt))  # 5s, 10s, 20s
+        if isinstance(err, urllib.error.HTTPError) and err.code == 429:
+            raise RateLimited(f"{url}: {err}")
         raise RuntimeError(f"{url}: {err}")
 
     def get(self, url: str, headers: dict = None) -> tuple[int, str]:
