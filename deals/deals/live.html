@@ -176,7 +176,7 @@ svg { flex: none; }
 .hdr { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 90%, transparent);
   -webkit-backdrop-filter: saturate(1.4) blur(12px); backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--line); }
 .top { display: flex; align-items: center; gap: 8px; height: var(--hdr); }
-.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; flex: none; min-height: var(--tap); }
+.brand { display: flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none; flex: none; min-height: var(--tap); min-width: var(--tap); }
 .mark { width: 34px; height: 34px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; position: relative; }
 .mark .pulse { position: absolute; top: -3px; inset-inline-end: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--good);
   border: 2px solid var(--bg); animation: pulse 2.4s ease-in-out infinite; }
@@ -188,7 +188,7 @@ svg { flex: none; }
 .search input::placeholder { color: var(--faint); }
 .search input:focus { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .search > svg { position: absolute; inset-inline-start: 13px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
-.search .mic { position: absolute; inset-inline-end: 2px; top: 2px; width: 40px; height: 40px; border: 0; background: none; border-radius: 10px;
+.search .mic { position: absolute; inset-inline-end: 0; top: 0; width: var(--tap); height: var(--tap); border: 0; background: none; border-radius: 10px;
   display: grid; place-items: center; cursor: pointer; color: var(--muted); }
 .search .mic.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); animation: pulse 1s infinite; }
 .search:has(.mic:not([hidden])) input { padding-inline-end: 44px; }
@@ -277,7 +277,7 @@ aside { position: sticky; top: calc(var(--hdr) + 16px); align-self: start; max-h
 .brief-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .brief h2 { margin: 0; font-size: 17px; font-weight: 750; }
 .brief .subt { color: var(--muted); font-size: 13px; }
-.stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
 .st { background: var(--chip); border: 1px solid transparent; border-radius: var(--r-m); padding: 10px 12px; text-align: start; cursor: pointer; min-height: 68px;
   display: flex; flex-direction: column; justify-content: center; gap: 2px; transition: border-color .16s var(--ease), background .16s var(--ease); }
 .st:hover { border-color: var(--line); background: var(--panel); }
@@ -295,7 +295,7 @@ aside { position: sticky; top: calc(var(--hdr) + 16px); align-self: start; max-h
 .hubbar button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 0 14px; min-height: 36px; white-space: nowrap; cursor: pointer; font-size: 13.5px; }
 .hubbar button.on { background: var(--talabat); border-color: var(--talabat); color: #fff; font-weight: 650; }
 .hubbar button .c { opacity: .7; font-size: 12px; margin-inline-start: 6px; }
-html:not(.has-hubs) .hubbar:empty { display: none; }
+html:not(.has-hubs) .hubbar:empty, html.loaded .hubbar:empty { display: none; }  /* reserved only until the first answer */
 html:not(.has-hubs) #hubGroup, html:not(.home) #brief { display: none; }
 .bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; min-height: var(--tap); }
 .count { font-weight: 750; font-size: 17px; white-space: nowrap; }
@@ -304,9 +304,9 @@ html:not(.has-hubs) #hubGroup, html:not(.home) #brief { display: none; }
 .tbtn { position: relative; height: 40px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 0 14px; display: inline-flex;
   align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 14px; white-space: nowrap; }
 .tbtn .n { position: static; }
-.sortw { position: relative; display: inline-flex; align-items: center; }
+.sortw { position: relative; display: inline-flex; align-items: center; min-width: 0; flex: 0 1 auto; }
 .sortw svg { position: absolute; inset-inline-start: 12px; color: var(--muted); pointer-events: none; }
-.sortw select { height: 40px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding-inline: 34px 14px; max-width: 58vw;
+.sortw select { height: 40px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding-inline: 34px 14px; max-width: 100%; text-overflow: ellipsis;
   cursor: pointer; font-weight: 550; font-size: 14px; -webkit-appearance: none; appearance: none; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: -2px 0 12px; }
 .chips:empty { display: none; }
@@ -490,7 +490,6 @@ table.cmp .best { color: var(--good); font-weight: 700; }
 .foot p { margin: 4px auto 0; max-width: 70ch; }
 
 @media (min-width: 1200px) { .grid { grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); gap: 14px; } }
-@media (max-width: 1100px) { .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (min-width: 901px) and (pointer: fine) {
   .seg button, .opt { min-height: 34px; }
 }
@@ -503,7 +502,7 @@ table.cmp .best { color: var(--good); font-weight: 700; }
   .ph-only { display: inline-flex; }
   .search { margin-inline: 8px 4px; }
   .kbd { display: none; }
-  .ib { min-width: 42px; padding: 0 8px; }
+  .ib { min-width: var(--tap); padding: 0 6px; }
   .layout { display: block; padding-top: 12px; }
   aside { position: fixed; inset: auto 0 0 0; top: auto; max-height: 88dvh; z-index: 25; border-radius: var(--r-l) var(--r-l) 0 0; border: 0;
     padding: 0 16px; transform: translateY(105%); visibility: hidden; transition: transform .22s var(--ease), visibility 0s .22s; box-shadow: var(--sheet); }
@@ -515,10 +514,18 @@ table.cmp .best { color: var(--good); font-weight: 700; }
   .sheet-f { position: sticky; bottom: 0; background: var(--panel); padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); z-index: 2; }
   .sheet-f .primary { display: inline-flex; flex: 2; }
   .seg button, .opt { min-height: var(--tap); }
+  /* every tap target at least 44 px on touch screens */
+  .chip { min-width: var(--tap); justify-content: center; }
+  .nav a, .chip, .hubbar button, .tbtn, .sortw select, .fresh, .stat, .pick label, .qty button, .btn.small, .best { min-height: var(--tap); }
+  .qty button { width: var(--tap); }
+  .hubbar { min-height: var(--tap); }
+  .tick { min-height: 32px; }
   .scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 24; }
   .filterbtn { display: inline-flex; }
   .bar { position: sticky; top: var(--hdr); z-index: 8; background: var(--bg); margin: 0 -12px 10px; padding: 6px 12px; gap: 8px; }
-  .count { font-size: 15px; } .count small { font-size: 13px; }
+  .count { font-size: 15px; flex: none; } .count small { font-size: 13px; }
+  .bar .spacer { flex: 0 0 0; margin-inline-start: auto; }
+  .tbtn { flex: none; padding: 0 12px; }
   .brief { padding: 14px; min-height: 0; }
   .brief .subt { display: none; }
   .stats { display: flex; overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px; scroll-snap-type: x proximity; }
@@ -917,7 +924,7 @@ function renderMeta(r) {
 }
 // a whole new list: a first load or another filter
 function renderList(r) {
-  lastData = r; renderMeta(r);
+  lastData = r; renderMeta(r); document.documentElement.classList.add("loaded");
   items = r.items; cards.clear(); pending = null; updatePill();
   const g = $("grid");
   g.innerHTML = items.length ? items.map((d, i) => card(d, "", i < 4)).join("") : emptyState();
@@ -1223,7 +1230,9 @@ async function showProduct(id, quick) {
   $("dlg").scrollTop = sc;
 }
 function fillDialog(id, p, d, h, matches) {
+  const focused = $("dbody").contains(document.activeElement) ? document.activeElement.id || "close" : null;
   $("dbody").innerHTML = dialogHTML(id, p, d, h, matches);
+  if (focused) ($(focused) || $("dbody").querySelector("[data-close]")).focus({ preventScroll: true });   // keep the keyboard inside
   if (!$("dlg").open) { lastFocus = document.activeElement; $("dlg").showModal(); $("dbody").querySelector("[data-close]").focus({ preventScroll: true }); }
   if (h) drawChart(h, p.price);
   $("setTarget").onclick = () => {
@@ -1450,7 +1459,7 @@ $("alertsBtn").onclick = async () => {
       <div class="grp"><div class="tip">…only at these stores (none = all)</div><div class="pick" id="aStores">${Object.entries(LABELS).map(([k, l]) =>
         `<label><input type="checkbox" value="${k}" ${a.stores.includes(k) ? "checked" : ""}> ${esc(l)}</label>`).join("")}</div></div>
       ${hubs.length > 1 ? `<div class="grp"><div class="tip">…only these talabat hubs</div><div class="pick" id="aHubs">${hubs.map(h => { const [id, n] = h.split("|");
-        return `<label><input type="checkbox" value="${id}" ${a.hubs.map(String).includes(id) ? "checked" : ""}> <span dir="auto">${esc(n)}</span></label>`; }).join("")}</div></div>` : ""}
+        return `<label><input type="checkbox" value="${id}" ${a.hubs.map(String).includes(id) ? "checked" : ""}> ${/^\d+$/.test(n) ? `<span>Hub ${esc(id)}</span>` : `<span dir="auto">${esc(n)}</span>`}</label>`; }).join("")}</div></div>` : ""}
       ${cats.length ? `<div class="grp"><div class="tip">…only these categories</div><div class="pick" id="aCats">${cats.map(c =>
         `<label><input type="checkbox" value="${esc(c)}" ${a.categories.includes(c) ? "checked" : ""}> <span dir="auto">${esc(c)}</span></label>`).join("")}</div></div>` : ""}
       <label class="grp" style="display:block">…only names containing (comma-separated)<input type="text" id="aWords" value="${esc(a.words.join(", "))}" placeholder="milk, nescafe, حفاضات"></label>
