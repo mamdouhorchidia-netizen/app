@@ -18,11 +18,23 @@ an environment variable (`DEALS_DB`, `HOST`, `PORT`, …); the Dockerfile lists 
 
 ## How "live" works
 Each store is checked **continuously** on its own thread, one request at a time at its own pace:
-talabat every 1.5 s, Amazon every 3 s, Breadfast every 5 s.
+talabat every 1.5 s, Jumia, Dream 2000 and Kenzz every 3 s, Breadfast every 5 s, Amazon every 8 s, Raya
+every 10 s (`TALABAT_DELAY`, `AMAZON_DELAY`, …). What follows only changes **which** shelf is asked next,
+never how often a store is asked.
 - **Every shelf** (one list page of ~20–60 products) comes round once per pass. That's about 14 minutes
-  for talabat's ~550 pages and about 15 for Amazon's ~300.
-- **Hot shelves**, where a price moved in the last 30 minutes, are rechecked **every 60 seconds**
-  (`HOT_EVERY`). Hot and normal shelves take turns, so a busy day slows a pass down but never stalls it.
+  for talabat's ~550 pages.
+- Some shelves have a **target** for how often they should be rechecked (`deals/priority.py`):
+  - **hot**, a price moved in the last 30 minutes: every **60 seconds** (`HOT_EVERY`);
+  - **watched**, one of its products is on someone's ★ alert watchlist, followed in the Telegram bot, or
+    has a sale predicted within a day: every **5 minutes**;
+  - **busy**, its checks keep finding changes (a fading average of changes found per hour, over ~4 h):
+    every 15 minutes at one change every 2 hours, down to every 5 minutes at two an hour.
+- **Turns alternate:** one request goes to the shelf most overdue for its target (time since its last check
+  ÷ its target, only shelves at or past it), the next to the shelf checked longest ago of all. So a busy
+  day slows a pass down (at most to double) but never stalls it, and when nothing is due both turns sweep.
+  When more shelves are due than the priority turns can serve, they all slip in proportion to their target.
+- Which products a shelf holds is remembered from its last check; the watch lists are read again about
+  once a minute and the predicted sales about once an hour, shared by all the stores.
 - Each checked page is **one commit**: its prices and the store's status line together (WAL, `synchronous=NORMAL`).
 - A **data version** `v` (the newest price row's number) moves only when a price or stock really changed, since
   that is the only time a price row is written. The server reads it at most once a second.

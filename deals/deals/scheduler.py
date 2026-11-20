@@ -1,9 +1,13 @@
 """Continuous checking: each store's pages are revisited nonstop at that store's polite pace.
 
 - Cold pages: whichever was checked longest ago goes next, so every shelf comes round in one cycle
-  (talabat ~550 pages at 1.5 s = ~14 min; Amazon ~300 at 3 s = ~15 min).
-- Hot pages: a page where a price moved in the last 30 minutes is rechecked every `hot_every` seconds
-  (default 60). Hot and cold take turns, so a busy day can at most double the cycle, never stall it.
+  (talabat ~550 pages at 1.5 s = ~14 min).
+- Pages that matter more get a target interval (priority.py): hot (a price moved in the last 30 minutes)
+  every `hot_every` seconds (default 60), watched (a product on it is watched or has a sale due) every 5 min,
+  volatile (its checks keep finding changes) every 5-15 min. Turns alternate: a priority turn takes the page
+  most overdue for its target ((now - last check) / target, only pages at or past it), the next turn the page
+  checked longest ago of all. So a busy day can at most double the cycle, never stall it, and the store is
+  asked exactly as often as before: only the order of pages changes.
 - A bot check pauses that store for 30 minutes; an expired Breadfast session pauses it until a new
   capture is imported. Each store runs on its own thread with its own Fetcher.
 """
@@ -12,7 +16,7 @@ import os
 import time
 import traceback
 
-from . import db
+from . import db, priority
 from .http import Blocked, Fetcher
 from .models import NotConfigured, SessionExpired
 from .tasks import Task
@@ -25,7 +29,7 @@ ERROR_PAUSE = 5 * 60
 class StoreLoop:
     def __init__(self, store: str, plan, db_path: str, delay: float, hot_every: float = 60,
                  replan_every: float = 6 * 3600, watch_file: str = None, replan_file: str = None,
-                 clock=time.time, sleep=time.sleep, log=print):
+                 clock=time.time, sleep=time.sleep, log=print, watchlist=None):
         self.store, self.plan, self.db_path = store, plan, db_path
         self.fetcher = Fetcher(delay=delay)
         self.hot_every, self.replan_every, self.watch_file = hot_every, replan_every, watch_file
@@ -44,6 +48,10 @@ class StoreLoop:
         self.replan_file = replan_file  # when this file changes (settings), the store's pages are listed afresh
         self.replan_mtime = self._file_mtime(replan_file)
         self.con = None
+        self.watchlist = watchlist  # None: the database's shared one (made on first use)
+        self.watch_version = None
+        self.watched_shelves = self.volatile_shelves = 0  # how many pages each rule covers (for the log)
+        self.counted_at = float("-inf")
 
     @staticmethod
     def _file_mtime(path):
@@ -74,14 +82,45 @@ class StoreLoop:
         if not self.cycle_start:
             self.cycle_start = now
 
+    def _watched(self, now: float) -> set:
+        """This store's watched skus; when the set changed, every page is marked again."""
+        if self.watchlist is None:
+            self.watchlist = (priority.Watchlist(con=self.con, log=self.log) if self.db_path == ":memory:"
+                              else priority.shared(self.db_path))
+        try:
+            skus = self.watchlist.get(now).get(self.store) or set()
+        except Exception as e:  # the order of pages is a nicety: never let it stop the checking
+            self.log(f"{self.store}: watch list: {type(e).__name__}: {e}")
+            return set()
+        if self.watchlist.version != self.watch_version:
+            self.watch_version = self.watchlist.version
+            for t in self.tasks.values():
+                t.watched = bool(t.skus & skus)
+            self._count()
+        return skus
+
+    def _count(self):
+        watched = sum(1 for t in self.tasks.values() if t.watched)
+        now = self.clock()
+        volatile = sum(1 for t in self.tasks.values() if priority.volatile_target(t, now) is not None)
+        changed = (watched, volatile) != (self.watched_shelves, self.volatile_shelves)
+        self.watched_shelves, self.volatile_shelves = watched, volatile
+        if changed and now - self.counted_at >= 600:  # a line in the log now and then, not every minute
+            self.counted_at = now
+            self.log(f"{self.store}: {watched} watched and {volatile} busy pages rechecked sooner")
+
     def pick(self, now: float):
         if not self.tasks:
             return None
-        hot = [t for t in self.tasks.values()
-               if t.last_change and now - t.last_change < HOT_WINDOW and now - t.last_run >= self.hot_every]
-        self.hot_turn = not self.hot_turn
-        if hot and self.hot_turn:
-            return min(hot, key=lambda t: t.last_run)
+        self.hot_turn = not self.hot_turn  # a priority turn, then a sweep turn
+        if self.hot_turn:
+            best, score = None, 1.0
+            for t in self.tasks.values():
+                want = priority.target(t, now, self.hot_every, HOT_WINDOW)
+                if want is not None and (now - t.last_run) / want >= score:
+                    best, score = t, (now - t.last_run) / want
+            if best is not None:
+                return best
         return min(self.tasks.values(), key=lambda t: t.last_run)
 
     def step(self):
@@ -110,6 +149,7 @@ class StoreLoop:
         except Exception as e:
             self._pause(ERROR_PAUSE, f"could not list pages: {type(e).__name__}: {e}")
             return
+        watched = self._watched(now)
         task = self.pick(now)
         if task is None:
             self.sleep(5)
@@ -133,12 +173,16 @@ class StoreLoop:
             if task.fails >= 3:
                 self.tasks.pop(task.key, None)  # gone from the store; the next replan brings it back if not
             return
+        offers = list(offers)  # read twice: saved, then remembered as this page's products
         done = self.clock()
         self.blocks = 0
         stats = {}
         with self.con:  # the page's prices and the store's status in one commit
             db.write_offers(self.con, offers, int(done), stats)
             task.last_run, task.fails = done, 0
+            task.skus = frozenset(o.sku for o in offers)
+            task.watched = bool(task.skus & watched)
+            priority.observe(task, bool(stats["moved"]), done)
             self.pages += 1
             if stats["moved"]:  # a price or stock really changed (a first sighting doesn't count)
                 task.last_change = self.last_change = done
@@ -147,6 +191,8 @@ class StoreLoop:
                 task.last_change = done
             for f in follow:
                 self.tasks.setdefault(f.key, f)
+            if self.pages % 50 == 0:
+                self._count()
             self.error = None
             if all(t.last_run >= self.cycle_start for t in self.tasks.values()):
                 self.cycle_secs = done - self.cycle_start
