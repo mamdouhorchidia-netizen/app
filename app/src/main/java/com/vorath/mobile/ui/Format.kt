@@ -42,6 +42,9 @@ object Format {
                 else -> "Updated at ${stamp(f.at, now)}"
             }
         }
-        is Freshness.Unreachable -> if (f.showing > 0) "Can't reach Vorath · showing ${stamp(f.showing, now)}" else "Can't reach Vorath"
+        is Freshness.Unreachable -> {
+            val what = if (f.reached) "Vorath did not answer" else "Can't reach Vorath"
+            if (f.showing > 0) "$what · showing ${stamp(f.showing, now)}" else what
+        }
     }
 }

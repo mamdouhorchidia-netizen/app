@@ -27,8 +27,11 @@ sealed class Freshness {
     /** Every section's latest read worked; [at] is the oldest of their read times. */
     data class Updated(val at: Long) : Freshness()
 
-    /** The latest read failed; the page shows what was read at [showing] (0: nothing to show). */
-    data class Unreachable(val showing: Long) : Freshness()
+    /**
+     * The latest read failed; the page shows what was read at [showing] (0: nothing to show). [reached]: the server
+     * did answer, only not as expected (a 5xx, a page that is not Vorath's), so "Can't reach" would be wrong.
+     */
+    data class Unreachable(val showing: Long, val reached: Boolean = false) : Freshness()
 
     companion object {
         /** A quiet read shows as "Updating…" only once it has taken this long, so the line does not flicker every 30 s. */
@@ -39,7 +42,8 @@ sealed class Freshness {
             val shown = sections.filter { it.answered }.minOfOrNull { it.fetchedAt } ?: 0L
             return when {
                 busySince != null && (shown == 0L || now - busySince >= SHOW_UPDATING_AFTER_MS) -> Updating
-                sections.any { it.error != null } -> Unreachable(shown)
+                sections.any { it.error != null } ->
+                    Unreachable(shown, reached = sections.none { it.error is VorathError.Offline })
                 shown > 0 -> Updated(shown)
                 else -> Never
             }

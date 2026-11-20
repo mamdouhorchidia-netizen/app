@@ -20,14 +20,20 @@ class TinyHttpServer(private val handle: (Request) -> Response) : AutoCloseable 
     class Response(val status: Int, val body: ByteArray = ByteArray(0), val headers: Map<String, String> = emptyMap())
 
     private val socket = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
-    private val open = java.util.Collections.synchronizedList(mutableListOf<Socket>())
+    private val open = mutableListOf<Socket>()
+    private var closed = false                               // guarded by open
     val port: Int get() = socket.localPort
 
     init {
         thread(isDaemon = true, name = "tiny-http") {
             while (!socket.isClosed) {
                 val s = try { socket.accept() } catch (e: SocketException) { break }
-                open += s
+                // ServerSocket.close() can be deferred while accept() is blocked, so a connection may still arrive
+                // after close(): refuse it, or a closed server would go on answering.
+                synchronized(open) {
+                    if (closed) s.close() else open += s
+                }
+                if (s.isClosed) break
                 thread(isDaemon = true) { serve(s) }
             }
         }
@@ -73,6 +79,7 @@ class TinyHttpServer(private val handle: (Request) -> Response) : AutoCloseable 
     }
 
     override fun close() {
+        synchronized(open) { closed = true }
         socket.close()
         synchronized(open) { open.forEach { runCatching { it.close() } } }
     }

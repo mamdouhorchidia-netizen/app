@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,6 +54,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -230,10 +233,15 @@ private fun NeedRow(n: Need, onOpen: (String) -> Unit) {
     Panel {
         Row(Modifier.height(IntrinsicSize.Min)) {
             Box(Modifier.width(4.dp).fillMaxHeight().background(tone))
-            Column(Modifier.weight(1f).padding(start = 12.dp, end = 6.dp, top = 12.dp, bottom = 4.dp)) {
+            Column(Modifier.weight(1f).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = if (n.href.isBlank()) 12.dp else 0.dp)) {
                 Text(n.text)
-                if (n.href.isNotBlank()) TextButton(onClick = { onOpen(n.href) }, contentPadding = PaddingValues(horizontal = 0.dp)) {
-                    Text(n.label.ifBlank { "Open" })
+                // Not a TextButton: its 58 dp minimum width centres a short label, which then sits indented from the
+                // text above. The label starts at the text's edge; the touch target stays 48 dp.
+                if (n.href.isNotBlank()) Box(
+                    Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).clickable(role = Role.Button) { onOpen(n.href) }.padding(end = 16.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Text(n.label.ifBlank { "Open" }, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 }
             }
         }

@@ -11,8 +11,9 @@ The phone app for [Vorath](https://github.com/mamdouhorchidia-netizen/vorath). I
   in a file that is never backed up, for that server and person only, deleted on sign-out or when the session ends),
   so the Today page shows them at once and then updates.
 - **Says how current it is**: a line under the title reads "Updated 12 s ago", "Updating…" or
-  "Can't reach Vorath · showing 14:05". When a read fails the page keeps what it last read and shows a slim line
-  with the reason; the numbers and the Autopilot are read separately, so one failing does not blank the other.
+  "Can't reach Vorath · showing 14:05" ("Vorath did not answer · …" when it answered, but with an error). When a
+  read fails the page keeps what it last read and shows a slim line with the reason; the numbers and the Autopilot
+  are read separately, so one failing does not blank the other.
 - **Stays current while open**: while the Today page is on screen the phone reads again quietly every 30 seconds
   (no spinner; the spinner is for pull-to-refresh and the first read). A slow server is read at most once per ten of
   its answer times; failures back off to 60 s, 120 s, then every 5 minutes, and retry as soon as the network comes
@@ -69,13 +70,14 @@ VORATH_HOME=/tmp/vhome VORATH_SECRET_KEY=dev-only python tools/vorath_devserver.
 
 ## Not done yet
 
-- Never run on a phone or emulator. It now compiles for Android (`assembleDebug`, and a minified `assembleRelease`
-  that passes lint's release checks), and the unit tests for the client, parsing, cache file and freshness rules pass
-  under the Android build. The screens, the 30-second loop, the Keystore, the notifications and the 15-minute check
+- Never run on a phone or emulator. It compiles for Android (`assembleDebug`, and a minified `assembleRelease`
+  that passes lint's release checks), and all unit tests pass under the Android build, Robolectric included. The
+  30-second loop, the Keystore, the notifications, the 15-minute check, the in-app Vorath page, touch and scrolling
   are still unproven until run on a phone or emulator.
-- The pictures of the screens (`ScreensTest`) have not been drawn yet: Robolectric's native graphics jar could not be
-  downloaded on the build machine (its download host was blocked), so the plain `testDebugUnitTest` stops before the
-  tests run there. On a machine with normal access to Maven Central it should run as written.
+- The screens have been drawn (`ScreensTest`, with Robolectric's native graphics, not on a phone): sign-in, Today in
+  light and dark, a small phone, the first read, a quiet update, offline with the last answers (light and dark), one
+  section failing, and offline with nothing to show. They are pictures of the layout only; fonts, system bars, the
+  pull gesture and real-device colours can still differ.
 - Release builds are minified with R8 and resource shrinking (about 1.3 MB against 7.4 MB without); the library keep
   rules cover what is made by class name, but the minified build has not been run on a device either. Keep
   `app/build/outputs/mapping/release/mapping.txt` from each release to read its crash reports.

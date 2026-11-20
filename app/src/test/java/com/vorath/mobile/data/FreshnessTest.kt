@@ -39,6 +39,14 @@ class FreshnessTest {
     }
 
     @Test
+    fun aServerThatAnsweredBadlyWasReached() {
+        val bad = VorathError.NotVorath("Vorath did not answer as expected (502).")
+        val f = Freshness.of(listOf(Section("m", fetchedAt = t), Section("d", fetchedAt = t, error = bad)), null, t + 45_000)
+        assertEquals(Freshness.Unreachable(t, reached = true), f)
+        assertEquals("Vorath did not answer · showing ${Format.clock(t)}", Format.freshness(f, t + 45_000))
+    }
+
+    @Test
     fun aRefusedSectionIsAnAnswerNotAFailure() {
         val f = Freshness.of(listOf(Section("m", fetchedAt = t), Section<String>(refused = "no", fetchedAt = t)), null, t + 1_000)
         assertEquals(Freshness.Updated(t), f)

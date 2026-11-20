@@ -61,6 +61,27 @@ class ScreensTest {
     }
 
     @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-night-xxhdpi")
+    fun todayOfflineDark() = shot("today-offline-dark") {
+        val offline = VorathError.Offline("Cannot reach the server. Check the connection and the address.")
+        Today(today.let { it.copy(money = it.money.copy(error = offline), deck = it.deck.copy(error = offline)) }, secondsLater = 20 * 60)
+    }
+
+    /** Only the Autopilot read failed: the numbers stay, the slim line says why. */
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+    fun todayDeckFailed() = shot("today-deck-failed") {
+        Today(today.let { it.copy(deck = it.deck.copy(error = VorathError.NotVorath("Vorath did not answer as expected (502)."))) }, secondsLater = 45)
+    }
+
+    /** A quiet 30-second read under way over data already shown: "Updating…", no spinner. */
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-night-xxhdpi")
+    fun todayQuietUpdate() = shot("today-quiet-update") {
+        Today(today.copy(busySince = readAt + 28_000), secondsLater = 30)
+    }
+
+    @Test
     @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
     fun todayFirstRead() = shot("today-first-read") { Today(TodayState(spinning = true, busySince = readAt)) }
 
