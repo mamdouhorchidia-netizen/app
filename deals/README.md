@@ -87,6 +87,16 @@ talabat and Amazon and your Breadfast account flagged within hours. The delays c
   sweep. Chrome runs as itself: its own headless identity, no disguise, TLS checks on. A bot check stops it
   like any other page. The Docker image includes Chromium. Elsewhere, set `CHROME_BIN` or install Chrome;
   without Chrome, this part is skipped.
+- **One Chrome, kept running.** Raya's ~800 pages and Today's Deals share one headless Chrome, one page at
+  a time, driven over the DevTools protocol on a pipe (`--remote-debugging-pipe`, standard library only)
+  instead of a Chrome launch per page. Each page gets a fresh browser context (no cookies or cache from
+  earlier pages) and the same `--virtual-time-budget` page time and time limit as before; the stores' own
+  delays are unchanged, so no store is asked more often. Chrome is restarted after `CHROME_MAX_PAGES`
+  pages (200), past `CHROME_MAX_MB` of memory (700; it sits near 350 MB), after any protocol error, and
+  after a page outruns its time limit (killed outright, with a watchdog for anything stuck); it is shut
+  down after `CHROME_IDLE` s without a page (120), and its profile directory is removed every time it
+  stops. If the pipe won't start, pages fall back to a launch each (`--dump-dom`) for 30 minutes before it
+  is tried again; `CHROME_PIPE=0` keeps the launch per page.
 - Best-seller lists show today's price but no struck-through price. Their deals come from the price
   history ("usually X EGP") and start about 3 days after the first run. A list price seen on Today's
   Deals is kept while the price stays the same.
@@ -185,6 +195,8 @@ talabat sweep; up to 10 can be chosen.
 - **Price-drop alerts (🔔):** real Web Push, so they arrive with the site closed. Choose what to hear about:
   your ★ watchlist (with target prices), and/or any drop of at least N %, optionally only some stores,
   hubs, categories or words. At most one bundle every 5 minutes. Notifications buzz in their own pattern.
+  New prices are found by their row number, not their time, so a price written in the same second as a
+  look still gets its alert.
   The custom **chime** plays while the site is open; browsers don't allow custom sounds on closed-site
   notifications. iPhone needs the installed app (iOS 16.4+). The signing key is `vapid.json` next to the
   database: keep it, or every device has to turn alerts on again.
@@ -239,7 +251,7 @@ deals/
   db.py         SQLite storage and history
   finder.py     the deal rules
   sigv4.py      AWS request signing for the Amazon API
-  browser.py    headless Chrome for JavaScript-built pages (Amazon's Today's Deals)
+  browser.py    headless Chrome for JavaScript-built pages (Amazon's Today's Deals, Raya): one kept running
   applinks.py   links that open a product in its store's app
   units.py      pack sizes from names, for price per kg / L / piece
   matching.py   the same product in different stores
