@@ -144,7 +144,7 @@ PRODUCT_CSS = _minify(SHARED_CSS + """
 .card { display:flex; flex-direction:column; overflow:hidden; text-decoration:none; transition:transform .18s ease-out, box-shadow .18s ease-out; }
 .card:hover { transform:translateY(-2px); box-shadow:var(--lift); }
 .pic, .shot { position:relative; aspect-ratio:1; background:var(--pic); display:grid; place-items:center; overflow:hidden; }
-.pic img, .shot img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; padding:10%; background:var(--pic); }
+.pic img, .shot img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; padding:10%; background:var(--pic); color:transparent; }
 .ph { font-size:32px; font-weight:750; color:#d9d5cc; }
 .shot .ph { font-size:64px; }
 .off { background:var(--accent); color:var(--accent-ink); font-weight:750; font-size:13.5px; padding:0 8px; border-radius:var(--r-s);
