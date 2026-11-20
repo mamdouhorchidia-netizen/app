@@ -114,18 +114,29 @@ def etag_of(body: bytes) -> str:
     return 'W/"' + hashlib.sha1(body).hexdigest()[:16] + '"'
 
 
+def _num(x):
+    """25.0 -> 25: the same number to JavaScript, two bytes shorter."""
+    return int(x) if isinstance(x, float) and x.is_integer() and abs(x) < 1e15 else x
+
+
 def card(d: dict, now: int) -> dict:
-    """What one card on the page shows (fields=card): CARD_FIELDS, a 12-point spark, links without "browser"."""
-    sp = d["spark"] + [[now, d["spark"][-1][1]]]
+    """What one card on the page shows (fields=card): CARD_FIELDS, a spark of at most 12 points, links without
+    "browser". Whole-number prices are written without ".0", and spark points that repeat the price before them are
+    left out (a step line draws the same thing)."""
+    pts = d["spark"] + [[now, d["spark"][-1][1]]]
+    sp = [pts[0]] + [p for prev, p in zip(pts, pts[1:-1]) if p[1] != prev[1]] + [pts[-1]] if len(pts) > 1 else pts
     if len(sp) > 12:
         step = len(sp) / 12
         sp = [sp[int(i * step)] for i in range(11)] + [sp[-1]]
     out = {k: d[k] for k in CARD_FIELDS}
+    for k in ("price", "original_price", "usual_price", "discount_pct", "saving", "prev_price", "recent_low",
+              "promo_price"):
+        out[k] = _num(out[k])
     l, v, r = d["links"], d["verdict"], d["rhythm"]
-    out["spark"] = sp
+    out["spark"] = [[t, _num(p)] for t, p in sp]
     out["links"] = {"web": l.get("web"), "android": l.get("android"), "ios": l.get("ios")}
     out["verdict"] = {"label": v["label"], "tone": v["tone"], "why": v["why"]}
-    out["matches"] = [{"id": m["id"], "store": m["store"], "price": m["price"], "in_stock": m["in_stock"]}
+    out["matches"] = [{"id": m["id"], "store": m["store"], "price": _num(m["price"]), "in_stock": m["in_stock"]}
                       for m in d["matches"]]
     out["rhythm"] = {"next_in_days": r["next_in_days"], "on_sale": r["on_sale"], "text": r["text"]} if r else None
     return out
