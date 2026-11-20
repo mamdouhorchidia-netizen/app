@@ -109,9 +109,11 @@ def live(args, stores):
                     print(f"talabat hubs: {type(e).__name__}: {e}")
                 time.sleep(6 * 3600)
         threading.Thread(target=hubs_job, name="talabat-hubs", daemon=True).start()
+    from . import livedata
+    livedata.shared(args.db).start()  # one catalog, rebuilt in the background, for the page, the bot and the poster
     try:
         from . import push
-        push.start(args.db, LABELS)  # price-drop notifications, checked every minute
+        push.start(args.db, LABELS)  # price-drop notifications, looked for as soon as a price moves
     except ImportError:
         print("push notifications off: the cryptography package isn't installed")
     from . import telegram

@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS prices (
     in_stock INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS prices_by_product ON prices (product_id, at);
+CREATE INDEX IF NOT EXISTS prices_by_at ON prices (at);  -- the catalog window, the ticker, the last hour's count
 CREATE TABLE IF NOT EXISTS live_status (
     store TEXT PRIMARY KEY,
     updated INTEGER,        -- last page checked
@@ -65,10 +66,22 @@ CREATE TABLE IF NOT EXISTS runs (
 """
 
 
+def tune(con: sqlite3.Connection, busy_ms: int = 30000) -> sqlite3.Connection:
+    """Per-connection settings that are safe for every reader and writer here. With WAL, synchronous=NORMAL
+    can't corrupt the database: at worst a power cut loses the last moments' writes (prices that the next
+    check reads again), and each commit no longer waits for the disk twice."""
+    con.execute(f"PRAGMA busy_timeout={int(busy_ms)}")
+    con.execute("PRAGMA synchronous=NORMAL")
+    con.execute("PRAGMA temp_store=MEMORY")
+    return con
+
+
 def connect(path: str) -> sqlite3.Connection:
     con = sqlite3.connect(path, check_same_thread=False, timeout=30)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")
+    tune(con)
+    con.execute("PRAGMA journal_size_limit=67108864")  # the WAL file shrinks back after a checkpoint
     con.executescript(SCHEMA)
     cols = {r["name"] for r in con.execute("PRAGMA table_info(products)")}
     if "extra" not in cols:  # databases made before the column existed
@@ -105,44 +118,49 @@ def save_offers(con: sqlite3.Connection, offers: Iterable[Offer], now: int = Non
     is new. `stats`, if given, also gets "new", "moved" (an existing product's price or stock changed) and "held"
     (a jump of more than JUMP seen for the first time: stores sometimes show a wrong price for a moment, such as
     1 EGP, and one sighting isn't enough to put it in the history)."""
+    with con:
+        return write_offers(con, offers, now, stats)
+
+
+def write_offers(con: sqlite3.Connection, offers: Iterable[Offer], now: int = None, stats: dict = None) -> tuple[int, int]:
+    """save_offers without its own commit, for a caller that writes more in the same transaction."""
     now = int(now or time.time())
     seen = changed = new = held = 0
-    with con:
-        for o in offers:
-            seen += 1
-            row = con.execute("SELECT id, name, price, original_price, in_stock, category, brand, image, extra, pending_price"
-                              " FROM products WHERE store=? AND sku=?", (o.store, o.sku)).fetchone()
-            if (row is not None and row["price"] and o.in_stock and row["in_stock"]
-                    and abs(o.price - row["price"]) / row["price"] > JUMP and row["pending_price"] != o.price):
-                con.execute("UPDATE products SET pending_price=?, last_seen=? WHERE id=?", (o.price, now, row["id"]))
-                held += 1
-                continue
-            original = o.original_price
-            if not o.original_known:  # keep a list price another source saw, while the price hasn't moved
-                original = row["original_price"] if row is not None and row["price"] == o.price else None
-            if row is None:
-                cur = con.execute(
-                    "INSERT INTO products (store, sku, name, brand, category, url, image, first_seen, last_seen,"
-                    " price, original_price, in_stock, extra) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (o.store, o.sku, o.name, o.brand, o.category, o.url, o.image, now, now,
-                     o.price, original, int(o.in_stock), json.dumps(o.extra, ensure_ascii=False)))
-                pid, moved = cur.lastrowid, True
-                new += 1
-            else:
-                pid = row["id"]
-                moved = (row["price"] != o.price or row["original_price"] != original
-                         or bool(row["in_stock"]) != o.in_stock)
-                extra = {**json.loads(row["extra"] or "{}"), **o.extra}
-                con.execute(
-                    "UPDATE products SET name=?, brand=?, category=?, url=?, image=?, last_seen=?,"
-                    " price=?, original_price=?, in_stock=?, extra=?, pending_price=NULL WHERE id=?",
-                    (row["name"] if o.name in ("", o.sku) and row["name"] else o.name,  # never a bare code over a name
-                     o.brand or row["brand"], o.category or row["category"], o.url, o.image or row["image"],
-                     now, o.price, original, int(o.in_stock), json.dumps(extra, ensure_ascii=False), pid))
-            if moved:
-                changed += 1
-                con.execute("INSERT INTO prices (product_id, at, price, original_price, in_stock) VALUES (?,?,?,?,?)",
-                            (pid, now, o.price, original, int(o.in_stock)))
+    for o in offers:
+        seen += 1
+        row = con.execute("SELECT id, name, price, original_price, in_stock, category, brand, image, extra, pending_price"
+                          " FROM products WHERE store=? AND sku=?", (o.store, o.sku)).fetchone()
+        if (row is not None and row["price"] and o.in_stock and row["in_stock"]
+                and abs(o.price - row["price"]) / row["price"] > JUMP and row["pending_price"] != o.price):
+            con.execute("UPDATE products SET pending_price=?, last_seen=? WHERE id=?", (o.price, now, row["id"]))
+            held += 1
+            continue
+        original = o.original_price
+        if not o.original_known:  # keep a list price another source saw, while the price hasn't moved
+            original = row["original_price"] if row is not None and row["price"] == o.price else None
+        if row is None:
+            cur = con.execute(
+                "INSERT INTO products (store, sku, name, brand, category, url, image, first_seen, last_seen,"
+                " price, original_price, in_stock, extra) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (o.store, o.sku, o.name, o.brand, o.category, o.url, o.image, now, now,
+                 o.price, original, int(o.in_stock), json.dumps(o.extra, ensure_ascii=False)))
+            pid, moved = cur.lastrowid, True
+            new += 1
+        else:
+            pid = row["id"]
+            moved = (row["price"] != o.price or row["original_price"] != original
+                     or bool(row["in_stock"]) != o.in_stock)
+            extra = {**json.loads(row["extra"] or "{}"), **o.extra}
+            con.execute(
+                "UPDATE products SET name=?, brand=?, category=?, url=?, image=?, last_seen=?,"
+                " price=?, original_price=?, in_stock=?, extra=?, pending_price=NULL WHERE id=?",
+                (row["name"] if o.name in ("", o.sku) and row["name"] else o.name,  # never a bare code over a name
+                 o.brand or row["brand"], o.category or row["category"], o.url, o.image or row["image"],
+                 now, o.price, original, int(o.in_stock), json.dumps(extra, ensure_ascii=False), pid))
+        if moved:
+            changed += 1
+            con.execute("INSERT INTO prices (product_id, at, price, original_price, in_stock) VALUES (?,?,?,?,?)",
+                        (pid, now, o.price, original, int(o.in_stock)))
     if stats is not None:
         stats.update(new=new, moved=changed - new, held=held)
     return seen, changed
@@ -160,10 +178,22 @@ def finish_run(con, run_id: int, offers: int, changed: int, error: str = None):
 
 
 def set_live_status(con, store: str, **fields):
-    cols = ["store"] + list(fields)
     with con:
-        con.execute(f"INSERT OR REPLACE INTO live_status ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
-                    [store] + list(fields.values()))
+        write_live_status(con, store, **fields)
+
+
+def write_live_status(con, store: str, **fields):
+    """set_live_status without its own commit."""
+    cols = ["store"] + list(fields)
+    con.execute(f"INSERT OR REPLACE INTO live_status ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
+                [store] + list(fields.values()))
+
+
+def data_version(con) -> int:
+    """The newest price row's rowid. It moves only when a price row is written, and price rows are written only
+    when a price or stock really changed or a product is new (write_offers), so "same number" means "no price
+    news". (rows are never deleted; a VACUUM could renumber them, so a client seeing it go down starts over.)"""
+    return con.execute("SELECT MAX(rowid) FROM prices").fetchone()[0] or 0
 
 
 def history(con, product_id: int) -> list[dict]:

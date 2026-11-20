@@ -18,13 +18,49 @@ an environment variable (`DEALS_DB`, `HOST`, `PORT`, …); the Dockerfile lists 
 
 ## How "live" works
 Each store is checked **continuously** on its own thread, one request at a time at its own pace:
-talabat every 1.5 s, Amazon every 3 s, Breadfast every 5 s.
+talabat every 1.5 s, Jumia, Dream 2000 and Kenzz every 3 s, Breadfast every 5 s, Amazon every 8 s, Raya
+every 10 s (`TALABAT_DELAY`, `AMAZON_DELAY`, …). What follows only changes **which** shelf is asked next,
+never how often a store is asked.
 - **Every shelf** (one list page of ~20–60 products) comes round once per pass. That's about 14 minutes
-  for talabat's ~550 pages and about 15 for Amazon's ~300.
-- **Hot shelves**, where a price moved in the last 30 minutes, are rechecked **every 60 seconds**
-  (`HOT_EVERY`). Hot and normal shelves take turns, so a busy day slows a pass down but never stalls it.
+  for talabat's ~550 pages.
+- Some shelves have a **target** for how often they should be rechecked (`deals/priority.py`):
+  - **hot**, a price moved in the last 30 minutes: every **60 seconds** (`HOT_EVERY`);
+  - **watched**, one of its products is on someone's ★ alert watchlist, followed in the Telegram bot, or
+    has a sale predicted within a day: every **5 minutes**;
+  - **busy**, its checks keep finding changes (a fading average of changes found per hour, over ~4 h):
+    every 15 minutes at one change every 2 hours, down to every 5 minutes at two an hour.
+- **Turns alternate:** one request goes to the shelf most overdue for its target (time since its last check
+  ÷ its target, only shelves at or past it), the next to the shelf checked longest ago of all. So a busy
+  day slows a pass down (at most to double) but never stalls it, and when nothing is due both turns sweep.
+  When more shelves are due than the priority turns can serve, they all slip in proportion to their target.
+- Which products a shelf holds is remembered from its last check; the watch lists are read again about
+  once a minute and the predicted sales about once an hour, shared by all the stores.
+- Each checked page is **one commit**: its prices and the store's status line together (WAL, `synchronous=NORMAL`).
+- A **data version** `v` (the newest price row's number) moves only when a price or stock really changed, since
+  that is the only time a price row is written. The server reads it at most once a second.
+- The **catalog** (every product judged: deal, score, flags, matches) is refreshed on a thread of its own, never
+  on a request: when `v` has moved and the last copy is 15 s old or more, and every 5 minutes anyway, because
+  "changed in 24 h" or "back in stock" follow the clock and names, pictures and ranks change without a price row.
+  A refresh is **incremental** (`finder.Catalog`): it recomputes only the products with a new price row or a
+  rewritten product row, the ones whose flags the clock has just changed (each item knows the next moment it
+  can), and the matching buckets they touch; everything else is reused, and gives the same result as a full
+  build (`tests/test_incremental.py`). ~0.1 s at 30k products, ~0.3–0.5 s at 100k; a full build (~3 s / ~11 s)
+  runs at start and every 30 minutes as a safety net. Requests always get the last finished copy at once. The
+  page, the Telegram bot and the channel poster share it (`deals/livedata.py`).
+- **Filtered lists** are kept per filter set and catalog copy, so "more" and refreshes only slice them; the
+  counts next to each filter come from the same single pass.
+- **Cheap refreshes:** `/api/pulse` is a ~1 KB answer with `v`, the server's time, each store's status and the
+  changes in the last hour. `/api/deals`, `/api/pulse`, `/api/changes`, `/api/brief`, `/api/product/ID` and
+  `/api/status` carry an ETag and answer `304` to `If-None-Match` while what they show is unchanged (the
+  time fields `now`, ages and sparkline end points don't count). `/api/changes?after=ROWID` gives only newer
+  moves for the ticker, and `/api/seen?ids=…` when each card's product was last checked.
+- **Transport:** HTTP/1.1 keep-alive, gzip for text and JSON when the browser takes it (a 48-card page
+  is ~33 KB, ~5 KB gzipped: only the fields the cards use; `?full=1` gives every field), and the page, scripts and icons kept in memory with an ETag and `no-cache`
+  (the browser keeps them but asks every time, so a deploy shows at once). API answers stay `no-store`.
 - The **page** asks for news every 10 seconds, redraws only when something changed, and shows each store's
   last change ("last change 8 s ago"), its pass time and the price changes in the last hour.
+- **Price-drop alerts** look for drops within ~15 s of a price row being written (and at least once a
+  minute); each phone still hears at most one bundle every 5 minutes.
 - A **bot check** (Amazon) pauses that store for 30 minutes. An **expired Breadfast session** pauses it until
   a new capture is imported.
 
@@ -51,6 +87,16 @@ talabat and Amazon and your Breadfast account flagged within hours. The delays c
   sweep. Chrome runs as itself: its own headless identity, no disguise, TLS checks on. A bot check stops it
   like any other page. The Docker image includes Chromium. Elsewhere, set `CHROME_BIN` or install Chrome;
   without Chrome, this part is skipped.
+- **One Chrome, kept running.** Raya's ~800 pages and Today's Deals share one headless Chrome, one page at
+  a time, driven over the DevTools protocol on a pipe (`--remote-debugging-pipe`, standard library only)
+  instead of a Chrome launch per page. Each page gets a fresh browser context (no cookies or cache from
+  earlier pages) and the same `--virtual-time-budget` page time and time limit as before; the stores' own
+  delays are unchanged, so no store is asked more often. Chrome is restarted after `CHROME_MAX_PAGES`
+  pages (200), past `CHROME_MAX_MB` of memory (700; it sits near 350 MB), after any protocol error, and
+  after a page outruns its time limit (killed outright, with a watchdog for anything stuck); it is shut
+  down after `CHROME_IDLE` s without a page (120), and its profile directory is removed every time it
+  stops. If the pipe won't start, pages fall back to a launch each (`--dump-dom`) for 30 minutes before it
+  is tried again; `CHROME_PIPE=0` keeps the launch per page.
 - Best-seller lists show today's price but no struck-through price. Their deals come from the price
   history ("usually X EGP") and start about 3 days after the first run. A list price seen on Today's
   Deals is kept while the price stays the same.
@@ -149,6 +195,8 @@ talabat sweep; up to 10 can be chosen.
 - **Price-drop alerts (🔔):** real Web Push, so they arrive with the site closed. Choose what to hear about:
   your ★ watchlist (with target prices), and/or any drop of at least N %, optionally only some stores,
   hubs, categories or words. At most one bundle every 5 minutes. Notifications buzz in their own pattern.
+  New prices are found by their row number, not their time, so a price written in the same second as a
+  look still gets its alert.
   The custom **chime** plays while the site is open; browsers don't allow custom sounds on closed-site
   notifications. iPhone needs the installed app (iOS 16.4+). The signing key is `vapid.json` next to the
   database: keep it, or every device has to turn alerts on again.
@@ -203,13 +251,14 @@ deals/
   db.py         SQLite storage and history
   finder.py     the deal rules
   sigv4.py      AWS request signing for the Amazon API
-  browser.py    headless Chrome for JavaScript-built pages (Amazon's Today's Deals)
+  browser.py    headless Chrome for JavaScript-built pages (Amazon's Today's Deals, Raya): one kept running
   applinks.py   links that open a product in its store's app
   units.py      pack sizes from names, for price per kg / L / piece
   matching.py   the same product in different stores
-  web.py        /, /api/deals (filters, sorts, counts), /api/changes, /api/product/ID, /api/status, /healthz,
-                /admin (hubs, Breadfast), /api/push/* (alerts), /sw.js, icons
-  push.py       Web Push: VAPID keys, RFC 8291 encryption, the minute-by-minute alert sender
+  web.py        /, /api/deals (filters, sorts, counts), /api/pulse, /api/changes, /api/seen, /api/product/ID,
+                /api/status, /healthz, /admin (hubs, Breadfast), /api/push/* (alerts), /sw.js, icons
+  livedata.py   the data version and the catalog rebuilt in the background, shared by the page and the bots
+  push.py       Web Push: VAPID keys, RFC 8291 encryption, the alert sender (wakes when a price moves)
   settings.py   the owner's settings (talabat hubs), kept next to the database
   live.html     the page
 tests/          saved real talabat and amazon pages (best sellers and Today's Deals), breadfast captures,

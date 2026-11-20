@@ -11,6 +11,13 @@
   const EXACT = {
     // header and filters
     "Live deals": "عروض لحظة بلحظة", "connecting…": "بيتصل…", "Filters": "فلاتر", "Install": "تثبيت",
+    "More": "المزيد", "Search": "دوّر", "Search by voice": "دوّر بالصوت", "Basket": "السلة", "Alerts": "التنبيهات", "Language": "اللغة",
+    "Install the app": "ثبّت التطبيق", "Price-drop alerts": "تنبيهات نزول الأسعار", "Watch this price": "تابع السعر ده",
+    "Skip to deals": "روح للعروض", "tracked since": "متابَع من", "Quick filters": "فلاتر سريعة", "Real only": "حقيقي بس", "Sort by": "رتّب حسب", "Main": "الرئيسية", "Pages": "الصفحات", "Close": "اقفل",
+    "Store status": "حالة المتاجر", "Minimum discount": "أقل خصم", "Maximum discount": "أكبر خصم",
+    "under its usual price": "أقل من سعره المعتاد", "the store's own discount": "خصم من المتجر نفسه",
+    "Hides discounts whose price never moves": "بيخبي الخصومات اللي سعرها ما بيتغيرش",
+    "A 'discount' whose price never moves: probably the normal price": "خصم سعره ما بيتغيرش: غالبًا ده سعره العادي",
     "Show": "اعرض", "Deals": "العروض", "All products": "كل المنتجات", "Store": "المتجر", "talabat hub": "فرع طلبات",
     "Discount type": "نوع الخصم", "Any": "أي نوع", "Platform": "خصم المتجر", "Price drop": "نزول السعر", "Discount": "الخصم",
     "any": "أي نسبة", "Availability": "التوفر", "In stock": "متاح", "Out": "خلصان", "All": "الكل", "Status": "الحالة",
@@ -24,6 +31,7 @@
     "Price: high to low": "السعر: من الأعلى", "Price per kg / L / piece": "سعر الكيلو / اللتر / القطعة",
     "Best sellers": "الأكثر مبيعًا", "Name": "الاسم", "deals": "عرض", "deal": "عرض", "products": "منتج", "EGP": "ج.م",
     // tags and cards
+    "dropped": "نزل", "went up": "زاد",  // tags whose time ("from 5 min") is written by the page itself
     "lowest in 90 days": "🔥 أقل سعر", "back in stock": "رجع تاني", "cheapest of all stores": "الأرخص في كل المتاجر",
     "discount never moves": "خصم ثابت (مش حقيقي)", "out of stock": "خلصان", "Buy now": "اشتري دلوقتي",
     "Good price": "سعر كويس", "Fair price": "سعره العادي", "Wait": "استنى", "Cheaper elsewhere": "أرخص في مكان تاني",
@@ -56,6 +64,8 @@
     "Couldn't hear that: try again, or type.": "مسمعتش كويس: جرب تاني أو اكتب.",
     "starting: the first prices arrive within a minute": "بيبدأ: أول الأسعار هتوصل خلال دقيقة",
     "can't reach the server, retrying…": "مش قادر يوصل للسيرفر، بيحاول تاني…",
+    "Can't reach the server.": "مش قادرين نوصل للسيرفر.", "Retry": "حاول تاني", "No prices loaded yet.": "لسه مفيش أسعار اتحمّلت.",
+    "Couldn't load the deals. They'll show here as soon as the server answers.": "مقدرناش نحمّل العروض. هتظهر هنا أول ما السيرفر يرد.",
     "Nothing matches these filters yet. The first sweep of each store takes about 15 minutes, and price-drop deals need a few days of history.":
       "مفيش نتايج للفلاتر دي لسه. أول لفة على كل متجر بتاخد حوالي ربع ساعة، وعروض نزول السعر محتاجة كام يوم تاريخ.",
     "Your watchlist is empty: tap ★ on any product to follow its price.": "قايمة المتابعة فاضية: دوس ★ على أي منتج عشان تتابع سعره.",
@@ -86,6 +96,10 @@
       "الأسعار بتتحدّث طول اليوم من صفحات المتاجر نفسها. ممكن السعر يتغير في المتجر قبل ما يتغير هنا.", "Telegram channel": "قناة التليجرام", "No coupons yet.": "مفيش كوبونات لسه.",
   };
   const RX = [
+    // the offline banner (the time is already written in Arabic by the page), the chart's tip, the deal score
+    [/^Prices shown are from (.+)\.$/, "الأسعار اللي قدامك من $1."],
+    [/^([\d,.]+) EGP on (.+)$/, "$1 ج.م يوم $2"],
+    [/^Deal score (\d+) of 100$/, "تقييم العرض $1 من 100"],
     [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|Raya|store) app ↗$/, (m, a) => `افتح في تطبيق ${APP[a]} ↗`],
     [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|Raya|store) ↗$/, (m, a) => `افتح في ${APP[a]} ↗`],
     [/^changed (.+)$/, "اتغير $1"], [/^dropped (.+)$/, "نزل $1"], [/^went up (.+)$/, "زاد $1"],
@@ -139,8 +153,18 @@
   const ATTRS = ["placeholder", "title", "aria-label"];
   const originals = new WeakMap();
 
+  // the same strings come back again and again (tags, prices, the status line): each is worked out once
+  const memo = new Map();
   function tr(s) {
     if (lang !== "ar" || !s || !/[A-Za-z]/.test(s)) return s;
+    let r = memo.get(s);
+    if (r === undefined) {
+      if (memo.size > 4000) memo.clear();
+      memo.set(s, r = translate(s));
+    }
+    return r;
+  }
+  function translate(s) {
     const k = s.trim();
     if (EXACT[k]) return s.replace(k, EXACT[k]);
     let o = k;
@@ -171,7 +195,10 @@
     if (root.nodeType !== 1) return;
     element(root);
     root.querySelectorAll("[placeholder],[title],[aria-label]").forEach(element);
-    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    if (root.closest(SKIP)) return;
+    // whole subtrees that are never translated (product names, [data-noi18n], svg…) are skipped, not walked
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+      { acceptNode: n => n.nodeType === 1 ? (n.matches(SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP) : NodeFilter.FILTER_ACCEPT });
     const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
     nodes.forEach(textNode);
   }
@@ -179,7 +206,11 @@
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
     const b = document.getElementById("langBtn");
-    if (b) { b.textContent = lang === "ar" ? "EN" : "ع"; b.title = lang === "ar" ? "English" : "العربية"; }
+    if (b && b.hasAttribute("data-long")) {  // a menu item: its icon and the other language's name
+      b.querySelector(".ic").textContent = lang === "ar" ? "EN" : "ع";
+      b.querySelector(".lt").textContent = lang === "ar" ? "English" : "العربية";
+      b.lang = lang === "ar" ? "en" : "ar";
+    } else if (b) { b.textContent = lang === "ar" ? "EN" : "ع"; b.title = lang === "ar" ? "English" : "العربية"; }
     if (lang === "ar") {
       if (document.title === "Live Deals") document.title = "عروض لحظة بلحظة";
       const q = document.getElementById("q");
@@ -189,13 +220,18 @@
   const mo = new MutationObserver(list => {
     if (lang !== "ar") return;
     for (const m of list) {
-      if (m.type === "characterData") textNode(m.target);
+      if (m.type === "characterData") { if (!(m.target.parentElement && m.target.parentElement.closest("[data-noi18n]"))) textNode(m.target); }
       else if (m.type === "attributes") element(m.target);
       else m.addedNodes.forEach(walk);
     }
   });
+  // text the server wrote in both languages (dates on /p/ID, also inside an svg <title>): English in the element, Arabic in data-ar
+  function both(root) {
+    if (lang === "ar") root.querySelectorAll("[data-ar]").forEach(n => { if (n.textContent !== n.dataset.ar) n.textContent = n.dataset.ar; });
+  }
   function start() {
     setDir();
+    both(document);
     walk(document.body);
     mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
     const b = document.getElementById("langBtn");

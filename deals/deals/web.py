@@ -4,10 +4,14 @@
   /api/deals             filters: deals=1|0 stores=a,b kind=platform|drop min= max= stock=in|out|all
                          status=new,lowest,real,label,back,compare category= q= pmin= pmax= ids=1,2 best=1
                          sort=score|discount|saving|newest|drop|price|price_desc|unit|popular|name limit= offset=
-  /api/changes           the latest price moves (?limit=)
+                         each item carries only what the page's cards read (web.LIST_FIELDS); full=1: every field
+  /api/changes           the latest price moves (?limit=), or only those newer than a price row (?after=ROWID)
+  /api/pulse             tiny and cheap: data version `v`, server time, each store's status, changes in the last hour
+  /api/seen?ids=1,2      when each product was last checked (up to 60)
   /api/product/ID        one product: history, links, matches in other stores, score and why
   /api/status            each store: products, last check, last change, cycle time, errors
   /manifest.webmanifest, /icon.svg   so the page installs as an app
+  /tokens.css            the design tokens the live page and the server-written pages share
   /healthz               200 when the database answers (Coolify's health check)
   /admin                 the owner's page: talabat hubs to follow, and adding Breadfast
   /api/talabat/hubs      every known talabat mart hub (name, number, areas) and the ones followed
@@ -20,6 +24,8 @@
   POST /admin/coupons    {"text": "store | CODE | what it gives | until | link" one per line}; GET /api/coupons
 """
 
+import gzip
+import hashlib
 import hmac
 import json
 import os
@@ -28,11 +34,12 @@ import sqlite3
 import tempfile
 import threading
 import time
+from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import db, finder, pages, settings
+from . import db, finder, livedata, pages, settings
 from .stores import LABELS, breadfast, talabat
 
 PAGE = Path(__file__).with_name("live.html")
@@ -64,7 +71,12 @@ def known_hubs(db_path: str = None) -> dict:
 MAX_UPLOAD = 300 * 1024 * 1024
 _import_lock = threading.Lock()
 CACHE_SECONDS = 5
-CATALOG_SECONDS = 15
+PULSE_SECONDS = 1.0  # /api/pulse and the status inside /api/deals are read from the database at most this often
+QUERY_CACHE = 64  # filter sets whose sorted matches are kept, per catalog copy
+SEEN_MAX = 60
+KEEP_ALIVE = 120  # seconds an idle connection stays open (longer than a reverse proxy's 90 s idle pool)
+GZIP_MIN = 1024
+COMPRESSIBLE = ("text/", "application/json", "application/manifest+json", "image/svg+xml")
 MANIFEST = json.dumps({
     "name": "عروض لحظة بلحظة", "short_name": "العروض", "lang": "ar", "dir": "rtl", "start_url": "/", "scope": "/", "display": "standalone",
     "background_color": "#f6f5f2", "theme_color": "#d6402b", "description": "Live prices and real deals",
@@ -73,7 +85,8 @@ MANIFEST = json.dumps({
               {"src": "/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}],
 }).encode()
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://deals.vorath.cloud").rstrip("/")
-STATIC = {"/sw.js": ("sw.js", "text/javascript"), "/i18n.js": ("i18n.js", "text/javascript"), "/icon-192.png": ("icon-192.png", "image/png"),
+STATIC = {"/sw.js": ("sw.js", "text/javascript"), "/i18n.js": ("i18n.js", "text/javascript"), "/tokens.css": ("tokens.css", "text/css; charset=utf-8"),
+          "/icon-192.png": ("icon-192.png", "image/png"),
           "/icon-512.png": ("icon-512.png", "image/png"), "/icon-maskable.png": ("icon-maskable.png", "image/png")}
 # the browser push services; the server sends pushes nowhere else
 PUSH_HOSTS = ("fcm.googleapis.com", "push.services.mozilla.com", "push.apple.com", "notify.windows.com")
@@ -104,18 +117,65 @@ def status(con) -> list[dict]:
     return out
 
 
+def etag_of(*parts) -> str:
+    """A weak ETag (W/"…") over JSON-able parts: weak because a 200 may differ in its time fields."""
+    h = hashlib.blake2b(digest_size=12)
+    for x in parts:
+        h.update(x if isinstance(x, bytes) else json.dumps(x, sort_keys=True, ensure_ascii=False, default=sorted).encode())
+        h.update(b"\0")
+    return f'W/"{h.hexdigest()}"'
+
+
+def accepts_gzip(header: str) -> bool:
+    for part in (header or "").lower().split(","):
+        name, _, params = part.strip().partition(";")
+        if name.strip() in ("gzip", "*"):
+            q = params.strip()
+            return not (q.startswith("q=") and q[2:].strip() in ("0", "0.0", "0.00", "0.000"))
+    return False
+
+
+def etag_matches(header: str, etag: str) -> bool:
+    if not header or not etag:
+        return False
+    if header.strip() == "*":
+        return True
+    bare = lambda t: t.strip().removeprefix("W/")
+    return bare(etag) in {bare(t) for t in header.split(",")}
+
+
+_static: dict = {}  # path -> (mtime_ns, size, body, gzipped, etag)
+
+
+def static_file(path: Path) -> tuple[bytes, bytes, str]:
+    """(body, gzipped body, ETag), read once and again only when the file changes (a deploy)."""
+    st = path.stat()
+    hit = _static.get(path)
+    if hit and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
+        return hit[2:]
+    body = path.read_bytes()
+    entry = (st.st_mtime_ns, st.st_size, body, gzip.compress(body, 9, mtime=0),
+             f'W/"{hashlib.blake2b(body, digest_size=12).hexdigest()}"')
+    _static[path] = entry
+    return entry[2:]
+
+
 def changes_last_hour(con) -> int:
     return con.execute("""SELECT COUNT(*) FROM prices x JOIN products p ON p.id = x.product_id
                           WHERE x.at > ? AND x.at > p.first_seen""", (int(time.time()) - 3600,)).fetchone()[0]
 
 
-def recent_changes(con, limit: int = 30) -> list[dict]:
-    rows = con.execute("""
-        SELECT x.at, x.price, x.in_stock, p.id, p.store, p.name, p.image,
+def recent_changes(con, limit: int = 30, after: int = None, upto: int = None) -> list[dict]:
+    """The latest price moves, newest first. With `after` (a price rowid): only rows after it, up to `upto`."""
+    where, args, order = "", [], "x.at DESC"
+    if after is not None:
+        where, args, order = " AND x.rowid > ? AND x.rowid <= ?", [after, upto], "x.rowid DESC"
+    rows = con.execute(f"""
+        SELECT x.rowid AS rowid, x.at, x.price, x.in_stock, p.id, p.store, p.name, p.image,
                (SELECT y.price FROM prices y WHERE y.product_id = x.product_id AND y.at < x.at
                 ORDER BY y.at DESC LIMIT 1) AS before
         FROM prices x JOIN products p ON p.id = x.product_id
-        WHERE x.at > p.first_seen ORDER BY x.at DESC LIMIT ?""", (limit,))
+        WHERE x.at > p.first_seen{where} ORDER BY {order} LIMIT ?""", args + [limit])
     out = []
     for r in rows:
         r = dict(r)
@@ -124,12 +184,61 @@ def recent_changes(con, limit: int = 30) -> list[dict]:
     return out
 
 
-def make_handler(db_path: str, requests_file: str = None):
+# /api/deals sends each item with only what the live page reads from a list item: its card (and the patcher that
+# compares cards part by part), the ★ watchlist check and the 🧺 basket. Everything else (sku, category, first_seen,
+# tracked_days, the sparkline, score and why, the sale rhythm, …) is in /api/product/ID, which the product view
+# fetches anyway. `?full=1` gives the whole item, as before, for any other caller.
+LIST_FIELDS = ("id", "store", "name", "image", "in_stock", "price", "original_price", "usual_price", "discount_pct",
+               "kind", "saving", "unit_text", "flags", "deal_label", "promo_code", "promo_price", "hub_name",
+               "matches", "cheapest", "verdict", "last_seen")
+LIST_VOLATILE = frozenset({"last_seen"})  # follows the clock: never a reason for a new ETag (as in livedata.VOLATILE)
+
+
+def list_item(d: dict) -> dict:
+    """The list shape of a catalog item. Empty values (None) are left out: the page reads a missing field as empty.
+    links: "web" always; "android" and "ios" only where they differ from it (the page falls back to "web");
+    "browser" only the product view uses. "url" only when there is no web link (the page's last fallback)."""
+    out = {k: d[k] for k in LIST_FIELDS if d.get(k) is not None}
+    links = d.get("links") or {}
+    web = links.get("web") or ""
+    out["links"] = {"web": web, **{k: links[k] for k in ("android", "ios") if links.get(k) and links[k] != web}}
+    if not web and d.get("url"):
+        out["url"] = d["url"]
+    return out
+
+
+_list_digests: dict = {}  # an item's full digest -> the digest of its list shape (a function of it)
+
+
+def list_digest(d: dict, full_digest: bytes) -> bytes:
+    """8 bytes that change exactly when the list shape changes, leaving out what follows the clock (last_seen,
+    the verdict's wording; its label and tone count), like livedata.item_digest does for the full item. Everything
+    it covers is covered by the full digest too, so it's kept per full digest and computed once per change."""
+    hit = _list_digests.get(full_digest)
+    if hit is None:
+        s = list_item(d)
+        v = s.get("verdict") or {}
+        stable = [(k, x) for k, x in s.items() if k not in LIST_VOLATILE and k != "verdict"]
+        stable.append(("verdict", (v.get("label"), v.get("tone"))))
+        hit = hashlib.blake2b(repr(stable).encode(), digest_size=8).digest()
+        if len(_list_digests) > 400_000:  # a few catalogs' worth; then start again
+            _list_digests.clear()
+        _list_digests[full_digest] = hit
+    return hit
+
+
+def make_handler(db_path: str, requests_file: str = None, keeper: livedata.CatalogKeeper = None):
+    """keeper: the catalog to serve (serve() passes the process's shared one); by default one of its own,
+    whose builder thread starts with the first request that needs it (Handler.keeper, for tests)."""
     requests_file = requests_file or breadfast.DEFAULT_REQUESTS_FILE
     coupons_file = os.path.join(os.path.dirname(os.path.abspath(db_path)), "coupons.json")
     cache, lock = {}, threading.Lock()
-    catalog_state = {"at": 0.0, "items": [], "by_id": {}}
-    catalog_lock = threading.Lock()
+    keeper = keeper or livedata.CatalogKeeper(db_path)
+    version = keeper.version
+    queries = OrderedDict()  # (catalog gen, filter set) -> (sorted matches, facets, facets digest)
+    queries_lock = threading.Lock()
+    pulse_box = {"at": float("-inf"), "value": None}
+    pulse_lock = threading.Lock()
 
     vapid_box = {}
 
@@ -189,12 +298,44 @@ def make_handler(db_path: str, requests_file: str = None):
         finally:
             con.close()
 
-    def catalog(con) -> list[dict]:
-        with catalog_lock:  # one rebuild at a time; everyone else gets the fresh copy
-            if time.monotonic() - catalog_state["at"] > CATALOG_SECONDS:
-                items = finder.catalog(con)
-                catalog_state.update(at=time.monotonic(), items=items, by_id={d["id"]: d for d in items})
-            return catalog_state["items"]
+    def catalog(con=None) -> list[dict]:
+        return keeper.get().items
+
+    def matches_for(snap, fargs: dict):
+        """Every match of a filter set, sorted, with its facets: kept per catalog copy, so paging and the
+        page's refresh only slice it."""
+        key = (snap.gen, json.dumps(fargs, sort_keys=True, default=sorted))
+        with queries_lock:
+            hit = queries.get(key)
+            if hit:
+                queries.move_to_end(key)
+                return hit
+        hits, facets = finder.select(snap.items, **fargs)
+        entry = (hits, facets, hashlib.blake2b(json.dumps(facets, sort_keys=True).encode(), digest_size=8).digest())
+        with queries_lock:
+            for k in [k for k in queries if k[0] != snap.gen]:  # an older copy's results
+                del queries[k]
+            queries[key] = entry
+            while len(queries) > QUERY_CACHE:
+                queries.popitem(last=False)
+        return entry
+
+    def pulse(con) -> dict:
+        """{v, status, changes_last_hour, catalog}: what changes from second to second, read at most once a second."""
+        keeper.touch()  # a page polling only the pulse still needs fresh catalog copies to be told about
+        now = time.monotonic()
+        if now - pulse_box["at"] < PULSE_SECONDS:
+            return pulse_box["value"]
+        with pulse_lock:
+            if time.monotonic() - pulse_box["at"] < PULSE_SECONDS:
+                return pulse_box["value"]
+            snap = keeper.snap
+            keeper.start()  # builds the first catalog in the background if nobody asked for one yet
+            value = {"v": version.get(con), "status": status(con), "changes_last_hour": changes_last_hour(con),
+                     "catalog": {"v": snap.v, "built": snap.built} if snap else None}
+            value["etag"] = etag_of("pulse", value)
+            pulse_box.update(at=time.monotonic(), value=value)
+            return value
 
     def cached(key: str, build):
         now = time.monotonic()
@@ -210,22 +351,59 @@ def make_handler(db_path: str, requests_file: str = None):
         return value
 
     class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"  # keep-alive: every answer carries its Content-Length
+        timeout = KEEP_ALIVE
+        disable_nagle_algorithm = True  # headers and body go out as two writes: don't wait 40 ms between them
+
         def log_message(self, fmt, *args):
             pass
 
-        def send(self, code: int, body: bytes, ctype: str):
+        def send(self, code: int, body: bytes, ctype: str, cache: str = "no-store", etag: str = None,
+                 gzipped: bytes = None):
+            """One answer. gzip when the client takes it and it's worth it; 304 when the client's copy (its
+            If-None-Match) is still the right one. `gzipped`: the body already compressed (static files)."""
+            compressible = ctype.startswith(COMPRESSIBLE)
+            encoded = False
+            if etag and code == 200 and etag_matches(self.headers.get("If-None-Match"), etag):
+                code, body = 304, b""
+            elif compressible and len(body) >= GZIP_MIN and accepts_gzip(self.headers.get("Accept-Encoding")):
+                body, encoded = (gzipped if gzipped is not None else gzip.compress(body, 5, mtime=0)), True
             self.send_response(code)
-            self.send_header("Content-Type", ctype)
+            if code != 304:
+                self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Cache-Control", cache)
+            if etag:
+                self.send_header("ETag", etag)
+            if compressible:
+                self.send_header("Vary", "Accept-Encoding")
+            if encoded:
+                self.send_header("Content-Encoding", "gzip")
             if ctype == "text/javascript":
                 self.send_header("Service-Worker-Allowed", "/")
             self.send_header("X-Content-Type-Options", "nosniff")
+            if self.command == "POST":  # a POST's body may not have been read: don't read past it as a request
+                self.close_connection = True
+                self.send_header("Connection", "close")
             self.end_headers()
-            self.wfile.write(body)
+            if body and self.command != "HEAD":
+                self.wfile.write(body)
 
-        def json(self, obj, code: int = 200):
-            self.send(code, json.dumps(obj, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+        def json(self, obj, code: int = 200, etag: str = None):
+            self.send(code, json.dumps(obj, ensure_ascii=False).encode(), "application/json; charset=utf-8", etag=etag)
+
+        def static(self, path: Path, ctype: str):
+            """A file from the package: kept in memory, may be cached but is revalidated every time (no-cache),
+            since its address doesn't change when a deploy changes it."""
+            body, gz, etag = static_file(path)
+            self.send(200, body, ctype, cache="no-cache", etag=etag, gzipped=gz)
+
+        def unchanged(self, etag: str) -> bool:
+            """Answers 304 (and returns True) when the client already has this version of a JSON answer."""
+            if etag_matches(self.headers.get("If-None-Match"), etag):
+                self.send(200, b"", "application/json; charset=utf-8", etag=etag)
+                return True
+            return False
 
         def do_GET(self):
             u = urlparse(self.path)
@@ -235,9 +413,9 @@ def make_handler(db_path: str, requests_file: str = None):
                 con = sqlite3.connect(db_path, timeout=10)
                 con.row_factory = sqlite3.Row
                 if u.path in ("/", "/live"):
-                    self.send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+                    self.static(PAGE, "text/html; charset=utf-8")
                 elif u.path in ("/admin", "/admin/"):
-                    self.send(200, ADMIN_PAGE.read_bytes(), "text/html; charset=utf-8")
+                    self.static(ADMIN_PAGE, "text/html; charset=utf-8")
                 elif u.path == "/healthz":
                     con.execute("SELECT 1").fetchone()
                     self.send(200, b"ok", "text/plain")
@@ -258,28 +436,70 @@ def make_handler(db_path: str, requests_file: str = None):
                                 limit=min(int(q.get("limit", 60)), 500), offset=int(q.get("offset", 0)))
                     if args["ids"] is not None:
                         args["ids"] = set(args["ids"])
-
-                    def build():
-                        r = finder.query(catalog(con), **args)
-                        r.update(labels=LABELS, status=status(con), changes_last_hour=changes_last_hour(con),
-                                 now=int(time.time()))
-                        return r
-                    self.json(cached("deals" + json.dumps(args, sort_keys=True, default=sorted), build))
+                    limit, offset = args.pop("limit"), args.pop("offset")
+                    snap = keeper.get()
+                    hits, facets, facets_digest = matches_for(snap, args)
+                    page = hits[offset:offset + limit]
+                    # the ETag covers what the items carry (only the list shape's fields unless ?full=1); status,
+                    # changes_last_hour, now and v are left out
+                    full = q.get("full") == "1"
+                    digests = (snap.digests[d["id"]] for d in page) if full else \
+                        (list_digest(d, snap.digests[d["id"]]) for d in page)
+                    etag = etag_of("deals-full" if full else "deals", limit, offset, len(hits), facets_digest,
+                                   b"".join(digests))
+                    if self.unchanged(etag):
+                        return
+                    p = pulse(con)
+                    self.json({"items": page if full else [list_item(d) for d in page], "total": len(hits),
+                               "facets": facets, "labels": LABELS,
+                               "status": p["status"], "changes_last_hour": p["changes_last_hour"],
+                               "now": int(time.time()), "v": snap.v}, etag=etag)
+                elif u.path == "/api/pulse":
+                    p = pulse(con)
+                    if not self.unchanged(p["etag"]):
+                        self.json({"v": p["v"], "now": int(time.time()), "status": p["status"],
+                                   "changes_last_hour": p["changes_last_hour"], "catalog": p["catalog"]}, etag=p["etag"])
+                elif u.path == "/api/seen":
+                    ids = list(dict.fromkeys(int(x) for x in q.get("ids", "").split(",") if x.strip().isdigit()))[:SEEN_MAX]
+                    rows = con.execute(f"SELECT id, last_seen FROM products WHERE id IN ({','.join('?' * len(ids))})",
+                                       ids).fetchall() if ids else []
+                    self.json({"seen": {str(r["id"]): r["last_seen"] for r in rows}, "now": int(time.time())})
                 elif u.path == "/api/brief":
-                    self.json(cached("brief", lambda: finder.brief(catalog(con))))
+                    snap = keeper.get()
+                    b = cached(f"brief{snap.gen}", lambda: (lambda r: (r, etag_of("brief", r)))(finder.brief(snap.items)))
+                    if not self.unchanged(b[1]):
+                        self.json(b[0], etag=b[1])
                 elif u.path == "/api/changes":
                     limit = min(int(q.get("limit", 30)), 100)
-                    self.json(cached(f"changes{limit}", lambda: {"changes": recent_changes(con, limit)}))
+                    after = int(q["after"]) if q.get("after", "").strip() else None
+                    v = version.get(con)
+
+                    def build_changes():
+                        upto = db.data_version(con)
+                        reset = after is not None and after > upto  # the client's cursor is from another numbering
+                        r = {"changes": recent_changes(con, limit, None if reset or after is None else after, upto),
+                             "v": upto}
+                        if reset:
+                            r["reset"] = True
+                        return r, etag_of("changes", r)
+                    r, etag = cached(f"changes{limit}:{after}:{v}", build_changes)
+                    if not self.unchanged(etag):
+                        self.json(r, etag=etag)
                 elif u.path.startswith("/api/product/"):
                     pid = int(u.path.rsplit("/", 1)[1])
                     p = con.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
                     if not p:
                         return self.json({"error": "not found"}, 404)
-                    catalog(con)
-                    item = catalog_state["by_id"].get(pid, {})
-                    matches = [dict(catalog_state["by_id"][m["id"]], spark=None) for m in item.get("matches", [])
-                               if m["id"] in catalog_state["by_id"]]
-                    self.json({"product": dict(p), "item": item, "history": db.history(con, pid), "matches": matches})
+                    snap = keeper.get()
+                    item = snap.by_id.get(pid, {})
+                    history = db.history(con, pid)
+                    found = [m["id"] for m in item.get("matches", []) if m["id"] in snap.by_id]
+                    etag = etag_of("product", {k: v for k, v in dict(p).items() if k != "last_seen"}, history,
+                                   b"".join(snap.digests[i] for i in [pid] * bool(item) + found))
+                    if self.unchanged(etag):
+                        return
+                    matches = [dict(snap.by_id[i], spark=None) for i in found]
+                    self.json({"product": dict(p), "item": item, "history": history, "matches": matches}, etag=etag)
                 elif u.path == "/api/talabat/hubs":
                     chosen = settings.load(settings.path_for(db_path))["talabat_hubs"]
                     hubs = known_hubs(db_path)
@@ -299,26 +519,26 @@ def make_handler(db_path: str, requests_file: str = None):
                     self.json({"selected": [h["id"] for h in chosen], "districts": order, "hubs": rows})
                 elif u.path in STATIC:
                     name, ctype = STATIC[u.path]
-                    self.send(200, (Path(__file__).parent / name).read_bytes(), ctype)
+                    self.static(Path(__file__).parent / name, ctype)
                 elif u.path == "/api/push/key":
                     self.json({"key": vapid().public_b64})
                 elif u.path == "/manifest.webmanifest":
-                    self.send(200, MANIFEST, "application/manifest+json")
+                    self.send(200, MANIFEST, "application/manifest+json", cache="no-cache", etag=etag_of(MANIFEST))
                 elif u.path == "/icon.svg":
-                    self.send(200, ICON, "image/svg+xml")
+                    self.send(200, ICON, "image/svg+xml", cache="no-cache", etag=etag_of(ICON))
                 elif re.fullmatch(r"/p/\d+", u.path):
                     pid = int(u.path[3:])
                     p = con.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
                     if not p:
                         return self.send(404, pages.layout("Not found", '<div class="empty">This product isn\'t'
                                                            ' tracked (any more).</div>'), "text/html; charset=utf-8")
-                    catalog(con)
-                    by_id = catalog_state["by_id"]
+                    snap = keeper.get()
+                    by_id = snap.by_id
                     item = by_id.get(pid, {})
                     matches = [by_id[m["id"]] for m in item.get("matches", []) if m["id"] in by_id]
                     related = []
                     if item:
-                        r = finder.query(catalog_state["items"], deals_only=True, category=item["top_category"],
+                        r = finder.query(snap.items, deals_only=True, category=item["top_category"],
                                          stores=[item["store"]], sort="score", limit=13)
                         related = [x for x in r["items"] if x["id"] != pid][:12]
                     self.send(200, pages.product_page(dict(p), item, db.history(con, pid), matches, related, PUBLIC_URL),
@@ -332,7 +552,7 @@ def make_handler(db_path: str, requests_file: str = None):
                             if d["in_stock"] and d["discount_pct"] and not {"steady", "inflated", "rose"} & set(d["flags"]):
                                 best[d["store"]] = max(best.get(d["store"], 0), d["discount_pct"])
                         return pages.stores_page(status(con), {}, deals, best)
-                    self.send(200, cached("stores", build_stores), "text/html; charset=utf-8")
+                    self.send(200, cached(f"stores{keeper.get().gen}", build_stores), "text/html; charset=utf-8")
                 elif re.fullmatch(r"/store/[a-z_]+", u.path):
                     self.send_response(302)
                     self.send_header("Location", "/?deals=1&stores=" + u.path.rsplit("/", 1)[1])
@@ -348,7 +568,7 @@ def make_handler(db_path: str, requests_file: str = None):
                                 top[d["top_category"]] = max(top.get(d["top_category"], 0), d["discount_pct"])
                         rows = sorted(((c, n, top.get(c, 0)) for c, n in r.items() if n), key=lambda x: -x[1])
                         return pages.cats_page(rows)
-                    self.send(200, cached("cats", build_cats), "text/html; charset=utf-8")
+                    self.send(200, cached(f"cats{keeper.get().gen}", build_cats), "text/html; charset=utf-8")
                 elif u.path == "/coupons":
                     def build_coupons():
                         found = {}  # codes the stores show on their own products (Kenzz), with how many they cut
@@ -361,7 +581,7 @@ def make_handler(db_path: str, requests_file: str = None):
                                  "title": f"Extra off on {v['n']} products, up to {v['best']:,.0f} EGP"}
                                 for (st, code), v in sorted(found.items(), key=lambda kv: -kv[1]["n"])[:60]]
                         return pages.coupons_page(pages.load_coupons(coupons_file) + auto)
-                    self.send(200, cached("coupons", build_coupons), "text/html; charset=utf-8")
+                    self.send(200, cached(f"coupons{keeper.get().gen}", build_coupons), "text/html; charset=utf-8")
                 elif u.path == "/about":
                     self.send(200, pages.about_page([pages.AR_STORE.get(k, v) for k, v in LABELS.items()
                                                      if k in {r["store"] for r in status(con)}]),
@@ -375,7 +595,10 @@ def make_handler(db_path: str, requests_file: str = None):
                 elif u.path == "/api/coupons":
                     self.json({"coupons": pages.load_coupons(coupons_file)})
                 elif u.path == "/api/status":
-                    self.json({"status": status(con), "changes_last_hour": changes_last_hour(con)})
+                    p = pulse(con)
+                    etag = etag_of("status", p["status"], p["changes_last_hour"])
+                    if not self.unchanged(etag):
+                        self.json({"status": p["status"], "changes_last_hour": p["changes_last_hour"]}, etag=etag)
                 else:
                     self.json({"error": "not found"}, 404)
             except (ValueError, KeyError) as e:
@@ -500,12 +723,15 @@ def make_handler(db_path: str, requests_file: str = None):
                 os.unlink(tmp)  # the capture holds the app session: never kept
                 _import_lock.release()
 
+    Handler.keeper = keeper
     return Handler
 
 
 def serve(db_path: str, host: str = "127.0.0.1", port: int = 8800, requests_file: str = None):
     db.connect(db_path).close()  # create the tables
-    server = ThreadingHTTPServer((host, port), make_handler(db_path, requests_file))
+    keeper = livedata.shared(db_path)  # the same catalog as the Telegram bot and poster, built off the requests
+    keeper.start()
+    server = ThreadingHTTPServer((host, port), make_handler(db_path, requests_file, keeper))
     server.daemon_threads = True
     print(f"live deals on http://{host}:{port}/")
     server.serve_forever()

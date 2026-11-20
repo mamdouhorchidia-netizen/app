@@ -8,25 +8,31 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.vorath.mobile.data.Keystore
 import com.vorath.mobile.data.SessionStore
 import com.vorath.mobile.data.Signals
+import com.vorath.mobile.data.TodayCache
 import com.vorath.mobile.data.VorathApi
 import com.vorath.mobile.data.VorathError
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
-/** About once an hour: read the Autopilot deck and tell the person what started needing them since the last check. */
+/**
+ * Every 15 minutes (WorkManager's shortest period; Android may stretch it in Doze): read the Autopilot deck and tell
+ * the person what started needing them since the last check.
+ */
 class AlarmWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val store = SessionStore(applicationContext)
         val s = store.load() ?: return@withContext Result.success()
         try {
             val now = Signals.of(VorathApi(s.base, s.sessionId).deck())
-            Signals.fresh(now, store.told).forEach { Notifier.tell(applicationContext, it) }
+            Notifier.tell(applicationContext, Signals.fresh(now, store.told))
             store.told = now.map { it.id }.toSet()
             Result.success()
         } catch (e: VorathError.SignedOut) {
+            TodayCache(applicationContext.noBackupFilesDir, Keystore).clear()   // the session is over: its answers go too
             if (!store.toldSignedOut) {
                 Notifier.signedOut(applicationContext)
                 store.toldSignedOut = true
@@ -43,10 +49,11 @@ class AlarmWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         private const val NAME = "vorath-alarms"
 
         fun start(context: Context) {
-            val work = PeriodicWorkRequestBuilder<AlarmWorker>(1, TimeUnit.HOURS)
+            val work = PeriodicWorkRequestBuilder<AlarmWorker>(15, TimeUnit.MINUTES)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.KEEP, work)
+            // UPDATE, not KEEP: a phone that already has the hourly check moves to the new period, keeping its schedule's start.
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.UPDATE, work)
         }
 
         fun stop(context: Context) {

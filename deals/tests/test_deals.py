@@ -935,7 +935,8 @@ class Push(unittest.TestCase):
                             (ep, json.dumps({"endpoint": ep, "keys": {}}), json.dumps(prefs)))
             con.commit(); con.close()
             n = push.Notifier(path, {"talabat": "talabat mart"}, log=lambda *_: None)
-            n.last = 1500
+            self.assertEqual(n.last_rowid, 4)  # starts after what is already there
+            n.last_rowid = 2  # ...rewound to just after the first prices, so the drops at 2000 are new
             sent = []
             n.tick(now=2100, sender=lambda v, sub, msg: (sent.append((sub["endpoint"], msg)), 410 if sub["endpoint"].endswith("gone") else 201)[1])
             self.assertEqual(len(sent), 2)
@@ -1064,6 +1065,8 @@ class Pages(unittest.TestCase):
         self.assertIn("📍 El Obour El Hay 9", page)
         self.assertIn('data-android="https://www.talabat.com/egypt/talabat-mart/product/tea/s/T2"', page)
         self.assertNotIn("<500", page)
+        self.assertIn('<link rel="stylesheet" href="/tokens.css">', page)  # the live page's tokens, not a copy
+        self.assertNotIn("#f6f5f2", page)
 
     def test_coupons_lines(self):
         from deals import pages

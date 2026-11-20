@@ -4,8 +4,10 @@
   database (vapid.json). Browsers subscribe with the public key.
 - Each subscription stores what its owner wants (see `wants`): their watchlist, and/or any drop of at least
   N %, optionally only some stores, hubs, categories or words.
-- `Notifier` looks at the price changes every minute and sends each subscriber one notification per batch
-  (at most one every `min_gap` seconds), so a busy minute doesn't buzz a phone ten times.
+- `Notifier` looks at the price changes within ~15 s of one being written (and at least every minute) and sends each subscriber one notification per batch
+  (at most one every `min_gap` seconds), so a busy minute doesn't buzz a phone ten times. It reads price rows
+  by rowid (every row after the last one it read), not by time, so a row written in the same second as a
+  look is still seen by the next one.
 - Encryption is RFC 8291 (aes128gcm) and the authorization header RFC 8292 (VAPID, ES256), on the
   `cryptography` package. Push services answer 404/410 for a subscription that is gone; it is then deleted.
 """
@@ -15,6 +17,7 @@ import hashlib
 import hmac
 import json
 import os
+import sqlite3
 import struct
 import threading
 import time
@@ -180,23 +183,54 @@ def due_sales(con, ids: list[int], now: int, within_days: float = 1.0) -> dict:
     return out
 
 
-# ---- the minute-by-minute check --------------------------------------------------------------------
+# ---- the check: soon after a price moves, and at least once a minute ----------------------------
 
 class Notifier:
     def __init__(self, db_path: str, labels: dict, min_gap: int = 300, log=print):
         self.db_path, self.labels, self.min_gap, self.log = db_path, labels, min_gap, log
         self.vapid = Vapid.load_or_create(os.path.join(os.path.dirname(os.path.abspath(db_path)), "vapid.json"))
-        self.last = int(time.time())
+        self.last_rowid = self._start_rowid()  # price rows up to here have been looked at
         self.pending = {}  # endpoint -> drops waiting for that subscriber's gap
         self.last_forecast = 0  # predicted sales are looked at once an hour
+        self.check_every, self.every = 15, 60  # look at the data version every 15 s; tick at least once a minute
+        self.seen_v, self.ticked = None, time.monotonic()
 
-    def drops_since(self, con, since: int) -> list[dict]:
+    def _start_rowid(self):
+        """Start from the newest price row at startup, as the old time cursor started from "now": drops written
+        while the app was down aren't sent late. A database without prices yet starts at 0; anything else
+        that goes wrong leaves it to the first tick."""
+        try:
+            con = sqlite3.connect(self.db_path, timeout=30)
+            try:
+                return dbm.data_version(con)
+            finally:
+                con.close()
+        except sqlite3.OperationalError as e:
+            return 0 if "no such table" in str(e) else None
+        except sqlite3.Error:
+            return None
+
+    def advance(self, con) -> tuple[int, int]:
+        """(after, upto): the rowid range of price rows to look at now, and moves the cursor to `upto`.
+        prices has no INTEGER PRIMARY KEY, so a VACUUM may renumber its rowids: a cursor past the newest row
+        is reset to it (and that look finds nothing) rather than waiting for rowids to catch up."""
+        upto = dbm.data_version(con)
+        after = self.last_rowid
+        if after is None or after > upto:
+            after = upto
+        self.last_rowid = upto
+        return after, upto
+
+    def drops_since(self, con, after: int, upto: int = None) -> list[dict]:
+        """Drops among the price rows with after < rowid <= upto (no upper bound when upto is None)."""
+        if upto is None:
+            upto = 1 << 62
         rows = con.execute("""
             SELECT x.at, x.price, p.id, p.store, p.name, p.image, p.category, p.original_price, p.extra,
                    (SELECT y.price FROM prices y WHERE y.product_id = x.product_id AND y.at < x.at
                     ORDER BY y.at DESC LIMIT 1) AS before
             FROM prices x JOIN products p ON p.id = x.product_id
-            WHERE x.at > ? AND x.at > p.first_seen AND x.in_stock = 1""", (since,))
+            WHERE x.rowid > ? AND x.rowid <= ? AND x.at > p.first_seen AND x.in_stock = 1""", (after, upto))
         out = []
         for r in rows:
             if r["before"] and r["price"] < r["before"]:
@@ -213,8 +247,7 @@ class Notifier:
         now = int(now or time.time())
         con = dbm.connect(self.db_path)
         try:
-            drops = self.drops_since(con, self.last)
-            self.last = now
+            drops = self.drops_since(con, *self.advance(con))
             for sub in con.execute("SELECT * FROM push_subs").fetchall():
                 prefs = json.loads(sub["prefs"] or "{}")
                 mine = [d for d in drops if wants(prefs, d)]
@@ -266,11 +299,23 @@ class Notifier:
                 break  # one forecast an hour per subscriber is plenty
         return sent
 
-    def run_forever(self):
+    def due(self, v: int, mono: float) -> bool:
+        """Look for drops when a price row was written since the last look (v moved), and at least every
+        `every` seconds anyway, for bundles waiting for a subscriber's gap and the hourly sale forecasts."""
+        return v != self.seen_v or mono - self.ticked >= self.every
+
+    def run_forever(self, sleep=time.sleep, clock=time.monotonic):
         while True:
-            time.sleep(60)
+            sleep(self.check_every)
             try:
-                self.tick()
+                con = sqlite3.connect(self.db_path, timeout=30)  # a bare look: no schema or migration work
+                try:
+                    v = dbm.data_version(con)
+                finally:
+                    con.close()
+                if self.due(v, clock()):
+                    self.tick()
+                    self.seen_v, self.ticked = v, clock()
             except Exception:
                 traceback.print_exc()
 

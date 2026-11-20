@@ -1,0 +1,60 @@
+/* Live deals design tokens: the one set of values the live page (live.html) and the server-written pages
+   (pages.py: /p/ID, /stores, /cats, /coupons, …) share. Served by web.py at /tokens.css, kept in memory with an
+   ETag and no-cache, and kept by the service worker with the page shell.
+
+   spacing 4/8/12/16/24/32 · type 12/14/16/20/24/32 · radius 8/12/16 · colour roles · elevation · motion.
+   Every text/background pair below passes WCAG AA (4.5:1) in both themes; store chips use --<store>-bg/-fg. */
+:root {
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --fs-1: 12px; --fs-2: 14px; --fs-3: 16px; --fs-4: 20px; --fs-5: 24px; --fs-6: 32px;
+  --r-1: 8px; --r-2: 12px; --r-3: 16px; --r-pill: 999px;
+  --tap: 44px;             /* the smallest hit area */
+  --bar-h: 56px;           /* the phone top bar and bottom tab bar */
+  /* system fonts only (no download). Arabic: the platform's own Arabic UI face comes first in RTL. */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Arabic", Tahoma, sans-serif;
+  --font-ar: system-ui, -apple-system, "Segoe UI", "Noto Sans Arabic", "Geeza Pro", Tahoma, "Noto Naskh Arabic", sans-serif;
+  /* motion: transform and opacity only */
+  --dur-1: 120ms; --dur-2: 200ms; --dur-3: 320ms; --ease: cubic-bezier(.2, .8, .2, 1);
+
+  /* colour roles (light) */
+  --bg: #f6f5f2; --surface: #ffffff; --surface-2: #efede8; --line: #e4e1da;
+  --ink: #1b1a17; --ink-2: #5d5a53; --ink-3: #6b6862;
+  --accent: #d6402b; --accent-ink: #ffffff; --accent-text: #b3321f;
+  --deal: #c4351f; --deal-ink: #ffffff;              /* the discount badge */
+  --good: #1f7a4d; --good-bg: #e3f3ea; --warn: #845b00; --warn-bg: #fbf0d4; --danger: #b1261b; --danger-bg: #fde8e4;
+  --focus: #d6402b;
+  --elev-1: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+  --elev-2: 0 6px 24px rgba(0,0,0,.18);
+  --elev-3: 0 -10px 40px rgba(0,0,0,.25);
+  /* store colours as text on --surface (both themes pass 4.5:1) */
+  --talabat: #c94700; --amazon_eg: #232f3e; --breadfast: #a80080; --jumia: #a65c12; --dream2000: #0b4ea2; --kenzz: #7b2cbf; --raya: #c8102e;
+  /* store chips (the same in both themes): background, and the text on it (white unless set) */
+  --talabat-bg: #c94700; --amazon_eg-bg: #232f3e; --breadfast-bg: #a80080; --jumia-bg: #f68b1e; --jumia-fg: #1b1a17;
+  --dream2000-bg: #0b4ea2; --kenzz-bg: #7b2cbf; --raya-bg: #c8102e;
+  /* picture tiles: product photos are mostly on white */
+  --pic: #ffffff; --plate: #ffffff; --ph: #d9d5cc;
+
+  /* older names, kept so nothing that still uses them breaks */
+  --panel: var(--surface); --chip: var(--surface-2); --muted: var(--ink-2); --faint: var(--ink-3);
+  --shadow: var(--elev-1); --drop: var(--good); --radius: var(--r-2);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121211; --surface: #1c1b19; --surface-2: #262421; --line: #2f2d29;
+    --ink: #f0eee9; --ink-2: #b4b0a7; --ink-3: #9d998f;
+    --accent: #ff6b55; --accent-ink: #1b0b07; --accent-text: #ff7a66;
+    --good: #5cc98f; --good-bg: #173326; --warn: #e6b84d; --warn-bg: #3a2f12; --danger: #ff8a7a; --danger-bg: #3d1714;
+    --focus: #ff8a78; --elev-1: none; --elev-2: 0 6px 24px rgba(0,0,0,.6); --elev-3: 0 -10px 40px rgba(0,0,0,.6);
+    --talabat: #ff5a00; --amazon_eg: #8aa0bb; --breadfast: #d06cbc; --jumia: #f68b1e; --dream2000: #6b96cf; --kenzz: #ad7ddb; --raya: #e06a7d;
+    --pic: #26251f; --plate: #c9c6bf; --ph: #77746d;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121211; --surface: #1c1b19; --surface-2: #262421; --line: #2f2d29;
+  --ink: #f0eee9; --ink-2: #b4b0a7; --ink-3: #9d998f;
+  --accent: #ff6b55; --accent-ink: #1b0b07; --accent-text: #ff7a66;
+  --good: #5cc98f; --good-bg: #173326; --warn: #e6b84d; --warn-bg: #3a2f12; --danger: #ff8a7a; --danger-bg: #3d1714;
+  --focus: #ff8a78; --elev-1: none; --elev-2: 0 6px 24px rgba(0,0,0,.6); --elev-3: 0 -10px 40px rgba(0,0,0,.6);
+  --talabat: #ff5a00; --amazon_eg: #8aa0bb; --breadfast: #d06cbc; --jumia: #f68b1e; --dream2000: #6b96cf; --kenzz: #ad7ddb; --raya: #e06a7d;
+  --pic: #26251f; --plate: #c9c6bf; --ph: #77746d;
+}
