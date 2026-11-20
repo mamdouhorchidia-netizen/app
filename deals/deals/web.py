@@ -76,6 +76,7 @@ def known_hubs(db_path: str = None) -> dict:
 MAX_UPLOAD = 300 * 1024 * 1024
 _import_lock = threading.Lock()
 STARTUP_WAIT = float(os.environ.get("DEALS_STARTUP_WAIT", 30))  # a request during the very first build waits this long
+READY_GRACE = float(os.environ.get("DEALS_READY_GRACE", 90))  # /healthz says "starting" this long at most
 KEEPALIVE = 120  # seconds an idle kept-alive connection stays open (longer than Traefik's 90 s idle pool)
 JSON = "application/json; charset=utf-8"
 HTML = "text/html; charset=utf-8"
@@ -192,6 +193,7 @@ def make_handler(db_path: str, requests_file: str = None, catalog: "catalog_mod.
              ["live.html", "admin.html"] + [v[0] for v in STATIC.values()]}
     MANIFEST_TAG, ICON_TAG = etag_of(MANIFEST), etag_of(ICON)
     started = []
+    boot = time.monotonic()
 
     def snapshot():
         if not started:
@@ -429,6 +431,14 @@ def make_handler(db_path: str, requests_file: str = None, catalog: "catalog_mod.
                 elif path == "/healthz":
                     with pool.connection() as con:
                         con.execute("SELECT 1").fetchone()
+                    # Not ready until the first catalogue is built, so a new deploy takes over only once it can
+                    # answer (the old container keeps serving meanwhile). Never waits; and after READY_GRACE seconds
+                    # it says ok regardless, so a slow first build can't fail the deploy.
+                    if not started:
+                        cat.start()
+                        started.append(True)
+                    if cat.snapshot() is None and time.monotonic() - boot < READY_GRACE:
+                        return self.send(503, b"starting", "text/plain", cache="no-store")
                     self.send(200, b"ok", "text/plain")
                 elif path == "/api/pulse":
                     snap = snapshot()
@@ -539,8 +549,10 @@ def make_handler(db_path: str, requests_file: str = None, catalog: "catalog_mod.
                     body, tag = snap.answer(("status", id(meta)), lambda: (lambda b: (b, etag_of(b)))(
                         dumps({"status": meta.status, "changes_last_hour": meta.changes_last_hour})))
                     self.send(200, body, JSON, etag=tag)
-                else:
+                elif path.startswith("/api/"):
                     self.json({"error": "not found"}, 404)
+                else:  # a mistyped address: the page that says where to go next
+                    self.send(404, pages.layout("Not found", '<div class="empty">This page doesn\'t exist.</div>'), HTML)
             except (ValueError, KeyError) as e:
                 self.json({"error": str(e)}, 400)
             except sqlite3.Error as e:

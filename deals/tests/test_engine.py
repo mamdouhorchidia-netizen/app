@@ -391,8 +391,15 @@ class StartUp(unittest.TestCase):
                 r = c.getresponse()
                 body = json.loads(r.read())
                 self.assertEqual((r.status, body["error"], r.getheader("Retry-After")), (503, "starting", "5"))
-                c.request("GET", "/healthz")  # the health check doesn't wait for the catalogue
-                self.assertEqual(c.getresponse().status, 200)
+                # The health check never waits. While the first catalogue is being built it answers 503 at once
+                # (so a new deploy takes traffic only when it can answer), and ok after READY_GRACE regardless.
+                c.request("GET", "/healthz")
+                r = c.getresponse(); r.read()
+                self.assertEqual(r.status, 503)
+                with mock.patch.object(web, "READY_GRACE", 0):
+                    c.request("GET", "/healthz")
+                    r = c.getresponse(); r.read()
+                    self.assertEqual(r.status, 200)
                 c.close()
         finally:
             server.shutdown()
