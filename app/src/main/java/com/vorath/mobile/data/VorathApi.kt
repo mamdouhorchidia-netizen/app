@@ -5,11 +5,12 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
 
 /** Why a call to Vorath did not answer with data. */
 sealed class VorathError(message: String) : Exception(message) {
-    /** No session, or the server no longer accepts it (401). */
-    class SignedOut(message: String) : VorathError(message)
+    /** No session, or the server no longer accepts it (401). [said]: the message is the server's own words. */
+    class SignedOut(message: String, val said: Boolean = true) : VorathError(message)
 
     /** Signed in, but the role or the plan does not open this (403). */
     class Refused(message: String) : VorathError(message)
@@ -26,6 +27,10 @@ class SignIn(val sessionId: String, val setup: Boolean, val mustChange: Boolean)
 /**
  * Vorath's server API (fleet.server and face.app), as the phone uses it. Read-only apart from sign-in and sign-out.
  * The session is the server's own `vorath_sid` cookie; the app keeps that, never the password.
+ *
+ * Keep one client per session: it remembers each GET's body with the server's ETag / Last-Modified and sends them
+ * back as If-None-Match / If-Modified-Since, so an unchanged answer can come back as an empty 304. It is safe to call
+ * from several threads at once.
  */
 class VorathApi(val base: String, private val sessionId: String? = null, private val agent: String = "VorathMobile/0.1") {
 
@@ -44,25 +49,85 @@ class VorathApi(val base: String, private val sessionId: String? = null, private
     fun signIn(user: String, password: String, code: String?): SignIn {
         val body = JSONObject().put("user", user.trim()).put("password", password)
         if (!code.isNullOrBlank()) body.put("code", code.trim())
-        val r = call("POST", "/api/auth/login", body, withSession = false)
+        val r = try {
+            call("POST", "/api/auth/login", body, withSession = false)
+        } catch (e: VorathError.SignedOut) {
+            throw if (e.said) e else VorathError.SignedOut(WRONG_SIGN_IN, said = false)
+        }
         val sid = r.cookies.firstNotNullOfOrNull { cookieValue(it, COOKIE) }?.takeIf { it.isNotEmpty() }
             ?: throw VorathError.NotVorath("The server did not start a session.")
         return SignIn(sid, r.json.optBoolean("setup"), r.json.optBoolean("must_change"))
+    }
+
+    /**
+     * Sign in, asking /healthz only when the sign-in fails: a sign-in that works is one round trip, and one that fails
+     * at an address with no Vorath (or none reachable) still says so ("No Vorath at this address.", "Cannot reach…")
+     * rather than the sign-in route's error. A 401 or 403 is Vorath's own answer and needs no health check.
+     */
+    fun signInChecked(user: String, password: String, code: String?): SignIn = try {
+        signIn(user, password, code)
+    } catch (e: VorathError) {
+        if (e !is VorathError.SignedOut && e !is VorathError.Refused) health()
+        throw e
     }
 
     fun signOut() {
         call("POST", "/api/auth/logout", JSONObject())
     }
 
-    fun me(): Me = Parse.me(call("GET", "/api/me").json)
+    fun me(): Me = Parse.me(meRaw().json)
 
-    fun money(days: Int = 30): Money = Parse.money(call("GET", "/api/state?days=$days").json)
+    fun money(days: Int = 30): Money = Parse.money(stateRaw(days).json)
 
-    fun deck(): Deck = Parse.deck(call("GET", "/api/autopilot/deck").json)
+    fun deck(): Deck = Parse.deck(deckRaw().json)
 
-    private class Answer(val json: JSONObject, val cookies: List<String>)
+    /** The answers as the server sent them, for the cache; [Raw.unchanged] says the body is the one this client last saw. */
+    fun meRaw(): Raw = read(ME)
 
-    private fun call(method: String, path: String, body: JSONObject? = null, withSession: Boolean = true): Answer {
+    fun stateRaw(days: Int = 30): Raw = read(state(days))
+
+    fun deckRaw(): Raw = read(DECK)
+
+    /**
+     * Give the client a body it got earlier (from the cache), with the server's validators for it, so the next read of
+     * [path] can ask "changed since?" and take a 304. A server that sends no ETag or Last-Modified simply answers 200.
+     */
+    fun remember(path: String, body: String, etag: String?, lastModified: String?) {
+        seen[path] = Seen(body, etag, lastModified)
+    }
+
+    /** One answer of a GET: the body text, and whether it is the one this client already had (304, or the same bytes). */
+    class Raw(val path: String, val body: String, val unchanged: Boolean, val etag: String?, val lastModified: String?) {
+        val json: JSONObject get() = JSONObject(body)
+    }
+
+    private class Seen(val body: String, val etag: String?, val lastModified: String?)
+
+    private val seen = ConcurrentHashMap<String, Seen>()
+
+    private fun read(path: String): Raw {
+        val before = seen[path]
+        val r = call("GET", path, conditional = before)
+        if (r.status == 304) {
+            if (before == null) throw VorathError.NotVorath("Vorath did not answer as expected (304).")
+            return Raw(path, before.body, true, before.etag, before.lastModified)
+        }
+        val etag = r.header("ETag")
+        val lastModified = r.header("Last-Modified")
+        seen[path] = Seen(r.text, etag, lastModified)          // also without validators: an identical body still counts as unchanged
+        return Raw(path, r.text, before?.body == r.text, etag, lastModified)
+    }
+
+    private class Answer(val status: Int, val text: String, val json: JSONObject, private val headers: Map<String?, List<String>>) {
+        val cookies: List<String> get() = headers.filterKeys { it.equals("Set-Cookie", true) }.values.flatten()
+        fun header(name: String): String? = headers.entries.firstOrNull { it.key.equals(name, true) }?.value?.firstOrNull()?.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * One request. The connection is not disconnected: reading the body to its end and closing the stream hands the
+     * socket back to the platform's keep-alive pool, so the next call to the same server skips the TCP and TLS setup.
+     */
+    private fun call(method: String, path: String, body: JSONObject? = null, withSession: Boolean = true, conditional: Seen? = null): Answer {
         val c = try {
             URL(base + path).openConnection() as HttpURLConnection
         } catch (e: Exception) {
@@ -70,21 +135,26 @@ class VorathApi(val base: String, private val sessionId: String? = null, private
         }
         try {
             c.requestMethod = method
-            c.connectTimeout = 15_000
-            c.readTimeout = 60_000
+            c.connectTimeout = CONNECT_TIMEOUT_MS
+            c.readTimeout = READ_TIMEOUT_MS
             c.instanceFollowRedirects = false
+            c.useCaches = false
             c.setRequestProperty("Accept", "application/json")
             c.setRequestProperty("User-Agent", agent)
             if (withSession && sessionId != null) c.setRequestProperty("Cookie", "$COOKIE=$sessionId")
+            conditional?.etag?.let { c.setRequestProperty("If-None-Match", it) }
+            conditional?.lastModified?.let { c.setRequestProperty("If-Modified-Since", it) }
             if (body != null) {
                 val bytes = body.toString().toByteArray(Charsets.UTF_8)
                 c.doOutput = true
                 c.setRequestProperty("Content-Type", "application/json")
-                c.setFixedLengthStreamingMode(bytes.size)
+                // Not setFixedLengthStreamingMode: in streaming mode the JVM's HttpURLConnection drops the body of a
+                // 401 (the sign-in's "wrong password" words). The bodies here are a few hundred bytes.
                 c.outputStream.use { it.write(bytes) }
             }
             val status = c.responseCode
             val text = (if (status < 400) c.inputStream else c.errorStream)?.use { it.readBytes().toString(Charsets.UTF_8) }.orEmpty()
+            if (status == 304) return Answer(status, "", JSONObject(), c.headerFields)
             val json = try {
                 JSONObject(text)
             } catch (e: Exception) {
@@ -92,20 +162,27 @@ class VorathApi(val base: String, private val sessionId: String? = null, private
             }
             val said = json?.optString("error").orEmpty()
             return when {
-                status == 401 -> throw VorathError.SignedOut(said.ifBlank { "Sign in first." })
+                status == 401 -> throw VorathError.SignedOut(said.ifBlank { "Sign in first." }, said = said.isNotBlank())
                 status == 403 -> throw VorathError.Refused(said.ifBlank { "Your role cannot open this." })
-                status in 200..299 && json != null -> Answer(json, c.headerFields.filterKeys { it.equals("Set-Cookie", true) }.values.flatten())
+                status == 429 -> throw VorathError.NotVorath(said.ifBlank { "Too many requests to Vorath. Wait a minute, then try again." })
+                status in 200..299 && json != null -> Answer(status, text, json, c.headerFields)
                 else -> throw VorathError.NotVorath(said.ifBlank { "Vorath did not answer as expected ($status)." })
             }
         } catch (e: IOException) {
+            c.disconnect()                                     // a broken exchange: do not hand this socket back to the pool
             throw VorathError.Offline("Cannot reach the server. Check the connection and the address.")
-        } finally {
-            c.disconnect()
         }
     }
 
     companion object {
         const val COOKIE = "vorath_sid"
+        const val WRONG_SIGN_IN = "Wrong user name, password or 2-step code."
+        const val ME = "/api/me"
+        const val DECK = "/api/autopilot/deck"
+        fun state(days: Int = 30) = "/api/state?days=$days"
+
+        const val CONNECT_TIMEOUT_MS = 8_000
+        const val READ_TIMEOUT_MS = 15_000
 
         /**
          * The server address as the person typed it, made into "https://host[:port]". Plain http is accepted only when
