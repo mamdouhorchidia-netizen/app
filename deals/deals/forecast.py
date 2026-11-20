@@ -13,7 +13,8 @@ DAY = 86400
 SALE = 0.95  # 5 % under the regular price
 
 
-def regular_price(rows: list[dict], now: int):
+def regular_price(rows: list[dict], now: int, parts: dict = None):
+    """`parts`, when given, also gets "secs" (in-stock seconds at each price) and "mid" (their median price)."""
     secs = {}
     for i, r in enumerate(rows):
         end = rows[i + 1]["at"] if i + 1 < len(rows) else now
@@ -22,6 +23,8 @@ def regular_price(rows: list[dict], now: int):
     if not secs:
         return None
     mid = median(secs)
+    if parts is not None:
+        parts.update(secs=secs, mid=mid)
     upper = {p: s for p, s in secs.items() if p >= mid}
     return max(upper, key=lambda p: (upper[p], p))
 
@@ -44,15 +47,20 @@ def episodes(rows: list[dict], regular: float, now: int) -> list[dict]:
     return out
 
 
-def rhythm(rows: list[dict], now: int) -> dict | None:
+def rhythm(rows: list[dict], now: int, parts: dict = None) -> dict | None:
     """None until two sales have been seen. Otherwise {regular, sales, every_days, lasts_days, typical_sale,
-    on_sale, next_in_days (when not on sale), ends_in_days (when on sale), text}."""
+    on_sale, next_in_days (when not on sale), ends_in_days (when on sale), text}. `parts`, when given, also gets
+    what the answer was worked out from (regular, secs, mid, eps, every, lasts: finder.valid_until reads them)."""
     if len(rows) < 3:
         return None
-    regular = regular_price(rows, now)
+    regular = regular_price(rows, now, parts)
+    if parts is not None:
+        parts["regular"] = regular
     if not regular:
         return None
     eps = episodes(rows, regular, now)
+    if parts is not None:
+        parts["eps"] = eps
     if len(eps) < 2:
         return None
     starts = [e["start"] for e in eps]
@@ -60,6 +68,8 @@ def rhythm(rows: list[dict], now: int) -> dict | None:
     done = [e for e in eps if e["end"]]
     lasts = median(e["end"] - e["start"] for e in done) / DAY if done else None
     typical = median(e["low"] for e in eps)
+    if parts is not None:
+        parts.update(every=every, lasts=lasts)
     on_sale = eps[-1]["end"] is None
     out = {"regular": regular, "sales": len(eps), "every_days": round(every, 1),
            "lasts_days": round(lasts, 1) if lasts is not None else None, "typical_sale": typical,
