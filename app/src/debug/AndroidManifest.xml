@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: lets the emulator tests (src/androidTest) talk to their own plain-http server on 127.0.0.1.
+     The release build keeps android:usesCleartextTraffic="false" from the main manifest and has no such exception. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:networkSecurityConfig="@xml/debug_network_security" />
+</manifest>

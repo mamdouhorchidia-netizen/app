@@ -13,7 +13,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,7 +32,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        Notifier.channel(this)
+        Notifier.channels(this)
         if (savedInstanceState == null) openFrom(intent)
         setContent {
             VorathTheme {
@@ -41,35 +40,39 @@ class MainActivity : ComponentActivity() {
                     val context = LocalContext.current
                     val session = model.session
                     var notificationsOn by remember { mutableStateOf(Notifier.allowed(context)) }
-                    var asked by remember { mutableStateOf(false) }
                     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notificationsOn = it }
 
-                    LifecycleResumeEffect(session) {
+                    val web = model.webPath
+                    // The quiet 30-second reads run only while this screen is resumed and the in-app Vorath page is closed.
+                    LifecycleResumeEffect(session, web) {
                         notificationsOn = Notifier.allowed(context)
-                        model.refreshIfOld()
-                        onPauseOrDispose { }
+                        model.startLoop()
+                        onPauseOrDispose { model.stopLoop() }
                     }
-                    LaunchedEffect(session) {                    // once signed in, ask once; after a refusal the Today page offers the settings
-                        if (session != null && !notificationsOn && !asked && Build.VERSION.SDK_INT >= 33) {
-                            asked = true
+                    // Not asked at sign-in: the Today page explains why next to the alarms, and asks when the person taps
+                    // "Allow". The first tap shows Android's dialog (remembered across restarts); later taps open the settings.
+                    val allow = {
+                        if (Build.VERSION.SDK_INT >= 33 && !model.notifyAsked) {
+                            model.markNotifyAsked()
                             ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
                         }
                     }
 
-                    val web = model.webPath
                     when {
                         session == null -> SignInScreen(model.lastBase, model.lastUser, model.signingIn, model.signInProblem, model::signIn)
-                        web != null -> WebScreen(session, web, onClose = { model.webPath = null; model.refresh() })
+                        web != null -> WebScreen(session, web, onClose = { model.webPath = null }, onSessionEnded = model::sessionEnded)
                         else -> TodayScreen(
                             session = session,
                             state = model.today,
                             notificationsOn = notificationsOn,
                             onRefresh = model::refresh,
                             onOpen = { model.webPath = it },
-                            onAllowNotifications = {
-                                startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
-                            },
+                            onAllowNotifications = allow,
                             onSignOut = { forgetWebSession(); model.signOut() },
+                            offerNotifications = !model.notifyDeclined,
+                            onNotNow = model::declineNotify,
                         )
                     }
                 }
@@ -82,9 +85,13 @@ class MainActivity : ComponentActivity() {
         openFrom(intent)
     }
 
-    /** A notification opens the page its alarm lives on. */
+    /** A notification opens the page its alarm lives on, or the Today page (closing the in-app Vorath page if open). */
     private fun openFrom(intent: Intent?) {
-        val path = intent?.getStringExtra(Notifier.EXTRA_PATH) ?: return
-        if (model.session != null && path.startsWith("/")) model.webPath = path
+        if (intent == null || model.session == null) return
+        val path = intent.getStringExtra(Notifier.EXTRA_PATH)
+        when {
+            path != null -> if (path.startsWith("/")) model.webPath = path
+            intent.getBooleanExtra(Notifier.EXTRA_TODAY, false) -> model.webPath = null
+        }
     }
 }

@@ -12,13 +12,37 @@ android {
         applicationId = "com.vorath.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        // CI passes its run number, so each published APK installs over the one before it.
+        versionCode = System.getenv("VORATH_VERSION_CODE")?.toIntOrNull() ?: 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // The release key comes from the environment (CI decodes it from the repository's secrets); see docs/RELEASING.md.
+    // Without it the release build is left unsigned; CI then makes a throwaway key and says so on the APK's name.
+    val releaseKey = System.getenv("VORATH_KEYSTORE")?.takeIf { it.isNotBlank() && file(it).exists() }
+    signingConfigs {
+        if (releaseKey != null) {
+            create("release") {
+                storeFile = file(releaseKey)
+                storePassword = System.getenv("VORATH_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("VORATH_KEY_ALIAS")
+                keyPassword = System.getenv("VORATH_KEY_PASSWORD") ?: System.getenv("VORATH_KEYSTORE_PASSWORD")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 and resource shrinking. The libraries bring their own keep rules (Compose, WorkManager's workers made
+            // by class name, the ViewModel made by its constructor); proguard-rules.pro adds nothing beyond them.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (releaseKey != null) signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
@@ -30,6 +54,10 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    sourceSets {
+        // The emulator tests (src/androidTest) answer with the same recorded Vorath answers as the unit tests.
+        getByName("androidTest").assets.srcDir("src/test/resources")
     }
     testOptions {
         unitTests.isIncludeAndroidResources = true
@@ -64,4 +92,12 @@ dependencies {
     testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.43.1")
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // On an emulator (CI) or a phone: ./gradlew :app:connectedDebugAndroidTest
+    androidTestImplementation(platform("androidx.compose:compose-bom:2025.05.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.work:work-testing:2.10.1")
 }
