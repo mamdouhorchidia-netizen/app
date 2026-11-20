@@ -38,11 +38,15 @@ never how often a store is asked.
 - Each checked page is **one commit**: its prices and the store's status line together (WAL, `synchronous=NORMAL`).
 - A **data version** `v` (the newest price row's number) moves only when a price or stock really changed, since
   that is the only time a price row is written. The server reads it at most once a second.
-- The **catalog** (every product judged: deal, score, flags, matches; ~2–3 s at 28k products) is rebuilt on a
-  thread of its own, never on a request: when `v` has moved and the last copy is 15 s old or more, and every
-  5 minutes anyway, because "changed in 24 h" or "back in stock" follow the clock and names, pictures and ranks
-  change without a price row. Requests always get the last finished copy at once. The page, the Telegram bot and
-  the channel poster share it (`deals/livedata.py`).
+- The **catalog** (every product judged: deal, score, flags, matches) is refreshed on a thread of its own, never
+  on a request: when `v` has moved and the last copy is 15 s old or more, and every 5 minutes anyway, because
+  "changed in 24 h" or "back in stock" follow the clock and names, pictures and ranks change without a price row.
+  A refresh is **incremental** (`finder.Catalog`): it recomputes only the products with a new price row or a
+  rewritten product row, the ones whose flags the clock has just changed (each item knows the next moment it
+  can), and the matching buckets they touch; everything else is reused, and gives the same result as a full
+  build (`tests/test_incremental.py`). ~0.1 s at 30k products, ~0.3–0.5 s at 100k; a full build (~3 s / ~11 s)
+  runs at start and every 30 minutes as a safety net. Requests always get the last finished copy at once. The
+  page, the Telegram bot and the channel poster share it (`deals/livedata.py`).
 - **Filtered lists** are kept per filter set and catalog copy, so "more" and refreshes only slice them; the
   counts next to each filter come from the same single pass.
 - **Cheap refreshes:** `/api/pulse` is a ~1 KB answer with `v`, the server's time, each store's status and the

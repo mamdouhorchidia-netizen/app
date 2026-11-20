@@ -3,14 +3,18 @@
 - The **data version** `v` is the newest price row's rowid (db.data_version). A price row is written only when
   a price or stock really changed (or a product is new), so `v` stays put while nothing moved. It is read from
   the database at most once a second.
-- The **catalog** (finder.catalog, ~2-3 s at 28k products) is rebuilt on a thread of its own, never on a request:
-  when `v` has moved and the copy is at least MIN_REBUILD seconds old, and every FORCE_REBUILD seconds whatever
-  happened, because some flags depend on the clock ("changed in 24 h", "back in stock") and some product details
-  change without a price row (names, pictures, ranks). Readers always get the latest finished copy at once.
+- The **catalog** is refreshed on a thread of its own, never on a request: when `v` has moved and the copy is at
+  least MIN_REBUILD seconds old, and every FORCE_REBUILD seconds whatever happened, because some flags depend on
+  the clock ("changed in 24 h", "back in stock") and some product details change without a price row (names,
+  pictures, ranks). A refresh is incremental (finder.Catalog): only products with a new price row, a rewritten
+  product row or a judgement the clock has just changed are recomputed, and only the matching buckets they touch;
+  each item's digest is kept while its item is. Every FULL_REBUILD seconds it builds everything afresh anyway, as
+  a safety net (the result is the same). Readers always get the latest finished copy at once.
   When nobody has read it for IDLE seconds, it isn't rebuilt (no visitors, no CPU) until the next reader, who
   gets the old copy at once while the new one builds.
 """
 
+import gc
 import hashlib
 import os
 import sqlite3
@@ -23,6 +27,7 @@ from . import db, finder
 VERSION_SECONDS = 1.0
 MIN_REBUILD = 15
 FORCE_REBUILD = 300
+FULL_REBUILD = 1800  # a from-scratch build this often, though a refresh gives the same items (a safety net)
 IDLE = 600  # nobody has asked for the catalog this long: stop rebuilding it until someone does
 # fields that follow the clock rather than the prices: left out of an item's digest (and so out of ETags)
 VOLATILE = frozenset({"last_seen", "spark", "tracked_days", "days_at_price", "why", "rhythm", "verdict"})
@@ -81,23 +86,32 @@ class Version:
 
 class Snapshot:
     """One finished catalog. Never changed after it's made: readers share it."""
-    __slots__ = ("items", "by_id", "digests", "v", "built", "built_mono", "gen", "secs")
+    __slots__ = ("items", "by_id", "digests", "v", "built", "built_mono", "gen", "secs", "info")
 
-    def __init__(self, items, v, built, built_mono, gen, secs):
+    def __init__(self, items, v, built, built_mono, gen, secs, digests=None, info=None):
+        """digests: the items' digests when already known (an incremental refresh keeps the unchanged ones)."""
         self.items, self.v, self.built, self.built_mono, self.gen, self.secs = items, v, built, built_mono, gen, secs
         self.by_id = {d["id"]: d for d in items}
-        self.digests = {d["id"]: item_digest(d) for d in items}
+        self.digests = digests if digests is not None else {d["id"]: item_digest(d) for d in items}
+        self.info = info or {}
 
 
 class CatalogKeeper:
     def __init__(self, db_path: str, version: Version = None, min_rebuild: float = MIN_REBUILD,
                  force_rebuild: float = FORCE_REBUILD, build=None, clock=time.monotonic, wall=time.time,
-                 poll: float = 1.0, idle: float = IDLE, log=print):
+                 poll: float = 1.0, idle: float = IDLE, log=print, full_rebuild: float = FULL_REBUILD,
+                 gc_freeze: bool = False):
+        """build(con, now) -> items: a full builder of one's own (tests); by default the incremental finder.Catalog.
+        gc_freeze: keep Python's cycle collector off the catalog (see _rebuild); the process's shared keeper does."""
         self.db_path = db_path
         self.version = version or Version(db_path)
         self.min_rebuild, self.force_rebuild, self.poll, self.idle = min_rebuild, force_rebuild, poll, idle
         self.last_read = clock()
-        self.build = build or finder.catalog
+        self.build = build
+        self.full_rebuild = full_rebuild
+        self.engine = finder.Catalog()
+        self.last_full = float("-inf")
+        self.gc_freeze = gc_freeze
         self.clock, self.wall, self.log = clock, wall, log
         self.snap: Snapshot = None
         self.builds = 0
@@ -121,17 +135,55 @@ class CatalogKeeper:
             return self._rebuild()
 
     def _rebuild(self) -> Snapshot:
+        """With gc_freeze, a refresh runs with the cycle collector paused and ends with gc.freeze(): the catalog is
+        hundreds of thousands of small dicts and lists without reference cycles (freed by reference counting), and
+        a refresh makes a new dict for every item (its sparkline ends at the new now), so otherwise the collector
+        would walk the whole catalog after nearly every refresh (~0.7 s at 100k products). Cycles that other
+        threads leave among frozen objects wait for the next full build, which unfreezes and collects first."""
+        freeze = self.gc_freeze and self.build is None
+        full = self.snap is None or self.clock() - self.last_full >= self.full_rebuild
+        paused = False
+        if freeze:
+            if full:
+                gc.unfreeze()
+            elif gc.isenabled():
+                gc.disable()
+                paused = True
+        try:
+            return self._build_snapshot(full)
+        finally:
+            if freeze:
+                if full:
+                    gc.collect()
+                gc.freeze()
+            if paused:
+                gc.enable()
+
+    def _build_snapshot(self, full: bool) -> Snapshot:
         started, wall = self.clock(), int(self.wall())
         con = open_db(self.db_path)
         try:
             con.execute("BEGIN")  # one read snapshot: `v` and the catalog describe the same data
-            v = db.data_version(con)
-            items = self.build(con, wall)
+            prev, digests, info = self.snap, None, None
+            if self.build is not None:
+                v = db.data_version(con)
+                items = self.build(con, wall)
+            else:
+                built = self.engine.refresh(con, wall, full=full)
+                v, items, info = built.v, built.items, built.stats
+                if built.full:
+                    self.last_full = started
+                else:  # keep the digests of the items that stayed the same
+                    digests = dict(prev.digests)
+                    for pid in built.removed:
+                        digests.pop(pid, None)
+                    for pid, d in built.changed.items():
+                        digests[pid] = item_digest(d)
             con.rollback()
         finally:
             con.close()
         self.builds += 1
-        snap = Snapshot(items, v, wall, started, self.builds, self.clock() - started)
+        snap = Snapshot(items, v, wall, started, self.builds, self.clock() - started, digests, info)
         self.snap = snap
         self.version.set(v)
         return snap
@@ -191,7 +243,7 @@ def shared(db_path: str) -> CatalogKeeper:
     key = os.path.abspath(db_path)
     with _shared_lock:
         if key not in _shared:
-            _shared[key] = CatalogKeeper(db_path)
+            _shared[key] = CatalogKeeper(db_path, gc_freeze=True)
         return _shared[key]
 
 

@@ -64,7 +64,11 @@ def pack_size(name: str):
 
 def unit_price(price: float, name: str):
     """(price per unit, unit label) e.g. (41.38, "L"); None when the pack size is unknown."""
-    size = pack_size(name)
+    return unit_price_of(price, pack_size(name))
+
+
+def unit_price_of(price: float, size):
+    """unit_price for a pack size already read (pack_size's answer)."""
     if not size or size[0] <= 0:
         return None
     return round(price / size[0], 2), size[1]
@@ -72,7 +76,11 @@ def unit_price(price: float, name: str):
 
 def unit_text(price: float, name: str):
     """What a shopper reads: "41.38 / L", or "25.57 / 100 ml" for small packs; None when unknown."""
-    size = pack_size(name)
+    return unit_text_of(price, pack_size(name))
+
+
+def unit_text_of(price: float, size):
+    """unit_text for a pack size already read (pack_size's answer)."""
     if not size or size[0] <= 0:
         return None
     amount, unit = size
