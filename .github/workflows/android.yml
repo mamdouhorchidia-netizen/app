@@ -74,7 +74,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Unit tests
-        run: ./gradlew --no-daemon :app:testDebugUnitTest
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebugAndroidTest   # the emulator tests compile here, before an emulator boots
 
       - name: Signed release APK
         env:

@@ -47,7 +47,7 @@ class AlarmCheckOnDeviceTest {
         val shown = Device.shade()
         assertEquals(1, shown.size)                                         // the recorded deck has one firing alarm
         assertEquals(Notifier.CHANNEL_ALARMS, shown.single().notification.channelId)
-        assertTrue(shown.single().notification.extras.getCharSequence(NotificationCompat.EXTRA_TITLE).isNotBlank())
+        assertTrue(shown.single().notification.extras.getCharSequence(NotificationCompat.EXTRA_TITLE).isNullOrBlank().not())
         assertTrue(SessionStore(Device.app).told.isNotEmpty())
 
         Device.notifications.cancelAll()
