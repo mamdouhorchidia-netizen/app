@@ -23,7 +23,7 @@ adb shell pm install /data/local/tmp/vorath.apk        # no -t (test-only) and n
 adb shell dumpsys package "$pkg" | grep -E "versionCode|versionName|pkgFlags" | tee "$out/package.txt"
 if grep -q TEST_ONLY "$out/package.txt"; then echo "The APK is marked test-only: a phone would refuse it."; exit 1; fi
 
-adb logcat -c
+adb logcat -c || true                                 # Android 8 emulators cannot always clear the log
 adb shell am start -W -n "$pkg/.MainActivity" | tee "$out/start.txt"
 grep -q "Status: ok" "$out/start.txt"
 
