@@ -29,6 +29,14 @@ class SessionStore(context: Context) {
     }
 
     val lastBase: String get() = prefs.getString("base", "").orEmpty()
+
+    /**
+     * The address last typed that answered as a Vorath, kept also when the sign-in itself failed (a wrong password),
+     * so the form does not ask for it again. Never the password or the code.
+     */
+    var lastAddress: String
+        get() = prefs.getString("address", null) ?: lastBase
+        set(v) = prefs.edit().putString("address", v).apply()
     val lastUser: String get() = prefs.getString("user", "").orEmpty()
 
     /** The signal ids the last background check saw (data.Signals). */

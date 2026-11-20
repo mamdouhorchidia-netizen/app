@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        Notifier.channel(this)
+        Notifier.channels(this)
         if (savedInstanceState == null) openFrom(intent)
         setContent {
             VorathTheme {
@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
 
                     when {
                         session == null -> SignInScreen(model.lastBase, model.lastUser, model.signingIn, model.signInProblem, model::signIn)
-                        web != null -> WebScreen(session, web, onClose = { model.webPath = null })
+                        web != null -> WebScreen(session, web, onClose = { model.webPath = null }, onSessionEnded = model::sessionEnded)
                         else -> TodayScreen(
                             session = session,
                             state = model.today,
@@ -85,9 +85,13 @@ class MainActivity : ComponentActivity() {
         openFrom(intent)
     }
 
-    /** A notification opens the page its alarm lives on. */
+    /** A notification opens the page its alarm lives on, or the Today page (closing the in-app Vorath page if open). */
     private fun openFrom(intent: Intent?) {
-        val path = intent?.getStringExtra(Notifier.EXTRA_PATH) ?: return
-        if (model.session != null && path.startsWith("/")) model.webPath = path
+        if (intent == null || model.session == null) return
+        val path = intent.getStringExtra(Notifier.EXTRA_PATH)
+        when {
+            path != null -> if (path.startsWith("/")) model.webPath = path
+            intent.getBooleanExtra(Notifier.EXTRA_TODAY, false) -> model.webPath = null
+        }
     }
 }

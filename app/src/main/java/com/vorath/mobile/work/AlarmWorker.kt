@@ -28,7 +28,7 @@ class AlarmWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val s = store.load() ?: return@withContext Result.success()
         try {
             val now = Signals.of(VorathApi(s.base, s.sessionId).deck())
-            Signals.fresh(now, store.told).forEach { Notifier.tell(applicationContext, it) }
+            Notifier.tell(applicationContext, Signals.fresh(now, store.told))
             store.told = now.map { it.id }.toSet()
             Result.success()
         } catch (e: VorathError.SignedOut) {

@@ -24,6 +24,7 @@ import com.vorath.mobile.data.Snapshot
 import com.vorath.mobile.data.TodayCache
 import com.vorath.mobile.data.VorathApi
 import com.vorath.mobile.data.VorathError
+import com.vorath.mobile.ui.forgetWebSession
 import com.vorath.mobile.work.AlarmWorker
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -66,7 +67,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         private set
     var signingIn by mutableStateOf(false)
         private set
-    var signInProblem by mutableStateOf<String?>(null)
+    var signInProblem by mutableStateOf<SignInProblem?>(null)
         private set
 
     /** The page of the full Vorath open inside the app, or null. While it is open the 30-second reads pause. */
@@ -88,7 +89,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         notifyDeclined = true
     }
 
-    val lastBase get() = store.lastBase
+    val lastBase get() = store.lastAddress
     val lastUser get() = store.lastUser
 
     /** One client per session, so connections and the servers' ETags are reused. */
@@ -119,22 +120,26 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun signIn(typedAddress: String, user: String, password: String, code: String) {
-        val base = VorathApi.address(typedAddress)
-        if (base == null) {
-            signInProblem = "Enter your Vorath address, like vorath.yourbrand.com."
+        if (signingIn) return                                      // a second tap while the first is under way
+        val problem = SignInCheck.of(typedAddress, user, password, code)
+        if (problem != null) {
+            signInProblem = problem
             return
         }
-        if (user.isBlank() || password.isEmpty()) {
-            signInProblem = "Enter your user name and password."
-            return
-        }
+        val base = VorathApi.address(typedAddress)!!
         signingIn = true
         signInProblem = null
         viewModelScope.launch {
             try {
                 val (s, api, meRaw) = withContext(Dispatchers.IO) {
-                    VorathApi(base).health()
-                    val r = VorathApi(base).signIn(user, password, code)
+                    val r = try {
+                        VorathApi(base).signInChecked(user, password, code)
+                    } catch (e: VorathError) {
+                        // Vorath answered (a wrong password, a refusal): keep the address for the next try.
+                        if (e is VorathError.SignedOut || e is VorathError.Refused) store.lastAddress = base
+                        throw e
+                    }
+                    store.lastAddress = base
                     val api = VorathApi(base, r.sessionId)
                     if (r.setup || r.mustChange) {
                         runCatching { api.signOut() }
@@ -162,11 +167,18 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 AlarmWorker.start(getApplication())
                 refresh()
             } catch (e: VorathError) {
-                signInProblem = e.message
+                signInProblem = SignInProblem(e.message.orEmpty(), null)
+            } catch (e: Exception) {
+                signInProblem = SignInProblem("Vorath did not answer as expected.", null)
             } finally {
                 signingIn = false
             }
         }
+    }
+
+    /** The in-app Vorath page landed on the server's sign-in page, or answered 401: the session is over. */
+    fun sessionEnded() {
+        if (session != null) end(SESSION_ENDED)
     }
 
     fun signOut() {
@@ -238,7 +250,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         if (session !== s) return false                            // signed out while reading: drop the answers
 
         if (m.exceptionOrNull() is VorathError.SignedOut || d.exceptionOrNull() is VorathError.SignedOut) {
-            end("Your session ended. Sign in again.")
+            end(SESSION_ENDED)
             return false
         }
         val now = System.currentTimeMillis()
@@ -317,6 +329,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /** Sign-out, or the server ended the session: forget the session, the cache and the client. */
     private fun end(problem: String?) {
+        forgetWebSession()
         stopLoop()
         AlarmWorker.stop(getApplication())
         store.clear()
@@ -334,7 +347,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         failures = 0
         lastTriedAt = 0
         lastTookMs = 0
-        signInProblem = problem
+        signInProblem = problem?.let { SignInProblem(it, null) }
     }
 
     private fun watchNetwork(on: Boolean) {
@@ -345,5 +358,6 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         const val CACHE_TOUCH_MS = 5 * 60_000L
+        const val SESSION_ENDED = "Your session ended. Sign in again."
     }
 }

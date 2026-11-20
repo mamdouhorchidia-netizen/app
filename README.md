@@ -4,7 +4,14 @@ The phone app for [Vorath](https://github.com/mamdouhorchidia-netizen/vorath). I
 (`python -m fleet`) and shows what the web Today page and the Autopilot show, sized for a phone.
 
 - **Sign in** with the server address, user name, password and 2-step code. The phone keeps the session
-  (encrypted with an Android Keystore key), never the password.
+  (encrypted with an Android Keystore key), never the password. Password managers offer the user name and password,
+  and the keyboard offers the 2-step code (Compose's autofill content types); Show / Hide reveals the password; Next
+  moves down the form and Done on the code signs in. The address is remembered once a Vorath has answered at it, also
+  after a wrong password. A problem with one field is said under it (no address, plain `http://`, a code that is not 6
+  digits); the server's answer (wrong password, no Vorath at the address, can't reach it, too many tries) in a box
+  above the button. While signing in the button says "Signing in…" and nothing can be sent twice. A sign-in that works
+  is one request (`/api/auth/login`, then `/api/me`); `/healthz` is asked only when the sign-in fails, to tell "no
+  Vorath here" from a wrong password.
 - **Today**: the client's name with how current the page is beneath it; the Autopilot's one answer with what needs you
   inside the same card (each a full-width row with a severity icon and its action); the alarms that are firing, with
   every other alarm one tap away under "All alarms (N)"; the four numbers against the previous period; cash in per
@@ -33,8 +40,16 @@ The phone app for [Vorath](https://github.com/mamdouhorchidia-netizen/vorath). I
 - **Notifications**: asked for on the Today page, in a small card after the alarms that says what they are for (not
   straight after sign-in); the phone remembers that it asked, and after that the card or the menu opens the settings.
   About every 15 minutes (Android's shortest background period; it may wait longer when the phone
-  sleeps) the phone reads the Autopilot and tells you when an alarm starts firing.
-- **The full Vorath** opens inside the app, already signed in.
+  sleeps) the phone reads the Autopilot and tells you when an alarm starts firing. Two channels: **Alarms** (high:
+  heads-up and sound; the id `alarms` it always had, so existing settings stay) and **Account** (default: "Sign in to
+  Vorath again"). Each notification shows its time; several alarms at once are grouped under one "3 alarms started"
+  summary that alone makes the sound and opens the Today page. A single alarm opens its page.
+- **The full Vorath** opens inside the app, already signed in: the session cookie is stored before the page is opened;
+  a bar shows each page's load progress; a page that does not open shows why with Retry; Back goes back through the
+  pages before closing. If the server sends the page to its sign-in page (`/login`) or answers 401, the session is
+  over: the app signs out and clears its cache, as on a 401 on the Today page. Files the page offers are saved by
+  Android's download manager into Downloads (with the session; named from the server's Content-Disposition, else the
+  address). Links to other sites, mail and phone open in the phone's apps; only this Vorath gets the cookie.
 
 The app only reads (`/api/me`, `/api/state`, `/api/autopilot/deck`) and never computes money: every figure is the
 server's. Vorath itself is not changed by this project.
@@ -45,7 +60,9 @@ Needs JDK 17+ and the Android SDK (platform 35).
 
 ```
 ./gradlew :app:assembleDebug          # app/build/outputs/apk/debug/app-debug.apk
-./gradlew :app:testDebugUnitTest      # parsing, alarm rules, cache, freshness, changes and the client's 304 / keep-alive
+./gradlew :app:testDebugUnitTest      # parsing, alarm rules, cache, freshness, changes, the client's 304 / keep-alive,
+                                      # sign-in (health only on failure, messages), the form checks, link and download
+                                      # rules of the in-app page, and the notification channels and grouping
 ```
 
 Two more tests are skipped unless asked for:
@@ -63,8 +80,8 @@ Two more tests are skipped unless asked for:
 app/src/main/java/com/vorath/mobile/
   data/   VorathApi (the server's routes), Models (parsing), Signals (what is worth a notification), SessionStore,
           TodayCache (the last answers on the phone), Keystore (the encryption), Freshness (sections, the 30 s pacing),
-          Changes (what differs from the previous read, by key)
-  AppModel  the session, the cache and the quiet foreground reads
+          Changes (what differs from the previous read, by key), WebLinks (inside / sign-in / outside links, file names)
+  AppModel  the session, the cache and the quiet foreground reads; SignInCheck the form's own checks
   work/   AlarmWorker (15-minute check), Notifier
   ui/     SignInScreen, TodayScreen (layout, top bar, states), TodayParts (the cards), WebScreen,
           Theme (Vorath's own colours, the 4/8/12/16/24 spacing and the type scale with tabular figures)
@@ -92,12 +109,19 @@ VORATH_HOME=/tmp/vhome VORATH_SECRET_KEY=dev-only python tools/vorath_devserver.
   phone): sign-in, Today in light and dark (full length and phone height), a small phone, the first read as grey
   shapes (phone and tablet), a quiet update, offline with the last answers (light and dark), one section failing,
   offline with nothing to show, a role refusal, all alarms open, the notifications card, 200 % font size (two widths),
-  an 840 dp tablet and a wide screen in two columns, and a frame of the changed-value flash. They are pictures of the layout only; fonts, system bars, the
+  an 840 dp tablet and a wide screen in two columns, a frame of the changed-value flash, the sign-in form filled (password
+  hidden and shown), with a field error, refused and signing in, and the in-app page's progress bar and error with Retry
+  (the web view itself cannot be drawn without a phone). They are pictures of the layout only; fonts, system bars, the
   pull gesture and real-device colours can still differ.
 - Release builds are minified with R8 and resource shrinking (about 1.3 MB against 7.4 MB without); the library keep
   rules cover what is made by class name, but the minified build has not been run on a device either. Keep
   `app/build/outputs/mapping/release/mapping.txt` from each release to read its crash reports.
 - The APK in `release/` is a debug build signed with a throwaway key; a permanent signing key is needed for updates.
-  It predates the cache and the 30-second reads.
-- Alarms are checked every 15 minutes at best; instant push needs a change in Vorath. English only. File downloads
-  inside the in-app pages are not handled.
+  It predates the cache, the 30-second reads and this round's sign-in, in-app page and notification changes.
+- Alarms are checked every 15 minutes at best; instant push needs a change in Vorath. English only.
+- In the in-app page: the sign-in page is recognised by its path `/login` (where the app already sends people to set
+  up 2-step codes); files a page makes in itself (`blob:` / `data:`) cannot be saved from the app and say so; before
+  Android 10 downloads go to the app's own Downloads folder (the public one needs a storage permission). The page is
+  not kept alive between openings (it would have to outlive the screen that owns it and be torn down on sign-out and
+  rotation); it reloads each time it opens. Autofill, the downloads, the redirect handling and the error page are
+  unproven until run on a phone.

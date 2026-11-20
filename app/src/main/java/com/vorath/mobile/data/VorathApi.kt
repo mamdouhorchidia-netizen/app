@@ -9,8 +9,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** Why a call to Vorath did not answer with data. */
 sealed class VorathError(message: String) : Exception(message) {
-    /** No session, or the server no longer accepts it (401). */
-    class SignedOut(message: String) : VorathError(message)
+    /** No session, or the server no longer accepts it (401). [said]: the message is the server's own words. */
+    class SignedOut(message: String, val said: Boolean = true) : VorathError(message)
 
     /** Signed in, but the role or the plan does not open this (403). */
     class Refused(message: String) : VorathError(message)
@@ -49,10 +49,26 @@ class VorathApi(val base: String, private val sessionId: String? = null, private
     fun signIn(user: String, password: String, code: String?): SignIn {
         val body = JSONObject().put("user", user.trim()).put("password", password)
         if (!code.isNullOrBlank()) body.put("code", code.trim())
-        val r = call("POST", "/api/auth/login", body, withSession = false)
+        val r = try {
+            call("POST", "/api/auth/login", body, withSession = false)
+        } catch (e: VorathError.SignedOut) {
+            throw if (e.said) e else VorathError.SignedOut(WRONG_SIGN_IN, said = false)
+        }
         val sid = r.cookies.firstNotNullOfOrNull { cookieValue(it, COOKIE) }?.takeIf { it.isNotEmpty() }
             ?: throw VorathError.NotVorath("The server did not start a session.")
         return SignIn(sid, r.json.optBoolean("setup"), r.json.optBoolean("must_change"))
+    }
+
+    /**
+     * Sign in, asking /healthz only when the sign-in fails: a sign-in that works is one round trip, and one that fails
+     * at an address with no Vorath (or none reachable) still says so ("No Vorath at this address.", "Cannot reach…")
+     * rather than the sign-in route's error. A 401 or 403 is Vorath's own answer and needs no health check.
+     */
+    fun signInChecked(user: String, password: String, code: String?): SignIn = try {
+        signIn(user, password, code)
+    } catch (e: VorathError) {
+        if (e !is VorathError.SignedOut && e !is VorathError.Refused) health()
+        throw e
     }
 
     fun signOut() {
@@ -132,7 +148,8 @@ class VorathApi(val base: String, private val sessionId: String? = null, private
                 val bytes = body.toString().toByteArray(Charsets.UTF_8)
                 c.doOutput = true
                 c.setRequestProperty("Content-Type", "application/json")
-                c.setFixedLengthStreamingMode(bytes.size)
+                // Not setFixedLengthStreamingMode: in streaming mode the JVM's HttpURLConnection drops the body of a
+                // 401 (the sign-in's "wrong password" words). The bodies here are a few hundred bytes.
                 c.outputStream.use { it.write(bytes) }
             }
             val status = c.responseCode
@@ -145,8 +162,9 @@ class VorathApi(val base: String, private val sessionId: String? = null, private
             }
             val said = json?.optString("error").orEmpty()
             return when {
-                status == 401 -> throw VorathError.SignedOut(said.ifBlank { "Sign in first." })
+                status == 401 -> throw VorathError.SignedOut(said.ifBlank { "Sign in first." }, said = said.isNotBlank())
                 status == 403 -> throw VorathError.Refused(said.ifBlank { "Your role cannot open this." })
+                status == 429 -> throw VorathError.NotVorath(said.ifBlank { "Too many requests to Vorath. Wait a minute, then try again." })
                 status in 200..299 && json != null -> Answer(status, text, json, c.headerFields)
                 else -> throw VorathError.NotVorath(said.ifBlank { "Vorath did not answer as expected ($status)." })
             }
@@ -158,6 +176,7 @@ class VorathApi(val base: String, private val sessionId: String? = null, private
 
     companion object {
         const val COOKIE = "vorath_sid"
+        const val WRONG_SIGN_IN = "Wrong user name, password or 2-step code."
         const val ME = "/api/me"
         const val DECK = "/api/autopilot/deck"
         fun state(days: Int = 30) = "/api/state?days=$days"

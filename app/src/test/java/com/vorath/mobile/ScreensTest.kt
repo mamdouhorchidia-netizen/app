@@ -11,7 +11,11 @@ import com.vorath.mobile.data.Parse
 import com.vorath.mobile.data.Section
 import com.vorath.mobile.data.Session
 import com.vorath.mobile.data.VorathError
+import com.vorath.mobile.ui.SignInFields
+import com.vorath.mobile.ui.SignInForm
 import com.vorath.mobile.ui.SignInScreen
+import com.vorath.mobile.ui.WebFrame
+import com.vorath.mobile.ui.WebProblem
 import com.vorath.mobile.ui.TodayScreen
 import com.vorath.mobile.ui.VorathTheme
 import org.json.JSONObject
@@ -149,11 +153,54 @@ class ScreensTest {
     @Config(sdk = [34], qualifiers = "w411dp-h891dp-night-xxhdpi")
     fun todayDarkPhone() = shot("today-main-dark") { Today(today) }
 
+    private val filled = SignInFields("vorath.example.com", "owner", "correct horse battery", "482913")
+
+    /** Sign-in, empty: the first start. */
     @Test
     @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
     fun signIn() = shot("sign-in") { SignInScreen("", "", false, null) { _, _, _, _ -> } }
 
+    /** Filled in, the password hidden (dots) and the Show button. */
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+    fun signInFilled() = shot("sign-in-filled") { SignInForm(filled, false, null, {}, {}) }
+
     @Test
     @Config(sdk = [34], qualifiers = "w411dp-h891dp-night-xxhdpi")
-    fun signInRefused() = shot("sign-in-refused") { SignInScreen("https://vorath.example.com", "owner", false, "Wrong user name, password or code.") { _, _, _, _ -> } }
+    fun signInPasswordShown() = shot("sign-in-password-shown") { SignInForm(filled.copy(showPassword = true), false, null, {}, {}) }
+
+    /** The server said no: the reason in a box above the button. */
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-night-xxhdpi")
+    fun signInRefused() = shot("sign-in-refused") {
+        SignInScreen("https://vorath.example.com", "owner", false, SignInProblem("Wrong user name, password or 2-step code.", null)) { _, _, _, _ -> }
+    }
+
+    /** A problem with one field is said under that field. */
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+    fun signInFieldError() = shot("sign-in-field-error") {
+        SignInForm(filled.copy(code = "482"), false, SignInProblem("The 2-step code has 6 digits.", SignInField.CODE), {}, {})
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+    fun signInSubmitting() = shot("sign-in-submitting") { SignInForm(filled, true, null, {}, {}) }
+
+    /** The in-app Vorath page while a page loads (60 %); the web view itself is not drawn here. */
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+    fun webLoading() = shot("web-loading") { WebFrame("ANJA", 60, null, false, {}, {}) {} }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+    fun webError() = shot("web-error") {
+        WebFrame("ANJA", 100, WebProblem("Can't reach Vorath", "Check the phone's connection, then try again."), false, {}, {}) {}
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h891dp-night-xxhdpi")
+    fun webErrorRetrying() = shot("web-error-retrying-dark") {
+        WebFrame("ANJA", 100, WebProblem("Vorath had a problem", "It answered with an error (502). Try again in a moment."), true, {}, {}) {}
+    }
 }
