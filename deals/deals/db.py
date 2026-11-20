@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS prices (
     in_stock INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS prices_by_product ON prices (product_id, at);
+CREATE INDEX IF NOT EXISTS prices_by_at ON prices (at);  -- the latest moves, the last hour's count, push alerts
 CREATE TABLE IF NOT EXISTS live_status (
     store TEXT PRIMARY KEY,
     updated INTEGER,        -- last page checked
@@ -64,12 +65,37 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 """
 
+# Which products changed, in the order the changes were committed: the live catalogue (catalog.py) reads the ids
+# after the last seq it saw and judges only those products again. Kept by triggers, so every writer is seen
+# (crawlers, imports, the talabat migration, a hand-made fix); one row per product, so it never grows past the
+# number of products.
+CHANGES = """
+CREATE TABLE IF NOT EXISTS product_changes (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL UNIQUE
+);
+CREATE TRIGGER IF NOT EXISTS products_ins AFTER INSERT ON products BEGIN
+    INSERT OR REPLACE INTO product_changes (product_id) VALUES (NEW.id); END;
+CREATE TRIGGER IF NOT EXISTS products_upd AFTER UPDATE ON products BEGIN
+    INSERT OR REPLACE INTO product_changes (product_id) VALUES (NEW.id); END;
+CREATE TRIGGER IF NOT EXISTS products_del AFTER DELETE ON products BEGIN
+    INSERT OR REPLACE INTO product_changes (product_id) VALUES (OLD.id); END;
+CREATE TRIGGER IF NOT EXISTS prices_ins AFTER INSERT ON prices BEGIN
+    INSERT OR REPLACE INTO product_changes (product_id) VALUES (NEW.product_id); END;
+CREATE TRIGGER IF NOT EXISTS prices_upd AFTER UPDATE ON prices BEGIN
+    INSERT OR REPLACE INTO product_changes (product_id) VALUES (OLD.product_id);
+    INSERT OR REPLACE INTO product_changes (product_id) VALUES (NEW.product_id); END;
+CREATE TRIGGER IF NOT EXISTS prices_del AFTER DELETE ON prices BEGIN
+    INSERT OR REPLACE INTO product_changes (product_id) VALUES (OLD.product_id); END;
+"""
+
 
 def connect(path: str) -> sqlite3.Connection:
     con = sqlite3.connect(path, check_same_thread=False, timeout=30)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")
     con.executescript(SCHEMA)
+    con.executescript(CHANGES)
     cols = {r["name"] for r in con.execute("PRAGMA table_info(products)")}
     if "extra" not in cols:  # databases made before the column existed
         con.execute("ALTER TABLE products ADD COLUMN extra TEXT DEFAULT '{}'")

@@ -157,8 +157,11 @@ def result_list(found: list[dict]) -> tuple[str, dict]:
 
 
 class Bot:
-    def __init__(self, db_path: str, token: str, base_url: str, send=None, log=print):
+    def __init__(self, db_path: str, token: str, base_url: str, send=None, log=print, catalog=None):
+        """catalog: the process's shared live catalogue (catalog.Catalog); without one the bot builds its own copy
+        from the database, at most once a minute."""
         self.db_path, self.token, self.base_url, self.log = db_path, token, base_url.rstrip("/"), log
+        self.shared = catalog
         self.call = send or self._call
         self.offset = None
         self._cat = (0.0, [], {})
@@ -179,6 +182,10 @@ class Bot:
         return con
 
     def catalog(self, con) -> tuple[list, dict]:
+        if self.shared is not None:
+            snap = self.shared.snapshot(wait=120)
+            if snap is not None:
+                return snap.items, snap.by_id
         at, items, by_id = self._cat
         if time.monotonic() - at > 60:
             items = finder.catalog(con)
@@ -322,10 +329,10 @@ class Bot:
                 time.sleep(10)
 
 
-def start(db_path: str, base_url: str, token: str, log=print):
+def start(db_path: str, base_url: str, token: str, log=print, catalog=None):
     if not token:
         return None
-    b = Bot(db_path, token, base_url, log=log)
+    b = Bot(db_path, token, base_url, log=log, catalog=catalog)
     threading.Thread(target=b.run_forever, name="telegram-bot", daemon=True).start()
     log("telegram bot: answering messages")
     return b

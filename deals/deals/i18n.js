@@ -78,14 +78,56 @@
     "The 'was' price looks inflated: compare with other stores before buying.": "السعر القديم شكله متضخم: قارن بمتاجر تانية قبل ما تشتري.",
     "📍 talabat hubs:": "📍 فروع طلبات:", "All hubs": "كل الفروع",
     "⏳ Before a watched product's predicted sale": "⏳ قبل العرض المتوقع لمنتج بتابعه",
+    "This page doesn't exist.": "الصفحة دي مش موجودة.",
     "About": "عن الموقع", "Privacy": "الخصوصية", "Contact": "تواصل معانا", "Appliances & electronics": "أجهزة وإلكترونيات", "Kenzz deals": "عروض كنز", "🎟️ Coupons": "🎟️ كوبونات", "🧺 Add to basket": "🧺 ضيف للسلة", "Product page": "صفحة المنتج",
     "★ Watch": "★ تابع السعر", "More deals like this": "عروض شبهه", "Lowest in 90 days": "أقل سعر في 90 يوم",
     "Highest in 90 days": "أعلى سعر في 90 يوم", "Usual price": "السعر المعتاد", "Price changes": "مرات تغيير السعر",
     "Not found": "مش موجود", "This product isn't tracked (any more).": "المنتج ده مش متتابع (خلاص).",
+    // the live page: freshness, states, menus, labels for screen readers
+    "Watching every store for price changes…": "بنراقب كل المتاجر عشان أي تغيير في السعر…", "Store status": "حالة المتاجر",
+    "Refresh now": "حدّث دلوقتي", "More": "المزيد", "Menu": "القايمة", "Clear all": "امسح الكل", "watching": "بيراقب",
+    "offline": "مفيش نت", "offline · saved prices": "مفيش نت · أسعار محفوظة", "saved prices · updating…": "أسعار محفوظة · بيحدّث…",
+    "Your watchlist is empty": "قايمة المتابعة فاضية", "Browse deals": "اتفرج على العروض", "Nothing viewed yet": "لسه مفتحتش أي منتج",
+    "Products you open appear here, so you can pick up where you left off.": "المنتجات اللي بتفتحها بتظهر هنا، عشان تكمّل من حيث وقفت.",
+    "Starting up": "بنبدأ", "Try again": "جرّب تاني", "Nothing matches these filters": "مفيش حاجة مطابقة للفلاتر دي",
+    "Try removing a filter or two, or search for something broader.": "جرّب تشيل فلتر أو اتنين، أو ابحث عن حاجة أعم.",
+    "Clear the search": "امسح البحث", "You're offline": "انت مش متصل بالنت", "Can't reach the server": "مش قادرين نوصل للسيرفر",
+    "Prices will load as soon as you're back online.": "الأسعار هتظهر أول ما النت يرجع.",
+    "Check your connection. We'll keep trying every 30 seconds.": "اتأكد من النت. هنفضل نحاول كل 30 ثانية.",
+    "Loading price history…": "بنحمّل تاريخ السعر…", "Couldn't load the price history. Try again.": "معرفناش نحمّل تاريخ السعر. جرّب تاني.",
+    "Target reached": "وصل للسعر اللي عايزه", "Price drop": "نزول السعر",
+    "Notifications are blocked for this site: allow them in the browser's site settings.": "الإشعارات مقفولة للموقع ده: افتحها من إعدادات الموقع في المتصفح.",
+    "This browser can't receive alerts.": "المتصفح ده مش بيستقبل تنبيهات.",
+    "On iPhone, alerts work from the installed app: tap ⬇︎ Install first (iOS 16.4+).": "على الآيفون، التنبيهات بتشتغل من التطبيق المتثبت بس: دوس ⬇︎ تثبيت الأول (iOS 16.4 أو أحدث).",
+    "Alerts arrive even when the site is closed, at most one bundle every 5 minutes. When the site is closed, the phone plays its notification sound with the deals buzz pattern; browsers don't allow a custom sound there.":
+      "التنبيهات بتوصل حتى لو الموقع مقفول، بحد أقصى مجموعة كل 5 دقايق. والموقع مقفول، الموبايل بيشغّل صوت الإشعارات بتاعه مع اهتزاز العروض؛ المتصفحات مش بتسمح بصوت مخصوص هناك.",
+    "Test failed.": "التجربة فشلت.", "A new version of the site is ready. Tap to reload.": "فيه نسخة جديدة من الموقع. دوس عشان تحدّث.",
+    "Open any product and tap Add to basket. The basket shows the cheapest store for each item, using the same products found in other stores.":
+      "افتح أي منتج ودوس ضيف للسلة. السلة بتوريك أرخص متجر لكل حاجة، من نفس المنتجات اللي لقيناها في متاجر تانية.",
+    "Tap the Share button (the square with an arrow) at the bottom of Safari.": "دوس زرار المشاركة (المربع اللي فيه سهم) تحت في سفاري.",
+    "Choose Add to Home Screen, then Add.": "اختار \"إضافة إلى الشاشة الرئيسية\"، وبعدين \"إضافة\".",
+    "Open it from the new icon. Alerts work only from the installed app on iPhone (iOS 16.4 or later).": "افتحه من الأيقونة الجديدة. التنبيهات على الآيفون بتشتغل من التطبيق المتثبت بس (iOS 16.4 أو أحدث).",
+    "In Chrome, open the ⋮ menu.": "في كروم، افتح قايمة ⋮.", "Choose Install app (or Add to Home screen).": "اختار \"تثبيت التطبيق\" (أو \"إضافة إلى الشاشة الرئيسية\").",
+    "Search": "بحث", "Search by voice": "ابحث بصوتك", "Language": "اللغة", "Basket": "السلة", "Price-drop alerts": "تنبيهات نزول الأسعار",
+    "Install the app": "ثبّت التطبيق", "Minimum discount": "أقل خصم", "Maximum discount": "أعلى خصم", "Sort by": "رتّب حسب",
+    "Hides discounts whose price never moves": "بيخفي الخصومات اللي سعرها عمره ما بيتحرك",
+    "A 'discount' whose price never moves: probably the normal price": "\"خصم\" سعره عمره ما بيتحرك: غالبًا ده سعره العادي",
+    "the store's own discount": "خصم المتجر نفسه", "under its usual price": "أقل من سعره المعتاد", "Watch this price": "تابع السعر ده",
+    "Close": "اقفل", "Sections": "الأقسام", "About this site": "عن الموقع", "One less": "واحد أقل", "One more": "واحد زيادة",
+    "no limit": "مفيش حد", "milk, nescafe, حفاضات": "لبن، نسكافيه، حفاضات",
     "Prices are checked around the clock from each store's public pages. A price can change at the store before it changes here.":
       "الأسعار بتتحدّث طول اليوم من صفحات المتاجر نفسها. ممكن السعر يتغير في المتجر قبل ما يتغير هنا.", "Telegram channel": "قناة التليجرام", "No coupons yet.": "مفيش كوبونات لسه.",
   };
   const RX = [
+    // the live page
+    [/^updated (\d+) (s|min|h|d) ago$/, (m, n, u) => `اتحدّث من ${n} ${{ s: "ث", min: "د", h: "س", d: "يوم" }[u]}`],
+    [/^Show ([\d,]+) results$/, "اعرض $1 نتيجة"], [/^(\d+) new deals? ↑$/, "↑ $1 عرض جديد"],
+    [/^Deal score (\d+) of 100$/, "تقييم العرض $1 من 100"], [/^Remove filter: (.+)$/, "شيل الفلتر: $1"],
+    [/^We'll tell you when it's ([\d,.]+) EGP or less\.$/, "هنبلغك لما يبقى $1 ج.م أو أقل."],
+    [/^Couldn't turn alerts on: (.*)$/, "معرفناش نشغّل التنبيهات: $1"],
+    [/^([\d,.]+) → ([\d,.]+) EGP at (.+)$/, (m, a, b, st) => `${a} ← ${b} ج.م في ${STORE[st] || st}`],
+    [/^([\d,.]+) EGP on (.+)$/, "$1 ج.م يوم $2"],
+    [/· (\d+) stores/g, "· $1 متاجر"], [/· (\d+) paused/g, "· $1 متوقف"],
     [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|Raya|store) app ↗$/, (m, a) => `افتح في تطبيق ${APP[a]} ↗`],
     [/^Open in (talabat|Amazon|Jumia|Breadfast|Dream 2000|Kenzz|Raya|store) ↗$/, (m, a) => `افتح في ${APP[a]} ↗`],
     [/^changed (.+)$/, "اتغير $1"], [/^dropped (.+)$/, "نزل $1"], [/^went up (.+)$/, "زاد $1"],
@@ -139,16 +181,28 @@
   const ATTRS = ["placeholder", "title", "aria-label"];
   const originals = new WeakMap();
 
+  // the same strings come back on every refresh ("EGP", "Open in talabat ↗", "3 min ago"): remember the answers
+  const memo = new Map();
+  const stats = { nodes: 0, ms: 0, misses: 0 };
   function tr(s) {
     if (lang !== "ar" || !s || !/[A-Za-z]/.test(s)) return s;
+    const hit = memo.get(s);
+    if (hit !== undefined) return hit;
+    stats.misses++;
     const k = s.trim();
-    if (EXACT[k]) return s.replace(k, EXACT[k]);
-    let o = k;
-    for (const [re, rep] of RX) {
-      if (re.global) o = o.replace(re, rep);
-      else if (re.test(o)) { o = o.replace(re, rep); if (!re.global) break; }
+    let out;
+    if (EXACT[k]) out = s.replace(k, EXACT[k]);
+    else {
+      let o = k, matched = false;
+      for (const [re, rep] of RX) {
+        if (re.global) o = o.replace(re, rep);  // times, units, store names: inside any text, after the whole-line rules
+        else if (!matched && re.test(o)) { o = o.replace(re, rep); matched = true; }
+      }
+      out = o === k ? s : s.replace(k, o);
     }
-    return o === k ? s : s.replace(k, o);
+    if (memo.size > 4000) memo.clear();
+    memo.set(s, out);
+    return out;
   }
   function textNode(n) {
     const p = n.parentElement;
@@ -188,19 +242,30 @@
   }
   const mo = new MutationObserver(list => {
     if (lang !== "ar") return;
+    const t0 = performance.now();
     for (const m of list) {
       if (m.type === "characterData") textNode(m.target);
       else if (m.type === "attributes") element(m.target);
       else m.addedNodes.forEach(walk);
     }
+    stats.nodes += list.length; stats.ms += performance.now() - t0;
   });
+  const OBS = { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS };
+  let observing = false;
   function start() {
     setDir();
-    walk(document.body);
-    mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+    const t0 = performance.now();
+    walk(document.body);   // anything the parser added before we were watching
+    stats.ms += performance.now() - t0;
+    if (!observing) { mo.observe(document.body, OBS); observing = true; }
     const b = document.getElementById("langBtn");
     if (b) b.onclick = () => { try { localStorage.setItem(KEY, lang === "ar" ? "en" : "ar"); } catch {} location.reload(); };
   }
-  window.I18N = { get lang() { return lang; }, tr };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+  window.I18N = { get lang() { return lang; }, tr, stats };
+  if (document.readyState === "loading") {
+    // translate the page while the parser builds it, so the first paint is already Arabic (no flash of English)
+    setDir();
+    if (lang === "ar") { mo.observe(document.documentElement, OBS); observing = true; }
+    document.addEventListener("DOMContentLoaded", start);
+  } else start();
 })();

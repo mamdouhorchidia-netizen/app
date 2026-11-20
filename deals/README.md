@@ -162,6 +162,24 @@ talabat sweep; up to 10 can be chosen.
 - **Same-size pictures:** every product picture fills the same square, whatever size the store sent.
 - **Unit prices** per L / kg / piece, and per 100 ml / 100 g for small packs.
 
+## Speed (the rebuild, `docs/REBUILD.md`)
+- **One live catalogue, kept in the background** (`deals/catalog.py`): built once at start (~11 s for 110,000 products),
+  then refreshed every 5 s by re-judging only the products that changed (a `product_changes` table fed by triggers) or
+  that the clock is about to change. Requests read an immutable snapshot and never wait; the web server, the Telegram
+  bot and the channel poster share it. A full rebuild runs every 6 h as a safety net.
+- **Measured on a synthetic 110,656-product database** (`python3 tools/bench.py make|compare`): the default deals list
+  went from 428 ms (and 12–15 s whenever the catalogue was stale) to 2.5 ms; a refresh after 300 price changes from
+  15.4 s to 0.27 s; memory from 1.56 GB to about 0.7 GB.
+- **A 30-second pulse.** The page asks `/api/pulse` (about 0.6 KB gzipped) every 30 s. Only when its version `v` changed
+  does it refetch the view (`fields=card`, `If-None-Match` → `304`), and it redraws only the cards that changed. Paused
+  when the tab is hidden or offline. An idle page costs 4 requests / under 1 KB in two minutes (was 22 requests / 1.67 MB).
+- **Instant repeat visits.** The service worker serves the page shell and the last home view from the device, then
+  updates; a new deploy shows "new version: tap to reload".
+- `/healthz` answers 503 "starting" until the first catalogue is ready (for at most `DEALS_READY_GRACE`, 90 s), so a new
+  deploy takes traffic only once it can answer. Tuning: `DEALS_REFRESH_EVERY` (5 s), `DEALS_FULL_EVERY` (6 h),
+  `DEALS_STARTUP_WAIT` (30 s).
+- Tests: `python3 -m unittest tests.test_deals tests.test_engine tests.test_pages tests.test_live_page`.
+
 ## Signature features
 - **⚡ Today in 30 seconds** (the home page): price drops in the last 24 h, lowest prices in 90 days, fake discounts
   caught, sales due within 3 days, extra codes, real deals now, and the biggest saving: each one tap away (`/api/brief`).

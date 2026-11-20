@@ -37,7 +37,8 @@ RUN useradd --uid 1000 --create-home app && mkdir -p /data && chown app:app /dat
 
 VOLUME ["/data"]
 EXPOSE 8800
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+# /healthz says "starting" (503) until the first catalogue is built (about 10-30 s; at most DEALS_READY_GRACE, 90 s)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
     CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/healthz' % os.environ['PORT'], timeout=4)" || exit 1
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

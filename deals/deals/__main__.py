@@ -8,7 +8,7 @@ import threading
 import time
 import traceback
 
-from . import db, settings, web
+from . import catalog, db, settings, web
 from .http import Blocked, Fetcher
 from .models import NotConfigured
 from .scheduler import StoreLoop
@@ -114,12 +114,14 @@ def live(args, stores):
         push.start(args.db, LABELS)  # price-drop notifications, checked every minute
     except ImportError:
         print("push notifications off: the cryptography package isn't installed")
+    # one catalogue for the whole process, kept up to date in the background: the page, the channel and the bot
+    cat = catalog.Catalog(args.db).start()
     from . import telegram
-    telegram.start(args.db, web.PUBLIC_URL)  # big fresh deals to a Telegram channel, when its keys are set
+    telegram.start(args.db, web.PUBLIC_URL, catalog=cat)  # big fresh deals to a Telegram channel, when its keys are set
     if os.environ.get("TELEGRAM_BOT", "1") != "0":  # the same bot answers people who write to it
         from . import bot
-        bot.start(args.db, web.PUBLIC_URL, os.environ.get("TELEGRAM_BOT_TOKEN", "").strip())
-    web.serve(args.db, args.host, args.port, args.breadfast_requests)
+        bot.start(args.db, web.PUBLIC_URL, os.environ.get("TELEGRAM_BOT_TOKEN", "").strip(), catalog=cat)
+    web.serve(args.db, args.host, args.port, args.breadfast_requests, catalog=cat)
 
 
 def _requests_file(args) -> str:
