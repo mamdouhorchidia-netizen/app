@@ -1,365 +1,39 @@
 <!doctype html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Live Deals</title>
 <meta name="description" content="عروض وأسعار لحظة بلحظة من طلبات مارت وأمازون مصر وجوميا وبريدفاست">
-<meta name="theme-color" content="#d6402b">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f0f11" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/icon.svg">
-<style>
-:root {
-  --bg: #f6f5f2; --panel: #ffffff; --ink: #1b1a17; --muted: #6d6a63; --faint: #a6a29a; --line: #e4e1da;
-  --accent: #d6402b; --accent-ink: #ffffff; --good: #1f7a4d; --good-bg: #e3f3ea; --warn: #9a6a00; --warn-bg: #fbf0d4;
-  --chip: #efede8; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04); --drop: #1f7a4d;
-  --talabat: #ff5a00; --amazon_eg: #232f3e; --breadfast: #a80080; --jumia: #f68b1e; --dream2000: #0b4ea2; --kenzz: #7b2cbf; --raya: #c8102e; --radius: 14px;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #121211; --panel: #1c1b19; --ink: #f0eee9; --muted: #a29e95; --faint: #6f6b64; --line: #2f2d29;
-    --accent: #ff6b55; --accent-ink: #1b0b07; --good: #5cc98f; --good-bg: #173326; --warn: #e6b84d; --warn-bg: #3a2f12;
-    --chip: #262421; --shadow: none; --drop: #5cc98f; --amazon_eg: #8aa0bb;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #121211; --panel: #1c1b19; --ink: #f0eee9; --muted: #a29e95; --faint: #6f6b64; --line: #2f2d29;
-  --accent: #ff6b55; --accent-ink: #1b0b07; --good: #5cc98f; --good-bg: #173326; --warn: #e6b84d; --warn-bg: #3a2f12;
-  --chip: #262421; --shadow: none; --drop: #5cc98f; --amazon_eg: #8aa0bb;
-}
-* { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--ink);
-  font: 15px/1.4 system-ui, -apple-system, "Segoe UI", "Noto Sans Arabic", Tahoma, sans-serif; }
-button, input, select { font: inherit; color: inherit; }
-a { color: inherit; }
-.wrap { max-width: 1400px; margin: 0 auto; padding: 0 16px; }
-
-/* header */
-header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
-.top { display: flex; align-items: center; gap: 12px; padding: 12px 0 8px; }
-h1 { font-size: 19px; margin: 0; letter-spacing: -.01em; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
-.pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; flex: none; }
-@keyframes pulse { 50% { opacity: .25; } }
-.search { flex: 1; min-width: 0; position: relative; }
-.search input { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  padding-block: 9px; padding-inline: 34px 12px; font-size: 15px; }
-.search svg { position: absolute; inset-inline-start: 11px; top: 50%; transform: translateY(-50%); color: var(--faint); }
-.iconbtn { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; height: 40px; min-width: 40px;
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; cursor: pointer; flex: none; }
-.iconbtn .n { background: var(--accent); color: var(--accent-ink); border-radius: 999px; font-size: 11px; padding: 0 6px; font-weight: 700; }
-.status { color: var(--muted); font-size: 12.5px; padding: 0 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ticker { overflow: hidden; border-top: 1px solid var(--line); height: 30px; position: relative; font-size: 13px; }
-.ticker-track { display: inline-flex; gap: 28px; white-space: nowrap; padding-left: 100%; line-height: 30px; direction: ltr;
-  animation: scroll linear infinite; }
-.ticker:hover .ticker-track { animation-play-state: paused; }
-@keyframes scroll { to { transform: translateX(-100%); } }
-.tick { cursor: pointer; color: var(--muted); }
-[dir=rtl] .tick { direction: rtl; unicode-bidi: isolate; }
-.slider { direction: ltr; }
-.badge, .score { direction: ltr; unicode-bidi: isolate; }
-.dlg-head { padding-inline-end: 40px; }
-.unit { direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
-svg.chart { direction: ltr; }
-[dir=rtl] body { font-family: system-ui, "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif; }
-.nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 0 0 8px; font-size: 13.5px; }
-.nav a { color: var(--muted); text-decoration: none; padding: 5px 11px; border-radius: 999px; white-space: nowrap; border: 1px solid transparent; }
-.nav a:hover { color: var(--ink); border-color: var(--line); }
-.nav a.on { background: var(--chip); color: var(--ink); font-weight: 650; }
-.tick b { color: var(--ink); font-weight: 600; }
-.tick .down { color: var(--drop); font-weight: 600; } .tick .up { color: var(--accent); font-weight: 600; }
-
-/* layout */
-.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 20px; padding-top: 16px; padding-bottom: 60px; }
-aside { position: sticky; top: 130px; align-self: start; max-height: calc(100vh - 140px); overflow: auto; padding-inline-end: 4px; }
-.fgroup { padding: 12px 0; border-bottom: 1px solid var(--line); }
-.fgroup:first-child { padding-top: 0; }
-.fgroup h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; font-weight: 650; }
-.seg { display: flex; background: var(--chip); border-radius: 9px; padding: 3px; gap: 2px; }
-.seg button { flex: 1; border: 0; background: none; padding: 6px 4px; border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--muted); white-space: nowrap; }
-.seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); font-weight: 600; }
-.opts { display: flex; flex-direction: column; gap: 2px; }
-.opt { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 7px; cursor: pointer; font-size: 14px; }
-.opt:hover { background: var(--chip); }
-.opt input { accent-color: var(--accent); margin: 0; width: 16px; height: 16px; }
-.opt .c { margin-inline-start: auto; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
-.opt .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
-.range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.range label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
-.range input[type=number], select.full { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
-.slider { position: relative; height: 30px; margin: 2px 4px 0; }
-.slider input { position: absolute; inset: 0; width: 100%; pointer-events: none; -webkit-appearance: none; appearance: none; background: none; margin: 0; }
-.slider input::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--panel); border: 2px solid var(--accent); cursor: pointer; }
-.slider input::-moz-range-thumb { pointer-events: auto; width: 14px; height: 14px; border-radius: 50%; background: var(--panel); border: 2px solid var(--accent); cursor: pointer; }
-.slider .rail { position: absolute; left: 0; right: 0; top: 14px; height: 3px; background: var(--line); border-radius: 2px; }
-.slider .fill { position: absolute; top: 14px; height: 3px; background: var(--accent); border-radius: 2px; }
-.pctlabel { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; text-transform: none; letter-spacing: 0; color: var(--ink); }
-.reset { width: 100%; margin-top: 12px; background: none; border: 1px dashed var(--line); border-radius: 9px; padding: 8px; cursor: pointer; color: var(--muted); }
-
-.bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-.count { font-weight: 650; font-size: 15px; }
-.count small { color: var(--muted); font-weight: 400; }
-.bar .spacer { flex: 1; }
-.bar select { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 7px 10px; max-width: 100%; }
-.chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 4px 10px; font-size: 12.5px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
-.chip:hover { border-color: var(--muted); }
-.chip .x { color: var(--faint); }
-.filterbtn { display: none; }
-
-/* cards */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex;
-  flex-direction: column; box-shadow: var(--shadow); cursor: pointer; transition: transform .12s, border-color .12s; position: relative; min-width: 0; }
-.card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--muted) 40%, var(--line)); }
-.card.fresh { animation: fresh 2.5s ease-out; }
-@keyframes fresh { from { box-shadow: 0 0 0 3px var(--accent); } }
-.card.out { opacity: .62; }
-.pic { position: relative; aspect-ratio: 1 / 1; background: #fff; display: grid; place-items: center; overflow: hidden; }
-/* every picture fills the same square, whatever size the store sent: small ones grow, big ones shrink */
-.pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 14% 12% 18%; box-sizing: border-box; }
-.pic .ph { font-size: 34px; font-weight: 700; color: #d9d5cc; }
-.badge { position: absolute; top: 8px; inset-inline-start: 8px; color: #fff; font-weight: 750; font-size: 13px; padding: 3px 8px; border-radius: 7px; background: #d6402b; letter-spacing: .01em; }
-.badge.drop { background: #1f7a4d; }
-.score { position: absolute; top: 6px; inset-inline-end: 6px; width: 38px; height: 38px; }
-.score text { font-size: 12px; font-weight: 750; fill: #1b1a17; }
-.why .score { position: static; flex: none; width: 52px; height: 52px; }
-.store { position: absolute; bottom: 8px; inset-inline-start: 8px; color: #fff; font-size: 11px; font-weight: 650; padding: 2px 7px; border-radius: 5px; }
-.watch { position: absolute; bottom: 6px; inset-inline-end: 6px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(255,255,255,.92);
-  display: grid; place-items: center; cursor: pointer; color: #a6a29a; box-shadow: 0 1px 3px rgba(0,0,0,.15); font-size: 16px; }
-.watch[aria-pressed="true"] { color: #e0a100; }
-.body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
-.name { font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.8em; }
-.priceline { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: auto; }
-.now { font-size: 19px; font-weight: 750; letter-spacing: -.01em; white-space: nowrap; }
-.now small { font-size: 12px; font-weight: 600; color: var(--muted); }
-.was { color: var(--muted); text-decoration: line-through; font-size: 13px; margin-inline-start: 4px; }
-.spark { width: 72px; height: 26px; flex: none; }
-.meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
-.tags { display: flex; gap: 4px; flex-wrap: wrap; }
-.tag { font-size: 11px; padding: 2px 6px; border-radius: 5px; background: var(--chip); color: var(--muted); white-space: nowrap; }
-.tag.good { background: var(--good-bg); color: var(--good); font-weight: 600; }
-.tag.warn { background: var(--warn-bg); color: var(--warn); }
-.tag.hot { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
-.cta { margin-top: 4px; display: flex; gap: 6px; }
-.cta a { flex: 1; text-align: center; text-decoration: none; background: var(--ink); color: var(--bg); border-radius: 9px; padding: 7px 8px; font-size: 13px; font-weight: 600; }
-.empty { text-align: center; color: var(--muted); padding: 60px 16px; grid-column: 1 / -1; }
-.skel { background: linear-gradient(90deg, var(--chip), var(--panel), var(--chip)); background-size: 200% 100%; animation: sk 1.2s infinite; border-radius: var(--radius); height: 330px; }
-@keyframes sk { to { background-position: -200% 0; } }
-#more { height: 1px; }
-
-/* dialog */
-dialog { border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--ink);
-  width: min(720px, calc(100vw - 24px)); max-height: calc(100vh - 32px); padding: 0; }
-dialog::backdrop { background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
-.dlg { padding: 20px; }
-.dlg-head { display: grid; grid-template-columns: 110px 1fr; gap: 16px; align-items: start; }
-.dlg-head .img { width: 110px; height: 110px; background: #fff; border-radius: 12px; display: grid; place-items: center; border: 1px solid var(--line); }
-.dlg-head img { max-width: 90%; max-height: 90%; }
-.dlg h2 { font-size: 17px; margin: 0 30px 6px 0; line-height: 1.3; }
-.x { position: absolute; top: 12px; inset-inline-end: 14px; background: var(--chip); border: 0; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; color: var(--muted); }
-.bigprice { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
-.why { margin: 14px 0; padding: 12px 14px; background: var(--chip); border-radius: 12px; display: flex; gap: 14px; align-items: center; }
-.why ul { margin: 0; padding-inline-start: 18px; font-size: 14px; }
-.chart { width: 100%; height: 200px; display: block; touch-action: pan-y; }
-.chart .ln { fill: none; stroke: var(--accent); stroke-width: 2.2; vector-effect: non-scaling-stroke; }
-.chart .ar { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
-.chart .ax { stroke: var(--line); }
-.chart text { fill: var(--muted); font-size: 11px; }
-.chart .hover line { stroke: var(--muted); stroke-dasharray: 3 3; }
-.chart .hover circle { fill: var(--accent); }
-.tip { font-size: 13px; color: var(--muted); min-height: 18px; }
-table.cmp { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 6px; }
-table.cmp td { padding: 8px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
-table.cmp td:last-child { text-align: end; }
-table.cmp .best { color: var(--good); font-weight: 700; }
-.row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 9px 14px; cursor: pointer; text-decoration: none; font-size: 14px; display: inline-flex; gap: 6px; align-items: center; }
-.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 650; }
-.alert { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; font-size: 14px; }
-.alert input { width: 110px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
-h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-
-.toasts { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; gap: 8px; width: min(420px, calc(100vw - 32px)); }
-.toast { background: var(--ink); color: var(--bg); padding: 11px 14px; border-radius: 12px; font-size: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.25); cursor: pointer; animation: up .25s ease-out; }
-@keyframes up { from { transform: translateY(10px); opacity: 0; } }
-
-.search .mic { position: absolute; inset-inline-end: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; font-size: 17px; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
-.search .mic.on { background: color-mix(in srgb, var(--accent) 18%, transparent); animation: pulse 1s infinite; }
-.search:has(.mic:not([hidden])) input { padding-inline-end: 38px; }
-.interp { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 0 6px; font-size: 12.5px; color: var(--muted); align-items: center; }
-.interp b { color: var(--ink); font-weight: 600; background: var(--chip); padding: 2px 8px; border-radius: 999px; }
-.tag.vd-good { background: var(--good-bg); color: var(--good); font-weight: 700; }
-.tag.vd-warn { background: var(--warn-bg); color: var(--warn); font-weight: 700; }
-.tag.vd-muted { font-weight: 600; }
-.foot { color: var(--faint); font-size: 12.5px; text-align: center; padding: 30px 0 10px; line-height: 1.8; }
-.hubbar { display: flex; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: none; padding: 12px 0 2px; }
-.hubbar .lbl { font-size: 13px; color: var(--muted); white-space: nowrap; font-weight: 650; }
-.hubbar button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 12px; white-space: nowrap;
-  cursor: pointer; font-size: 13.5px; color: var(--ink); }
-.hubbar button.on { background: var(--talabat); border-color: var(--talabat); color: #fff; font-weight: 650; }
-.hubbar button .c { opacity: .7; font-size: 12px; margin-inline-start: 4px; }
-.brief { margin: 14px 0 4px; padding: 16px; border-radius: var(--radius); color: #fff;
-  background: linear-gradient(135deg, #2a1a17 0%, #5b1f14 55%, var(--accent) 140%); box-shadow: var(--shadow); }
-.brief h2 { margin: 0 0 2px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
-.brief .sub { opacity: .75; font-size: 13px; margin-bottom: 12px; }
-.brief .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
-.brief .st { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 10px 12px;
-  text-align: start; color: #fff; cursor: pointer; font: inherit; }
-.brief .st:hover { background: rgba(255,255,255,.18); }
-.brief .st b { display: block; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.brief .st span { font-size: 12.5px; opacity: .85; }
-.brief .best { margin-top: 10px; font-size: 13.5px; opacity: .92; cursor: pointer; }
-.brief .best b { color: #ffd2c8; }
-.rhythm { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line); font-size: 14px; }
-.verdict { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 12px; margin: 14px 0 0; }
-.verdict.good { background: var(--good-bg); color: var(--good); } .verdict.warn { background: var(--warn-bg); color: var(--warn); } .verdict.muted { background: var(--chip); }
-.verdict b { font-size: 18px; } .verdict span { color: var(--ink); font-size: 14px; }
-.set { display: grid; gap: 10px; margin-top: 10px; }
-.set label { display: flex; gap: 8px; align-items: center; font-size: 14px; }
-.set input[type=number], .set input[type=text] { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; width: 90px; }
-.set input[type=text] { width: 100%; }
-.pick { display: flex; gap: 6px; flex-wrap: wrap; }
-.pick label { background: var(--chip); padding: 4px 10px; border-radius: 999px; font-size: 13px; cursor: pointer; }
-.bk td:nth-child(2), .bk td:nth-child(3) { white-space: nowrap; }
-.qty { display: inline-flex; gap: 4px; align-items: center; } .qty button { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
-@media (max-width: 900px) {
-  .layout { grid-template-columns: minmax(0, 1fr); }
-  aside { position: fixed; inset: auto 0 0 0; top: auto; max-height: 82vh; background: var(--panel); z-index: 15; border-radius: 18px 18px 0 0;
-    padding: 6px 16px 24px; transform: translateY(105%); transition: transform .25s ease; box-shadow: 0 -10px 40px rgba(0,0,0,.25); }
-  aside.open { transform: none; }
-  aside::before { content: ""; display: block; width: 40px; height: 4px; background: var(--line); border-radius: 2px; margin: 4px auto 10px; }
-  .sheet-done { display: flex !important; width: 100%; justify-content: center; margin-top: 14px; }
-  .filterbtn { display: inline-flex; }
-  h1 .t { display: none; }
-  /* phones: title and buttons on the first row, the search on its own full-width row */
-  .top { flex-wrap: wrap; row-gap: 8px; gap: 8px; }
-  .top h1 { margin-inline-end: auto; }
-  .top .search { order: 10; flex: 1 0 100%; }
-  .iconbtn { height: 38px; min-width: 38px; padding: 0 9px; }
-  .hide-sm { display: none; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 10px; }
-  .now { font-size: 17px; } .spark { width: 52px; }
-  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 14; }
-  .dlg-head { grid-template-columns: 80px 1fr; } .dlg-head .img { width: 80px; height: 80px; }
-  .dlg { padding: 16px; }
-}
-.sheet-done { display: none; }
-@media (prefers-reduced-motion: reduce) { .pulse, .card.fresh, .ticker-track, .skel { animation: none; } }
-</style>
-<script src="/i18n.js"></script>
-</head>
-<body>
-<header>
-  <div class="wrap">
-    <div class="top">
-      <h1><span class="pulse"></span><span class="t">Live deals</span></h1>
-      <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input type="search" id="q" placeholder="Try: milk under 50 at talabat · حفاضات أرخص للكيلو" aria-label="Search" autocomplete="off">
-        <button type="button" class="mic" id="mic" title="Search by voice" aria-label="Search by voice" hidden>🎤</button></label>
-      <button class="iconbtn" id="langBtn" title="العربية" aria-label="Language">ع</button>
-      <button class="iconbtn" id="watchBtn" title="Watchlist" aria-label="Watchlist">★ <span class="n" id="watchN" hidden>0</span></button>
-      <button class="iconbtn" id="basketBtn" title="Basket" aria-label="Basket">🧺 <span class="n" id="basketN" hidden>0</span></button>
-      <button class="iconbtn" id="alertsBtn" title="Price-drop alerts" aria-label="Price-drop alerts">🔔</button>
-      <button class="iconbtn" id="installBtn" title="Install the app" aria-label="Install the app" hidden>⬇︎ <span class="hide-sm">Install</span></button>
-      <button class="iconbtn filterbtn" id="filterBtn" aria-label="Filters">Filters <span class="n" id="filterN" hidden>0</span></button>
-    </div>
-    <nav class="nav" id="nav"><a href="/">Home</a><a href="/?deals=1&amp;sort=newest&amp;status=new">Just dropped</a><a href="/cats">Categories</a><a href="/stores">Stores</a><a href="/coupons">🎟️ Coupons</a><a href="/?recent=1">Recently viewed</a></nav>
-    <div class="interp" id="interp" hidden></div>
-    <div class="status" id="status">connecting…</div>
-  </div>
-  <div class="ticker" id="ticker" hidden><div class="ticker-track" id="tickerTrack"></div></div>
-</header>
-
-<div class="wrap layout">
-  <aside id="filters" aria-label="Filters">
-    <div class="fgroup"><h3>Show</h3>
-      <div class="seg" data-key="deals"><button data-v="1">Deals</button><button data-v="0">All products</button></div></div>
-    <div class="fgroup"><h3>Platform</h3><div class="opts" id="fStores"></div></div>
-    <div class="fgroup" id="hubGroup" hidden><h3>talabat hub</h3><div class="opts" id="fHubs"></div></div>
-    <div class="fgroup"><h3>Discount type</h3>
-      <div class="seg" data-key="kind"><button data-v="">Any</button><button data-v="platform">Platform</button><button data-v="drop">Price drop</button></div>
-      <div class="meta" style="margin-top:6px" id="kindCounts"></div></div>
-    <div class="fgroup"><h3>Discount <span class="pctlabel" id="pctLabel"></span></h3>
-      <div class="slider"><div class="rail"></div><div class="fill" id="pctFill"></div>
-        <input type="range" id="pmin" min="0" max="90" step="5" aria-label="Minimum discount">
-        <input type="range" id="pmax" min="0" max="90" step="5" aria-label="Maximum discount"></div></div>
-    <div class="fgroup"><h3>Availability</h3>
-      <div class="seg" data-key="stock"><button data-v="in">In stock</button><button data-v="out">Out</button><button data-v="all">All</button></div></div>
-    <div class="fgroup"><h3>Status</h3><div class="opts" id="fStatus">
-      <label class="opt" title="Hides discounts whose price never moves"><input type="checkbox" value="real"> Real deals only</label>
-      <label class="opt"><input type="checkbox" value="new"> Changed in the last 24 h</label>
-      <label class="opt"><input type="checkbox" value="lowest"> Lowest price in 90 days</label>
-      <label class="opt"><input type="checkbox" value="label"> Store event deals</label>
-      <label class="opt"><input type="checkbox" value="back"> Back in stock</label>
-      <label class="opt"><input type="checkbox" value="compare"> Sold in other stores too</label>
-      <label class="opt" title="A 'discount' whose price never moves: probably the normal price"><input type="checkbox" value="fake"> 🕵️ Fake discounts caught</label>
-      <label class="opt"><input type="checkbox" value="promo"> 🎟️ Extra off with a code</label>
-      <label class="opt"><input type="checkbox" value="soon"> ⏳ Sale due within 3 days</label>
-      <label class="opt"><input type="checkbox" id="fBest"> Cheapest across stores</label>
-      <label class="opt"><input type="checkbox" id="fWatch"> My watchlist</label>
-    </div></div>
-    <div class="fgroup"><h3>Category</h3><select class="full" id="fCat" aria-label="Category"></select></div>
-    <div class="fgroup"><h3>Price (EGP)</h3>
-      <div class="range"><label>From<input type="number" id="prmin" min="0" inputmode="decimal" placeholder="0"></label>
-        <label>To<input type="number" id="prmax" min="0" inputmode="decimal" placeholder="any"></label></div></div>
-    <button class="reset" id="reset">Reset filters</button>
-    <button class="btn primary sheet-done" id="sheetDone">Show results</button>
-  </aside>
-
-  <main>
-    <section class="brief" id="brief" hidden></section>
-    <div class="hubbar" id="hubBar" hidden></div>
-    <div class="bar">
-      <span class="count" id="count">…</span>
-      <div class="chips" id="activeChips"></div>
-      <span class="spacer"></span>
-      <select id="sort" aria-label="Sort by">
-        <option value="score">Best deals first</option>
-        <option value="discount">Biggest discount %</option>
-        <option value="saving">Biggest saving (EGP)</option>
-        <option value="newest">Just changed</option>
-        <option value="drop">Biggest drop vs usual</option>
-        <option value="price">Price: low to high</option>
-        <option value="price_desc">Price: high to low</option>
-        <option value="unit">Price per kg / L / piece</option>
-        <option value="popular">Best sellers</option>
-        <option value="name">Name</option>
-      </select>
-    </div>
-    <div class="grid" id="grid"></div>
-    <div id="more"></div>
-    <footer class="foot"><div><a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/contact">Contact</a></div>
-      <div>Some links earn us a small commission from the store, at no extra cost to you. As an Amazon Associate we earn from qualifying purchases.</div></footer>
-  </main>
-</div>
-
-<dialog id="dlg" aria-labelledby="dname"><div class="dlg" id="dbody"></div></dialog>
-<dialog id="panel"><div class="dlg" id="pbody"></div></dialog>
-<div class="toasts" id="toasts" aria-live="polite"></div>
-
+<link rel="apple-touch-icon" href="/icon-192.png">
 <script>
+// language and direction before the first paint (i18n.js does the words)
+(function () { var l = "ar"; try { l = localStorage.getItem("lang") || "ar"; } catch (e) {}
+  var h = document.documentElement; h.lang = l; h.dir = l === "ar" ? "rtl" : "ltr";
+  var hubs = true; try { hubs = JSON.parse(localStorage.getItem("hubBarShown")) !== false; } catch (e) {}
+  if (hubs) h.classList.add("has-hubs");   // reserve the talabat hub bar unless this browser saw there's none
+  var q = new URLSearchParams(location.search); q.delete("hubs"); q.delete("p"); if (!q.toString()) h.classList.add("home"); })();
+</script>
+<script>
+// ---------- state and data (here so the first request leaves before anything else loads) ----------
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = n => n == null ? "" : Number(n).toLocaleString("en-EG", { maximumFractionDigits: 2 });
-const ago = t => { if (!t) return "—"; const s = Math.max(0, Date.now() / 1000 - t);
-  return s < 60 ? Math.round(s) + " s ago" : s < 3600 ? Math.round(s / 60) + " min ago" : s < 86400 ? Math.round(s / 3600) + " h ago" : Math.round(s / 86400) + " d ago"; };
-const mins = s => s < 90 ? Math.round(s) + " s" : Math.round(s / 60) + " min";
+const int = n => Number(n || 0).toLocaleString("en-EG");
 const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
                 set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
-const isAndroid = /Android/i.test(navigator.userAgent), isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-const appHref = d => (isAndroid ? d.links?.android : isIOS ? d.links?.ios : d.links?.web) || d.links?.web || d.url || "#";
-const appLabel = { talabat: "talabat", amazon_eg: "Amazon", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz", raya: "Raya" };
 const LABELS = { talabat: "talabat mart", amazon_eg: "Amazon.eg", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz", raya: "Raya Shop" };
-
-// ---------- state, mirrored in the address so any view can be shared ----------
-document.querySelectorAll("#nav a").forEach(a => { const u = new URL(a.href);
-  if (u.pathname === location.pathname && u.search === location.search) a.classList.add("on"); });
+const DATA_CACHE = "deals-data-v1";   // the service worker keeps the last home-view answer here
+const PAGE = 48;
 const DEFAULTS = { deals: "1", stores: [], hubs: [], kind: "", min: 0, max: 90, stock: "in", status: [], best: false, watch: false, recent: false,
                    category: "", q: "", pmin: "", pmax: "", sort: "score" };
 let F = { ...DEFAULTS };
+let watch = store.get("watch", {});  // id -> {target, last, name, store}
+
 function readURL() {
   const p = new URLSearchParams(location.search);
   F = { ...DEFAULTS, stores: [], hubs: [], status: [] };
@@ -379,395 +53,9 @@ function writeURL() {
   if (prod) p.set("p", prod);
   history.replaceState(null, "", p.toString() ? "?" + p : location.pathname);
 }
+const isHome = () => { const p = new URLSearchParams(location.search); p.delete("hubs"); p.delete("p"); return !p.toString(); };
 
-// ---------- watchlist and price alerts (kept in this browser) ----------
-let watch = store.get("watch", {});  // id -> {target, last, name, store}
-function saveWatch() { store.set("watch", watch); if (typeof syncAlerts === "function") syncAlerts(); const n = Object.keys(watch).length; $("watchN").hidden = !n; $("watchN").textContent = n; }
-function askNotify() { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); }
-function toggleWatch(d, btn) {
-  if (watch[d.id]) { delete watch[d.id]; toast("Removed from your watchlist."); }
-  else { watch[d.id] = { target: null, last: d.price, name: d.name, store: d.store };
-         toast(`Watching it. You'll hear when the price drops.`); askNotify(); }
-  saveWatch();
-  if (btn) btn.setAttribute("aria-pressed", String(!!watch[d.id]));
-}
-async function checkWatch() {
-  const ids = Object.keys(watch);
-  if (!ids.length) return;
-  try {
-    const r = await (await fetch(`/api/deals?deals=0&stock=all&limit=500&ids=${ids.join(",")}`)).json();
-    for (const d of r.items) {
-      const w = watch[d.id]; if (!w) continue;
-      const hitTarget = w.target && d.price <= w.target && (w.last == null || w.last > w.target);
-      const dropped = w.last != null && d.price < w.last;
-      if (hitTarget || dropped) notify(`${hitTarget ? "Target reached" : "Price drop"}: ${d.name}`,
-        `${fmt(w.last)} → ${fmt(d.price)} EGP at ${LABELS[d.store] || d.store}`, d.id);
-      w.last = d.price;
-    }
-    saveWatch();
-  } catch {}
-}
-function notify(title, body, id) {
-  if (typeof chime === "function") chime();
-  toast(`<b>${esc(title)}</b><br>${esc(body)}`, () => showProduct(id), true);
-  if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
-    const n = new Notification(title, { body, icon: "/icon.svg", tag: "deal-" + id });
-    n.onclick = () => { window.focus(); showProduct(id); };
-  }
-}
-function toast(html, onclick, raw) {
-  const t = document.createElement("div"); t.className = "toast"; t.innerHTML = raw ? html : esc(html);
-  t.onclick = () => { if (onclick) onclick(); t.remove(); };
-  $("toasts").append(t); setTimeout(() => t.remove(), 6000);
-}
-
-// ---------- filter panel ----------
-function syncControls() {
-  document.querySelectorAll(".seg").forEach(seg => seg.querySelectorAll("button").forEach(b =>
-    b.setAttribute("aria-pressed", String(String(F[seg.dataset.key]) === b.dataset.v))));
-  $("pmin").value = F.min; $("pmax").value = F.max; paintSlider();
-  $("fStatus").querySelectorAll("input[value]").forEach(i => i.checked = F.status.includes(i.value));
-  $("fBest").checked = F.best; $("fWatch").checked = F.watch;
-  $("prmin").value = F.pmin; $("prmax").value = F.pmax; $("sort").value = F.sort; $("q").value = F.q;
-}
-function paintSlider() {
-  const a = +$("pmin").value, b = +$("pmax").value;
-  $("pctFill").style.left = (a / 90 * 100) + "%"; $("pctFill").style.right = (100 - b / 90 * 100) + "%";
-  $("pctLabel").textContent = a === 0 && b === 90 ? "any" : b === 90 ? `${a}%+` : `${a}–${b}%`;
-}
-function renderFacets(r) {
-  const fs = r.facets.store || {}, all = [...new Set([...Object.keys(LABELS), ...Object.keys(fs)])];
-  $("fStores").innerHTML = all.map(s => `<label class="opt"><input type="checkbox" value="${esc(s)}" ${F.stores.includes(s) ? "checked" : ""}>
-    <span class="dot" style="background:var(--${esc(s)},#888)"></span>${esc(r.labels?.[s] || LABELS[s] || s)}<span class="c">${fs[s] ?? 0}</span></label>`).join("");
-  $("fStores").querySelectorAll("input").forEach(i => i.onchange = () => {
-    F.stores = [...$("fStores").querySelectorAll("input:checked")].map(x => x.value); apply(); });
-  // one entry per hub: products saved before the hub had a name carry its number instead
-  const hubMap = {};
-  for (const [k, n] of Object.entries(r.facets.hub || {})) { const [id, name] = k.split("|");
-    const h = hubMap[id] || (hubMap[id] = { name, n: 0 }); h.n += n; if (/^\d+$/.test(h.name) && !/^\d+$/.test(name)) h.name = name; }
-  const fh = Object.entries(hubMap).sort((a, b) => b[1].n - a[1].n).map(([id, h]) => [`${id}|${/^\d+$/.test(h.name) ? "Hub " + id : h.name}`, h.n]);
-  $("hubGroup").hidden = fh.length < 2 && !F.hubs.length;
-  $("fHubs").innerHTML = fh.map(([k, n]) => { const [id, name] = k.split("|");
-    return `<label class="opt"><input type="checkbox" value="${esc(id)}" ${F.hubs.includes(id) ? "checked" : ""}> ${esc(name)}<span class="c">${n}</span></label>`; }).join("");
-  $("fHubs").querySelectorAll("input").forEach(i => i.onchange = () => {
-    setHubs([...$("fHubs").querySelectorAll("input:checked")].map(x => x.value)); });
-  // the same choice as a bar above the deals: which talabat hubs' stock and prices to show (remembered)
-  $("hubBar").hidden = fh.length < 2 && !F.hubs.length;
-  $("hubBar").innerHTML = `<span class="lbl">📍 talabat hubs:</span><button data-h="" class="${F.hubs.length ? "" : "on"}">All hubs</button>` +
-    fh.map(([k, n]) => { const [id, name] = k.split("|");
-      return `<button data-h="${esc(id)}" class="${F.hubs.includes(id) ? "on" : ""}" dir="auto">${esc(name)}<span class="c">${n}</span></button>`; }).join("");
-  $("hubBar").querySelectorAll("button").forEach(b => b.onclick = () => {
-    const id = b.dataset.h;
-    setHubs(!id ? [] : F.hubs.includes(id) ? F.hubs.filter(x => x !== id) : [...F.hubs, id]); });
-  const fc = r.facets.category || {}, cats = Object.keys(fc);
-  if (F.category && !cats.includes(F.category)) cats.unshift(F.category);
-  $("fCat").innerHTML = `<option value="">All categories</option>` + cats.map(c =>
-    `<option value="${esc(c)}" ${c === F.category ? "selected" : ""}>${esc(c)} (${fc[c] ?? 0})</option>`).join("");
-  const k = r.facets.kind || {};
-  $("kindCounts").textContent = `${k.platform || 0} platform discounts · ${k.drop || 0} price drops`;
-}
-function activeChips() {
-  const chips = [];
-  if (F.deals === "0") chips.push(["All products", () => F.deals = "1"]);
-  F.stores.forEach(s => chips.push([LABELS[s] || s, () => F.stores = F.stores.filter(x => x !== s)]));
-  if (F.hubs.length) chips.push([`${F.hubs.length} talabat hub${F.hubs.length > 1 ? "s" : ""}`, () => { F.hubs = []; store.set("myHubs", []); }]);
-  if (F.kind) chips.push([F.kind === "platform" ? "Platform discount" : "Price drop", () => F.kind = ""]);
-  if (F.min || F.max < 90) chips.push([$("pctLabel").textContent + " off", () => { F.min = 0; F.max = 90; }]);
-  if (F.stock !== "in") chips.push([F.stock === "out" ? "Out of stock" : "Any availability", () => F.stock = "in"]);
-  const names = { real: "Real deals", new: "Changed 24 h", lowest: "Lowest 90 d", label: "Event deals", back: "Back in stock", compare: "In other stores",
-                  fake: "🕵️ Fake discounts caught", promo: "🎟️ Extra off with a code", soon: "⏳ Sale due within 3 days" };
-  F.status.forEach(s => chips.push([names[s] || s, () => F.status = F.status.filter(x => x !== s)]));
-  if (F.best) chips.push(["Cheapest across stores", () => F.best = false]);
-  if (F.watch) chips.push(["Watchlist", () => F.watch = false]);
-  if (F.recent) chips.push(["Recently viewed", () => F.recent = false]);
-  if (F.category) chips.push([F.category, () => F.category = ""]);
-  if (F.q) chips.push([`“${F.q}”`, () => F.q = ""]);
-  if (F.pmin || F.pmax) chips.push([`${F.pmin || 0}–${F.pmax || "∞"} EGP`, () => { F.pmin = ""; F.pmax = ""; }]);
-  $("activeChips").innerHTML = chips.map(([t], i) => `<button class="chip" data-i="${i}">${esc(t)} <span class="x">×</span></button>`).join("");
-  $("activeChips").querySelectorAll(".chip").forEach(b => b.onclick = () => { chips[+b.dataset.i][1](); syncControls(); apply(); });
-  $("filterN").hidden = !chips.length; $("filterN").textContent = chips.length;
-}
-
-// ---------- cards ----------
-function sparkSVG(pts, w = 72, h = 26) {
-  if (!pts || pts.length < 2) return "";
-  const t0 = pts[0][0], t1 = pts[pts.length - 1][0], ps = pts.map(p => p[1]);
-  const lo = Math.min(...ps), hi = Math.max(...ps), span = hi - lo || 1;
-  const X = t => 2 + (w - 4) * (t - t0) / ((t1 - t0) || 1), Y = v => hi === lo ? h / 2 : 3 + (h - 6) * (1 - (v - lo) / span);
-  let d = `M${X(pts[0][0]).toFixed(1)} ${Y(pts[0][1]).toFixed(1)}`;
-  for (let i = 1; i < pts.length; i++) d += ` H${X(pts[i][0]).toFixed(1)} V${Y(pts[i][1]).toFixed(1)}`;
-  const first = ps[0], last = ps[ps.length - 1];
-  const col = last < first ? "var(--drop)" : last > first ? "var(--accent)" : "var(--faint)";
-  return `<svg class="spark" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d}" fill="none" stroke="${col}" stroke-width="1.8"/>
-    <circle cx="${X(t1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="2.4" fill="${col}"/></svg>`;
-}
-function scoreSVG(s) {
-  const r = 15, c = 2 * Math.PI * r, col = s >= 70 ? "#1f9d5c" : s >= 40 ? "#e0a100" : "#b9b4aa";
-  return `<svg class="score" viewBox="0 0 38 38" role="img" aria-label="Deal score ${s} of 100"><title>Deal score ${s}/100</title>
-    <circle cx="19" cy="19" r="17.5" fill="rgba(255,255,255,.96)"/>
-    <circle cx="19" cy="19" r="${r}" fill="none" stroke="#ece9e2" stroke-width="3"/>
-    <circle cx="19" cy="19" r="${r}" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${(c * s / 100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 19 19)"/>
-    <text x="19" y="23.5" text-anchor="middle">${s}</text></svg>`;
-}
-function tagsFor(d) {
-  const t = [];
-  if (d.verdict && d.verdict.label !== "Fair price" && d.verdict.label !== "Out of stock")
-    t.push(`<span class="tag vd-${d.verdict.tone}" title="${esc(d.verdict.why)}">${esc(d.verdict.label)}</span>`);
-  if (d.deal_label) t.push(`<span class="tag hot">${esc(d.deal_label)}</span>`);
-  if (d.flags.includes("lowest")) t.push('<span class="tag good">lowest in 90 days</span>');
-  if (d.flags.includes("new")) t.push(d.prev_price != null && d.price > d.prev_price
-    ? `<span class="tag warn">went up ${ago(d.since)}</span>` : `<span class="tag">dropped ${ago(d.since)}</span>`);
-  if (d.flags.includes("rose")) t.push(`<span class="tag warn">was ${fmt(d.recent_low)} lately</span>`);
-  if (d.flags.includes("back")) t.push('<span class="tag good">back in stock</span>');
-  if (d.cheapest && d.matches.length) t.push('<span class="tag good">cheapest of all stores</span>');
-  else if (d.matches.length) { const m = d.matches.find(x => x.in_stock && x.price < d.price);
-    if (m) t.push(`<span class="tag warn">${fmt(m.price)} at ${esc(LABELS[m.store] || m.store)}</span>`); }
-  if (d.flags.includes("steady")) t.push('<span class="tag warn">discount never moves</span>');
-  if (d.flags.includes("inflated")) t.push('<span class="tag warn">⚠️ "was" price looks inflated</span>');
-  if (d.promo_code) t.push(`<span class="tag hot" title="Code">🎟️ ${esc(d.promo_code)}: ${fmt(d.promo_price)}</span>`);
-  if (d.rhythm && d.rhythm.next_in_days != null && d.rhythm.next_in_days <= 3) t.push(`<span class="tag warn">⏳ sale due soon</span>`);
-  if (!d.in_stock) t.push('<span class="tag">out of stock</span>');
-  return t.join("");
-}
-const initial = n => esc((n || "?").trim()[0] || "?");
-function card(d, fresh) {
-  const badge = d.discount_pct > 0 ? `<span class="badge ${d.kind === "drop" ? "drop" : ""}" title="${d.kind === "drop" ? "under its usual price" : "the store's own discount"}">−${Math.round(d.discount_pct)}%</span>` : "";
-  const unit = d.unit_text || "";
-  const was = d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : "";
-  return `<article class="card${fresh ? " fresh" : ""}${d.in_stock ? "" : " out"}" data-id="${d.id}">
-    <div class="pic">${d.image ? `<img loading="lazy" src="${esc(d.image)}" alt="" data-i="${initial(d.name)}">` : `<span class="ph">${initial(d.name)}</span>`}
-      ${badge}${d.discount_pct > 0 ? scoreSVG(d.score) : ""}
-      <span class="store" style="background:var(--${esc(d.store)},#555)">${esc(LABELS[d.store] || d.store)}</span>
-      <button class="watch" aria-label="Watch this price" aria-pressed="${!!watch[d.id]}" data-watch>★</button></div>
-    <div class="body"><div class="name" dir="auto">${esc(d.name)}</div>
-      <div class="tags">${tagsFor(d)}</div>
-      <div class="priceline"><div><span class="now">${fmt(d.price)} <small>EGP</small></span>${was}</div>${sparkSVG(d.spark)}</div>
-      <div class="meta">${d.hub_name ? `<span title="talabat hub">📍 ${esc(d.hub_name)}</span>` : ""}${d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : ""}${d.saving > 0 ? `<span>save ${fmt(d.saving)}</span>` : ""}${unit ? `<span class="unit">${unit}</span>` : ""}</div>
-      <div class="cta"><a href="${esc(appHref(d))}" target="_blank" rel="noopener" data-open>Open in ${esc(appLabel[d.store] || "store")} ↗</a></div>
-    </div></article>`;
-}
-// a picture that fails to load becomes the product's first letter
-document.addEventListener("error", e => { const img = e.target;
-  if (img.tagName === "IMG" && img.dataset.i) { const s = document.createElement("span"); s.className = "ph"; s.textContent = img.dataset.i; img.replaceWith(s); }
-}, true);
-
-// ---------- loading ----------
-let items = [], total = 0, seen = new Set(), firstLoad = true, loading = false, timer, sig = "", lastStatus = [], lastChanges = 0;
-const PAGE = 48;
-function params(offset, limit) {
-  const p = new URLSearchParams({ deals: F.deals, stock: F.stock, sort: F.sort, limit, offset });
-  if (F.stores.length) p.set("stores", F.stores.join(","));
-  if (F.hubs.length) p.set("hubs", F.hubs.join(","));
-  if (F.kind) p.set("kind", F.kind);
-  if (F.min) p.set("min", F.min);
-  if (F.max < 90) p.set("max", F.max);
-  if (F.status.length) p.set("status", F.status.join(","));
-  if (F.best) p.set("best", "1");
-  if (F.category) p.set("category", F.category);
-  const nl = understand(F.q);
-  if (nl.q) p.set("q", nl.q);
-  for (const [k, v] of Object.entries(nl.set)) p.set(k, v);
-  if (F.pmin !== "") p.set("pmin", F.pmin);
-  if (F.pmax !== "") p.set("pmax", F.pmax);
-  if (F.watch) { p.set("ids", Object.keys(watch).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); }
-  else if (F.recent) { p.set("ids", store.get("recent", []).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); p.set("sort", "newest"); }
-  return p;
-}
-async function load({ append = false, quiet = false } = {}) {
-  if (loading) return; loading = true;
-  const offset = append ? items.length : 0, limit = append ? PAGE : Math.max(PAGE, quiet ? items.length : PAGE);
-  if (!quiet && !append) $("grid").innerHTML = Array.from({ length: 8 }, () => '<div class="skel"></div>').join("");
-  try {
-    const r = await (await fetch("/api/deals?" + params(offset, limit))).json();
-    lastStatus = r.status || []; lastChanges = r.changes_last_hour || 0; renderStatus();
-    renderFacets(r); total = r.total; window.lastFacets = r.facets;
-    $("count").innerHTML = `${total.toLocaleString()} <small>${F.deals === "1" && !F.watch ? (total === 1 ? "deal" : "deals") : "products"}</small>`;
-    if (append) {
-      items = items.concat(r.items);
-      $("grid").insertAdjacentHTML("beforeend", r.items.map(d => card(d, false)).join(""));
-    } else {
-      const s = JSON.stringify(r.items.map(d => [d.id, d.price, d.score, d.in_stock, d.flags]));
-      if (s !== sig || !quiet) {  // a quiet refresh only redraws when something changed
-        sig = s; items = r.items;
-        $("grid").innerHTML = items.length ? items.map(d => card(d, !firstLoad && quiet && !seen.has(d.id))).join("")
-          : `<div class="empty">${F.watch ? "Your watchlist is empty: tap ★ on any product to follow its price." :
-             "Nothing matches these filters yet. The first sweep of each store takes about 15 minutes, and price-drop deals need a few days of history."}</div>`;
-      }
-    }
-    r.items.forEach(d => seen.add(d.id));
-    firstLoad = false;
-  } catch (e) { $("status").textContent = "can't reach the server, retrying…"; }
-  loading = false;
-  clearTimeout(timer); timer = setTimeout(() => load({ quiet: true }), document.hidden ? 60000 : 10000);
-}
-function apply() { writeURL(); activeChips(); load(); loadBrief(); }
-
-function renderStatus() {
-  const parts = lastStatus.map(s => {
-    let t = `<b>${esc(s.label)}</b> ${s.products.toLocaleString()}`;
-    if (s.paused_until) return t + ` · paused, back in ${mins(s.paused_until - Date.now() / 1000)}`;
-    if (s.live) t += s.last_change ? ` · changed ${ago(s.last_change)}` : " · watching";
-    t += s.cycle_secs ? ` · full sweep ${mins(s.cycle_secs)}` : s.live ? " · first sweep" : ` · ${ago(s.updated)}`;
-    return t;
-  });
-  $("status").innerHTML = parts.length ? parts.join(" &nbsp;·&nbsp; ") + ` &nbsp;·&nbsp; ${lastChanges.toLocaleString()} price changes in the last hour`
-    : "starting: the first prices arrive within a minute";
-}
-setInterval(renderStatus, 1000);
-
-async function loadTicker() {
-  try {
-    const r = await (await fetch("/api/changes?limit=24")).json();
-    const ch = r.changes.filter(c => c.before != null && c.before !== c.price);
-    $("ticker").hidden = !ch.length;
-    if (!ch.length) return;
-    $("tickerTrack").innerHTML = ch.map(c => { const down = c.price < c.before;
-      return `<span class="tick" data-id="${c.id}"><b dir="auto">${esc(c.name.slice(0, 42))}</b> ${fmt(c.before)} → <span class="${down ? "down" : "up"}">${fmt(c.price)} ${down ? "▼" : "▲"}</span> · ${esc(c.label)} · ${ago(c.at)}</span>`;
-    }).join("");
-    $("tickerTrack").style.animationDuration = Math.max(30, ch.length * 6) + "s";
-    $("tickerTrack").querySelectorAll(".tick").forEach(t => t.onclick = () => showProduct(+t.dataset.id));
-  } catch {}
-}
-
-// ---------- product detail ----------
-async function showProduct(id) {
-  let r;
-  try { r = await (await fetch("/api/product/" + id)).json(); } catch { return; }
-  if (r.error) return;
-  const p = r.product, d = r.item && r.item.id ? r.item : null, h = r.history;
-  store.set("recent", [id, ...store.get("recent", []).filter(x => x !== id)].slice(0, 60));
-  const u = new URLSearchParams(location.search); u.set("p", id); history.replaceState(null, "", "?" + u);
-  const w = watch[id];
-  const rows = d ? [d, ...(r.matches || [])].sort((a, b) => a.price - b.price) : [];
-  const link = d ? appHref(d) : p.url;
-  $("dbody").innerHTML = `<button class="x" aria-label="Close" onclick="this.closest('dialog').close()">×</button>
-    <div class="dlg-head"><div class="img">${p.image ? `<img src="${esc(p.image)}" alt="" onerror="this.remove()">` : ""}</div>
-      <div><h2 id="dname" dir="auto">${esc(p.name)}</h2>
-        <div class="meta"><span style="color:var(--${esc(p.store)});font-weight:650">${esc(LABELS[p.store] || p.store)}</span><span>${esc(p.category || "")}</span><span>tracked ${ago(p.first_seen).replace(" ago", "")}</span></div>
-        <div style="margin-top:8px"><span class="bigprice">${fmt(p.price)} EGP</span>
-          ${d && d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : ""}
-          ${d && d.unit_text ? `<span class="meta unit" style="display:inline;margin-inline-start:8px">${esc(d.unit_text)}</span>` : ""}</div>
-        <div class="tags" style="margin-top:6px">${d ? tagsFor(d) : ""}</div></div></div>
-    ${d && d.verdict ? `<div class="verdict ${d.verdict.tone}"><b>${esc(d.verdict.label)}</b><span>${esc(d.verdict.why)}</span></div>` : ""}
-    ${d && d.rhythm ? `<div class="rhythm">⏳ <b>Sale rhythm</b><br>${esc(d.rhythm.text)}</div>` : ""}
-    ${d && d.promo_code ? `<div class="rhythm">🎟️ With the code <b data-noi18n>${esc(d.promo_code)}</b> at checkout: ${fmt(d.promo_price)} EGP</div>` : ""}
-    ${d && d.why && d.why.length ? `<div class="why">${scoreSVG(d.score)}<ul>${d.why.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
-    <h4>Price history</h4>
-    <svg class="chart" id="chart" viewBox="0 0 640 200" preserveAspectRatio="none" role="img" aria-label="Price history"></svg>
-    <div class="tip" id="tip">${h.length > 1 ? "Touch or point at the chart to see each price." : "One price so far: the chart fills in as it changes."}</div>
-    ${rows.length > 1 ? `<h4>Same product in other stores</h4><table class="cmp">${rows.map((x, i) => `<tr>
-      <td><span style="color:var(--${esc(x.store)});font-weight:650">${esc(LABELS[x.store] || x.store)}</span><br><span class="meta" style="display:inline" dir="auto">${esc(x.name.slice(0, 60))}</span></td>
-      <td class="${i === 0 ? "best" : ""}">${fmt(x.price)} EGP${i === 0 ? "<br>cheapest" : ""}${x.in_stock ? "" : "<br>out of stock"}</td>
-      <td><a class="btn" style="padding:5px 10px" href="${esc(appHref(x))}" target="_blank" rel="noopener">Open ↗</a></td></tr>`).join("")}</table>` : ""}
-    <div class="alert"><label for="target">Tell me when it's at or below</label>
-      <input id="target" type="number" inputmode="decimal" min="0" step="0.5" placeholder="${Math.floor(p.price * 0.9)}" value="${w && w.target ? w.target : ""}"> EGP
-      <button class="btn" id="setTarget">${w ? "Update alert" : "Watch"}</button></div>
-    <div class="row">
-      <a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener">Open in ${esc(appLabel[p.store] || "store")} app ↗</a>
-      ${d && p.store !== "talabat" && (isAndroid ? d.links.browser : d.links.web) && (isAndroid ? d.links.browser : d.links.web) !== link
-        ? `<a class="btn" href="${esc(isAndroid ? d.links.browser : d.links.web)}" target="_blank" rel="noopener">Open in browser</a>` : ""}
-      <button class="btn" id="toBasket">🧺 ${basket[id] ? "In basket (" + basket[id] + ")" : "Add to basket"}</button>
-      <button class="btn" id="share">Share</button>
-      <a class="btn" href="/p/${id}">Product page</a>
-    </div>`;
-  if (!$("dlg").open) $("dlg").showModal();
-  drawChart(h, p.price);
-  $("setTarget").onclick = () => {
-    const v = parseFloat($("target").value);
-    watch[id] = { ...(watch[id] || { last: p.price, name: p.name, store: p.store }), target: isFinite(v) ? v : null };
-    saveWatch(); askNotify();
-    toast(isFinite(v) ? `We'll tell you when it's ${fmt(v)} EGP or less.` : "Watching for any price drop.");
-    $("setTarget").textContent = "Update alert";
-    document.querySelectorAll(`.card[data-id="${id}"] [data-watch]`).forEach(b => b.setAttribute("aria-pressed", "true"));
-  };
-  $("toBasket").onclick = () => { basket[id] = (basket[id] || 0) + 1; saveBasket(); $("toBasket").textContent = `🧺 In basket (${basket[id]})`;
-    toast("Added to your basket. 🧺 shows where it's cheapest."); };
-  $("share").onclick = async () => {
-    const url = location.origin + "/p/" + id, text = `${p.name}: ${fmt(p.price)} EGP`;
-    try { if (navigator.share) await navigator.share({ title: text, text, url });
-          else { await navigator.clipboard.writeText(url); toast("Link copied."); } } catch {}
-  };
-}
-$("dlg").addEventListener("close", () => { const u = new URLSearchParams(location.search); u.delete("p");
-  history.replaceState(null, "", u.toString() ? "?" + u : location.pathname); });
-
-function drawChart(h, current) {
-  const now = Date.now() / 1000;
-  const pts = h.filter(r => r.in_stock).map(r => [r.at, r.price]);
-  if (!pts.length) pts.push([now - 60, current]);
-  pts.push([now, pts[pts.length - 1][1]]);
-  const W = 640, H = 200, L = 46, R = 8, T = 10, B = 24;
-  const t0 = pts[0][0], t1 = Math.max(now, t0 + 1), ps = pts.map(p => p[1]);
-  const lo = Math.min(...ps), hi = Math.max(...ps), pad = (hi - lo) * .15 || hi * .05 || 1;
-  const X = t => L + (W - L - R) * (t - t0) / (t1 - t0), Y = v => T + (H - T - B) * (1 - (v - (lo - pad)) / ((hi + pad) - (lo - pad)));
-  let d = `M${X(pts[0][0]).toFixed(1)} ${Y(pts[0][1]).toFixed(1)}`;
-  for (let i = 1; i < pts.length; i++) d += ` H${X(pts[i][0]).toFixed(1)} V${Y(pts[i][1]).toFixed(1)}`;
-  const area = d + ` V${H - B} H${X(pts[0][0]).toFixed(1)} Z`;
-  const date = t => new Date(t * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-  const svg = $("chart");
-  svg.innerHTML = `<path class="ar" d="${area}"/><path class="ln" d="${d}"/>
-    <line class="ax" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>
-    <text x="4" y="${Y(hi) + 4}">${fmt(hi)}</text>${hi !== lo ? `<text x="4" y="${Y(lo) + 4}">${fmt(lo)}</text>` : ""}
-    <text x="${L}" y="${H - 6}">${date(t0)}</text><text x="${W - R}" y="${H - 6}" text-anchor="end">now</text>
-    <g class="hover" visibility="hidden"><line y1="${T}" y2="${H - B}"/><circle r="4"/></g>`;
-  const g = svg.querySelector(".hover");
-  const move = e => {
-    const rect = svg.getBoundingClientRect(), x = Math.max(L, Math.min(W - R, (e.clientX - rect.left) / rect.width * W));
-    const t = t0 + (x - L) / (W - L - R) * (t1 - t0);
-    let i = 0; while (i + 1 < pts.length && pts[i + 1][0] <= t) i++;
-    const v = pts[i][1];
-    g.setAttribute("visibility", "visible");
-    g.querySelector("line").setAttribute("x1", x); g.querySelector("line").setAttribute("x2", x);
-    g.querySelector("circle").setAttribute("cx", x); g.querySelector("circle").setAttribute("cy", Y(v));
-    $("tip").textContent = `${fmt(v)} EGP on ${new Date(Math.min(t, now) * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`;
-  };
-  svg.onpointermove = move; svg.onpointerdown = move;
-}
-
-// ---------- wiring ----------
-document.querySelectorAll(".seg").forEach(seg => seg.querySelectorAll("button").forEach(b => b.onclick = () => {
-  F[seg.dataset.key] = b.dataset.v; syncControls(); apply(); }));
-let slideT;
-["pmin", "pmax"].forEach(id => $(id).oninput = () => {
-  let a = +$("pmin").value, b = +$("pmax").value;
-  if (a > b) { if (id === "pmin") $("pmax").value = b = a; else $("pmin").value = a = b; }
-  paintSlider(); clearTimeout(slideT); slideT = setTimeout(() => { F.min = a; F.max = b; apply(); }, 250); });
-$("fStatus").querySelectorAll("input[value]").forEach(i => i.onchange = () => {
-  F.status = [...$("fStatus").querySelectorAll("input[value]:checked")].map(x => x.value); apply(); });
-$("fBest").onchange = () => { F.best = $("fBest").checked; apply(); };
-$("fWatch").onchange = () => { F.watch = $("fWatch").checked; apply(); };
-$("fCat").onchange = () => { F.category = $("fCat").value; apply(); };
-let priceT;
-["prmin", "prmax"].forEach(id => $(id).oninput = () => { clearTimeout(priceT); priceT = setTimeout(() => {
-  F.pmin = $("prmin").value; F.pmax = $("prmax").value; apply(); }, 400); });
-$("sort").onchange = () => { F.sort = $("sort").value; apply(); };
-let typing;
-$("q").oninput = () => { clearTimeout(typing); typing = setTimeout(() => { F.q = $("q").value; showUnderstood(); apply(); }, 300); };
-$("reset").onclick = () => { F = { ...DEFAULTS, stores: [], hubs: [], status: [] }; store.set("myHubs", []); syncControls(); apply(); };
-function setHubs(ids) { F.hubs = ids; store.set("myHubs", ids); apply(); }
-$("watchBtn").onclick = () => { F.watch = !F.watch; syncControls(); apply(); };
-const sheet = open => { $("filters").classList.toggle("open", open);
-  document.querySelector(".scrim")?.remove();
-  if (open) { const s = document.createElement("div"); s.className = "scrim"; s.onclick = () => sheet(false); document.body.append(s); } };
-$("filterBtn").onclick = () => sheet(true);
-$("sheetDone").onclick = () => sheet(false);
-$("grid").addEventListener("click", e => {
-  const c = e.target.closest(".card"); if (!c) return;
-  const d = items.find(x => x.id === +c.dataset.id); if (!d) return;
-  if (e.target.closest("[data-watch]")) { e.stopPropagation(); toggleWatch(d, e.target.closest("[data-watch]")); return; }
-  if (e.target.closest("[data-open]")) return;  // the link opens the store's app at this product
-  showProduct(d.id);
-});
-new IntersectionObserver(es => { if (es[0].isIntersecting && items.length && items.length < total && !loading) load({ append: true }); },
-  { rootMargin: "800px" }).observe($("more"));
-document.addEventListener("keydown", e => {
-  if (e.key === "/" && !["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) { e.preventDefault(); $("q").focus(); }
-  if (e.key === "Escape" && $("filters").classList.contains("open")) sheet(false);
-});
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { load({ quiet: true }); loadTicker(); } });
-
-
-// ---------- understanding plain-language searches (English and Arabic) ----------
+// ---------- plain-language searches (English and Arabic) ----------
 const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 function understand(text) {
   let t = " " + (text || "").replace(/[٠-٩]/g, c => AR_DIGITS.indexOf(c)) + " ";
@@ -795,10 +83,1273 @@ function understand(text) {
   if (Object.keys(set).length && !("deals" in set)) set.deals = "0";  // "milk under 50" means every milk, not only deals
   return { q, set, said };
 }
+function params(offset, limit) {
+  const p = new URLSearchParams({ deals: F.deals, stock: F.stock, sort: F.sort, limit, offset, fields: "card" });
+  if (F.stores.length) p.set("stores", F.stores.join(","));
+  if (F.hubs.length) p.set("hubs", F.hubs.join(","));
+  if (F.kind) p.set("kind", F.kind);
+  if (F.min) p.set("min", F.min);
+  if (F.max < 90) p.set("max", F.max);
+  if (F.status.length) p.set("status", F.status.join(","));
+  if (F.best) p.set("best", "1");
+  if (F.category) p.set("category", F.category);
+  const nl = understand(F.q);
+  if (nl.q) p.set("q", nl.q);
+  for (const [k, v] of Object.entries(nl.set)) p.set(k, v);
+  if (F.pmin !== "") p.set("pmin", F.pmin);
+  if (F.pmax !== "") p.set("pmax", F.pmax);
+  if (F.watch) { p.set("ids", Object.keys(watch).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); }
+  else if (F.recent) { p.set("ids", store.get("recent", []).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); p.set("sort", "newest"); }
+  return p;
+}
+
+// one answer per view, kept with its ETag: asking again sends If-None-Match and a 304 costs nothing
+const VIEWS = new Map();
+async function getView(qs, signal, home) {
+  const key = qs.toString(), hit = VIEWS.get(key), headers = {};
+  if (hit && hit.etag) headers["If-None-Match"] = hit.etag;
+  if (home) headers["X-Home-View"] = "1";   // tells the service worker to keep this answer for the next visit
+  const r = await fetch("/api/deals?" + key, { headers, signal, cache: hit && hit.etag ? "no-store" : "default" });
+  if (r.status === 304 && hit) { VIEWS.delete(key); VIEWS.set(key, hit); return { data: hit.data, same: true }; }
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const data = await r.json();
+  VIEWS.delete(key); VIEWS.set(key, { etag: r.headers.get("ETag"), data });
+  while (VIEWS.size > 8) VIEWS.delete(VIEWS.keys().next().value);
+  return { data, same: false };
+}
+function savedHome(key) {
+  if (!("caches" in window)) return Promise.resolve(null);
+  return caches.open(DATA_CACHE).then(c => c.match("/api/deals?" + key, { ignoreVary: true })).then(r => r ? r.json() : null).catch(() => null);
+}
+readURL();
+const BOOT = (() => {
+  const qs = params(0, PAGE), ctrl = new AbortController(), home = isHome();
+  const b = { key: qs.toString(), ctrl, net: getView(qs, ctrl.signal, home), saved: home ? savedHome(qs.toString()) : Promise.resolve(null) };
+  b.brief = home ? fetch("/api/brief").then(r => r.ok ? r.json() : null).catch(() => null) : null;
+  b.net.catch(() => {});
+  return b;
+})();
+</script>
+<style>
+:root {
+  --bg: #f7f6f3; --panel: #ffffff; --ink: #17161a; --muted: #6b6871; --faint: #a3a0a8; --line: #e7e4de;
+  --accent: #e0452c; --accent-ink: #ffffff; --good: #16794a; --good-bg: #e2f4ea; --warn: #9a6500; --warn-bg: #fbf0d2; --chip: #f0eee9;
+  --talabat: #ff5a00; --amazon_eg: #232f3e; --breadfast: #a80080; --jumia: #f68b1e; --dream2000: #0b4ea2; --kenzz: #7b2cbf; --raya: #c8102e;
+  --r-s: 8px; --r-m: 12px; --r-l: 18px;
+  --pic: #ffffff; --ph: #d9d5cc; --scrim: rgba(15, 15, 17, .45);
+  --lift: 0 6px 20px rgba(23, 22, 26, .08), 0 1px 3px rgba(23, 22, 26, .06);
+  --sheet: 0 -12px 40px rgba(0, 0, 0, .18);
+  --tap: 44px; --hdr: 64px;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0f11; --panel: #19191d; --ink: #f2f0ea; --muted: #a09ca6; --faint: #6a6770; --line: #2a2930;
+    --accent: #ff6a52; --accent-ink: #1a0906; --good: #5fd09a; --good-bg: #14301f; --warn: #e8bb52; --warn-bg: #38300f; --chip: #232228;
+    --amazon_eg: #8aa0bb; --pic: #f3f2ef; --ph: #c9c5bd; --scrim: rgba(0, 0, 0, .6);
+    --lift: 0 6px 20px rgba(0, 0, 0, .35); --sheet: 0 -12px 40px rgba(0, 0, 0, .5); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0f11; --panel: #19191d; --ink: #f2f0ea; --muted: #a09ca6; --faint: #6a6770; --line: #2a2930;
+  --accent: #ff6a52; --accent-ink: #1a0906; --good: #5fd09a; --good-bg: #14301f; --warn: #e8bb52; --warn-bg: #38300f; --chip: #232228;
+  --amazon_eg: #8aa0bb; --pic: #f3f2ef; --ph: #c9c5bd; --scrim: rgba(0, 0, 0, .6);
+  --lift: 0 6px 20px rgba(0, 0, 0, .35); --sheet: 0 -12px 40px rgba(0, 0, 0, .5); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--hdr) + 12px); }
+body { margin: 0; background: var(--bg); color: var(--ink); min-height: 100vh;
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Arabic", "Noto Sans", Tahoma, sans-serif;
+  -webkit-tap-highlight-color: transparent; }
+[dir=rtl] body { font-family: system-ui, -apple-system, "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif; line-height: 1.6; }
+button, input, select { font: inherit; color: inherit; }
+a { color: inherit; }
+svg { flex: none; }
+.num, .now, .was, .count, .c, .n, .off, .unit, .bigprice, td { font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-s); }
+.wrap { max-width: 1360px; margin: 0 auto; padding: 0 16px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[hidden] { display: none !important; }
+
+/* ---------- header: one compact row, search always in reach ---------- */
+.hdr { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 90%, transparent);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px); backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--line); }
+.top { display: flex; align-items: center; gap: 8px; height: var(--hdr); }
+.brand { display: flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none; flex: none; min-height: var(--tap); min-width: var(--tap); }
+.mark { width: 34px; height: 34px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; position: relative; }
+.mark .pulse { position: absolute; top: -3px; inset-inline-end: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--good);
+  border: 2px solid var(--bg); animation: pulse 2.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.brand .t { font-size: 17px; font-weight: 750; letter-spacing: -.01em; white-space: nowrap; }
+.search { flex: 1; min-width: 0; position: relative; display: block; max-width: 640px; margin-inline: 8px auto; }
+.search input { width: 100%; height: var(--tap); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-m);
+  padding-inline: 40px 12px; font-size: 15px; text-overflow: ellipsis; -webkit-appearance: none; appearance: none; }
+.search input::placeholder { color: var(--faint); }
+.search input:focus { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.search > svg { position: absolute; inset-inline-start: 13px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+.search .mic { position: absolute; inset-inline-end: 0; top: 0; width: var(--tap); height: var(--tap); border: 0; background: none; border-radius: 10px;
+  display: grid; place-items: center; cursor: pointer; color: var(--muted); }
+.search .mic.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); animation: pulse 1s infinite; }
+.search:has(.mic:not([hidden])) input { padding-inline-end: 44px; }
+.kbd { position: absolute; inset-inline-end: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--faint);
+  border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; line-height: 20px; pointer-events: none; }
+.search:has(.mic:not([hidden])) .kbd, .search input:focus ~ .kbd, .search input:not(:placeholder-shown) ~ .kbd { display: none; }
+.ib { position: relative; height: var(--tap); min-width: var(--tap); padding: 0 10px; border: 1px solid transparent; background: none; border-radius: var(--r-m);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; color: var(--ink); flex: none; font-size: 14px; font-weight: 600; }
+.ib:hover { background: var(--chip); }
+.ib[aria-pressed="true"] { background: var(--chip); color: var(--accent); }
+.ib .n, .tbtn .n { position: absolute; top: 4px; inset-inline-end: 3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 750; line-height: 18px; text-align: center; }
+.ib.lang { font-weight: 750; font-size: 15px; }
+.ph-only { display: none; }
+
+/* nav, status, ticker (scroll away; only the header row stays) */
+.sub { padding-top: 8px; }
+.nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; font-size: 13.5px; margin-inline: -4px; padding: 0 4px; }
+.nav::-webkit-scrollbar { display: none; }
+.nav a { color: var(--muted); text-decoration: none; padding: 0 14px; border-radius: 999px; white-space: nowrap; min-height: 36px;
+  display: inline-flex; align-items: center; gap: 6px; font-weight: 550; }
+.nav a:hover { color: var(--ink); background: var(--chip); }
+.nav a.on { background: var(--ink); color: var(--bg); }
+.statusline { display: flex; align-items: center; gap: 6px; min-height: 36px; font-size: 12.5px; color: var(--muted); }
+.fresh { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 6px;
+  min-height: 36px; border-radius: 999px; min-width: 10.5em; justify-content: flex-start; font-size: 12.5px; white-space: nowrap; flex: none; }
+.fresh:hover { background: var(--chip); color: var(--ink); }
+.ring { width: 16px; height: 16px; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 2.4; }
+.ring .bgc { stroke: var(--line); }
+.ring .fg { stroke: var(--good); stroke-dasharray: 37.7; stroke-dashoffset: 37.7; stroke-linecap: round; }
+.ring.run .fg { animation: ring 30s linear forwards; }
+.fresh.err .fg { stroke: var(--warn); stroke-dashoffset: 0; animation: none; }
+.fresh.off .fg { stroke: var(--faint); stroke-dashoffset: 0; animation: none; }
+@keyframes ring { from { stroke-dashoffset: 37.7; } to { stroke-dashoffset: 0; } }
+.stat { border: 0; background: none; color: inherit; padding: 0 6px; min-height: 36px; cursor: pointer; border-radius: 999px; font-size: 12.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; text-align: start; }
+.stat:hover { color: var(--ink); background: var(--chip); }
+.interp { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px 0 0; font-size: 12.5px; color: var(--muted); align-items: center; }
+.interp b { color: var(--ink); font-weight: 600; background: var(--chip); padding: 2px 10px; border-radius: 999px; }
+.ticker { overflow: hidden; height: 34px; position: relative; font-size: 13px; margin-top: 4px; border-block: 1px solid var(--line);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
+.ticker-track { display: inline-flex; gap: 28px; white-space: nowrap; padding-left: 100%; line-height: 32px; direction: ltr; animation: scroll linear infinite; will-change: transform; }
+.ticker:hover .ticker-track, .ticker:focus-within .ticker-track { animation-play-state: paused; }
+.ticker .idle { display: block; line-height: 32px; color: var(--faint); text-align: center; }
+@keyframes scroll { to { transform: translateX(-100%); } }
+.tick { cursor: pointer; color: var(--muted); border: 0; background: none; padding: 0; font: inherit; }
+[dir=rtl] .tick { direction: rtl; unicode-bidi: isolate; }
+.tick b { color: var(--ink); font-weight: 600; }
+.pair { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+.tick .down { color: var(--good); font-weight: 650; } .tick .up { color: var(--accent); font-weight: 650; }
+
+/* ---------- layout ---------- */
+.layout { display: grid; grid-template-columns: 264px minmax(0, 1fr); gap: 24px; padding-top: 16px; padding-bottom: 32px; }
+aside { position: sticky; top: calc(var(--hdr) + 16px); align-self: start; max-height: calc(100vh - var(--hdr) - 32px); overflow: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-l); padding: 4px 16px 16px; scrollbar-width: thin; overscroll-behavior: contain; }
+.sheet-h, .sheet-f .primary, .grab { display: none; }
+.fgroup { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.fgroup:last-of-type { border-bottom: 0; }
+.fgroup h3 { font-size: 12px; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; font-weight: 650; display: flex; align-items: center; gap: 6px; }
+[dir=ltr] .fgroup h3 { text-transform: uppercase; }
+.seg { display: flex; background: var(--chip); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { flex: 1; border: 0; background: none; min-height: 36px; padding: 0 6px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.1); font-weight: 650; }
+.opts { display: flex; flex-direction: column; gap: 1px; }
+.opt { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 8px; margin-inline: -8px; border-radius: var(--r-s); cursor: pointer; font-size: 14px; }
+.opt:hover { background: var(--chip); }
+.opt input { accent-color: var(--accent); margin: 0; width: 18px; height: 18px; flex: none; }
+.opt .c { margin-inline-start: auto; color: var(--faint); font-size: 12px; }
+.opt .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.range label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+.field, .range input, select.full { width: 100%; height: 40px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-s); padding: 0 10px; }
+.slider { position: relative; height: 32px; margin: 2px 6px 0; direction: ltr; }
+.slider input { position: absolute; inset: 0; width: 100%; pointer-events: none; -webkit-appearance: none; appearance: none; background: none; margin: 0; height: 32px; }
+.slider input::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--panel); border: 2px solid var(--accent); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.slider input::-moz-range-thumb { pointer-events: auto; width: 18px; height: 18px; border-radius: 50%; background: var(--panel); border: 2px solid var(--accent); cursor: pointer; }
+.slider .rail { position: absolute; left: 0; right: 0; top: 15px; height: 3px; background: var(--line); border-radius: 2px; }
+.slider .fill { position: absolute; top: 15px; height: 3px; background: var(--accent); border-radius: 2px; }
+.pctlabel { font-size: 13px; font-weight: 650; letter-spacing: 0; color: var(--ink); text-transform: none; }
+.sheet-f { padding-top: 12px; display: flex; gap: 8px; }
+.sheet-f .btn { flex: 1; justify-content: center; }
+
+/* ---------- brief, hubs, toolbar ---------- */
+.brief { margin: 0 0 16px; padding: 16px; border-radius: var(--r-l); background: var(--panel); border: 1px solid var(--line); min-height: 152px; }
+.brief-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.brief h2 { margin: 0; font-size: 17px; font-weight: 750; }
+.brief .subt { color: var(--muted); font-size: 13px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.st { background: var(--chip); border: 1px solid transparent; border-radius: var(--r-m); padding: 10px 12px; text-align: start; cursor: pointer; min-height: 68px;
+  display: flex; flex-direction: column; justify-content: center; gap: 2px; transition: border-color .16s var(--ease), background .16s var(--ease); }
+.st:hover { border-color: var(--line); background: var(--panel); }
+.st b { font-size: 21px; font-weight: 800; line-height: 1.15; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.st:first-child b { color: var(--accent); }
+.st span { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.st.sk { cursor: default; background: var(--chip); }
+.best { margin-top: 10px; font-size: 13.5px; color: var(--muted); cursor: pointer; border: 0; background: none; padding: 0; text-align: start; min-height: 32px;
+  display: block; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.best b { color: var(--ink); }
+.best:hover b { text-decoration: underline; }
+.hubbar { display: flex; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: none; margin: 0 0 12px; min-height: 40px; }
+.hubbar::-webkit-scrollbar { display: none; }
+.hubbar .lbl { font-size: 13px; color: var(--muted); white-space: nowrap; font-weight: 650; }
+.hubbar button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 0 14px; min-height: 36px; white-space: nowrap; cursor: pointer; font-size: 13.5px; }
+.hubbar button.on { background: var(--talabat); border-color: var(--talabat); color: #fff; font-weight: 650; }
+.hubbar button .c { opacity: .7; font-size: 12px; margin-inline-start: 6px; }
+html:not(.has-hubs) .hubbar:empty, html.loaded .hubbar:empty { display: none; }  /* reserved only until the first answer */
+html:not(.has-hubs) #hubGroup, html:not(.home) #brief { display: none; }
+.bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; min-height: var(--tap); }
+.count { font-weight: 750; font-size: 17px; white-space: nowrap; }
+.count small { color: var(--muted); font-weight: 500; font-size: 14px; }
+.bar .spacer { flex: 1; }
+.tbtn { position: relative; height: 40px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 0 14px; display: inline-flex;
+  align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 14px; white-space: nowrap; }
+.tbtn .n { position: static; }
+.sortw { position: relative; display: inline-flex; align-items: center; min-width: 0; flex: 0 1 auto; }
+.sortw svg { position: absolute; inset-inline-start: 12px; color: var(--muted); pointer-events: none; }
+.sortw select { height: 40px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding-inline: 34px 14px; max-width: 100%; text-overflow: ellipsis;
+  cursor: pointer; font-weight: 550; font-size: 14px; -webkit-appearance: none; appearance: none; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: -2px 0 12px; }
+.chips:empty { display: none; }
+.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 0 8px 0 12px; min-height: 32px; font-size: 13px; cursor: pointer;
+  display: inline-flex; gap: 6px; align-items: center; }
+[dir=rtl] .chip { padding: 0 12px 0 8px; }
+.chip:hover { border-color: var(--muted); }
+.chip .x { color: var(--faint); font-size: 16px; line-height: 1; }
+.chip.clear { border-style: dashed; color: var(--muted); }
+.filterbtn { display: none; }
+
+/* ---------- cards: price first, then the discount, then the name ---------- */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-l); overflow: hidden; display: flex; flex-direction: column;
+  position: relative; min-width: 0; transition: transform .18s var(--ease), box-shadow .18s var(--ease), border-color .18s var(--ease);
+  content-visibility: auto; contain-intrinsic-size: auto 360px; }
+.card:hover, .card:focus-within { transform: translateY(-2px); box-shadow: var(--lift); border-color: color-mix(in srgb, var(--muted) 30%, var(--line)); }
+.card.out { opacity: .6; }
+.card.is-new, .card.is-changed { box-shadow: 0 0 0 2px var(--accent); }
+.card.is-changed { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  .card.is-new { animation: slidein .22s var(--ease), ringfade 2.6s ease-out forwards; }
+  .card.is-changed { animation: ringfade 2.6s ease-out forwards; }
+  .card.is-changed .now { animation: flash 1.2s ease-out; }
+}
+@keyframes slidein { from { opacity: 0; transform: translateY(10px); } }
+@keyframes ringfade { 0%, 60% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@keyframes flash { 0% { background: color-mix(in srgb, var(--accent) 22%, transparent); } 100% { background: transparent; } }
+.pic { position: relative; aspect-ratio: 1 / 1; background: var(--pic); display: grid; place-items: center; overflow: hidden; }
+.pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 12% 12% 14%; }
+.pic .ph { font-size: 40px; font-weight: 750; color: var(--ph); }
+.off { position: absolute; top: 10px; inset-inline-start: 10px; color: var(--accent-ink); font-weight: 800; font-size: 13.5px; padding: 2px 8px; border-radius: 7px;
+  background: var(--accent); direction: ltr; unicode-bidi: isolate; letter-spacing: .01em; }
+.off.drop { background: var(--good); color: #fff; }
+.score { position: absolute; top: 8px; inset-inline-end: 8px; width: 34px; height: 34px; direction: ltr; }
+.score text { font-size: 12.5px; font-weight: 750; fill: #17161a; }
+.watch { position: absolute; bottom: 4px; inset-inline-end: 4px; width: var(--tap); height: var(--tap); border: 0; background: none; display: grid; place-items: center;
+  cursor: pointer; padding: 0; }
+.watch i { width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,.94); display: grid; place-items: center; color: #8c8992;
+  box-shadow: 0 1px 4px rgba(0,0,0,.16); transition: transform .16s var(--ease); }
+.watch:active i { transform: scale(.9); }
+.watch[aria-pressed="true"] i { color: #e0a100; }
+.watch[aria-pressed="true"] svg path { fill: currentColor; }
+.body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.priceline { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+.priceline > div { min-width: 0; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; row-gap: 0; }
+.now { font-size: 21px; font-weight: 800; letter-spacing: -.02em; white-space: nowrap; line-height: 1.2; border-radius: 4px; }
+.now small { font-size: 12px; font-weight: 650; color: var(--muted); letter-spacing: 0; }
+.was { color: var(--faint); text-decoration: line-through; font-size: 13px; white-space: nowrap; }
+.spark { width: 64px; height: 24px; flex: none; margin-inline-start: auto; direction: ltr; }
+.name { font-size: 13.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  min-height: 2.9em; text-decoration: none; color: var(--ink); }
+.name:hover { text-decoration: underline; text-decoration-color: var(--faint); }
+.name::after { content: ""; position: absolute; inset: 0; z-index: 0; }  /* the whole card opens the product */
+.watch, .cta, .off, .score { z-index: 1; }
+.tags { display: flex; gap: 4px; flex-wrap: wrap; min-height: 22px; }
+.tag { font-size: 11.5px; line-height: 20px; padding: 0 7px; border-radius: 6px; background: var(--chip); color: var(--muted); white-space: nowrap;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tag.good { background: var(--good-bg); color: var(--good); font-weight: 600; }
+.tag.warn { background: var(--warn-bg); color: var(--warn); }
+.tag.hot { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); font-weight: 600; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; line-height: 20px; padding: 0 8px; border-radius: 999px; white-space: nowrap; }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.good { background: var(--good-bg); color: var(--good); } .pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.muted { background: var(--chip); color: var(--muted); }
+.meta { font-size: 12px; color: var(--muted); display: flex; gap: 4px 10px; flex-wrap: wrap; align-items: center; }
+.meta .st-n { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; color: var(--ink); }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.unit { direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
+.cta { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--tap); text-decoration: none; border-radius: var(--r-m);
+  background: var(--chip); color: var(--ink); font-size: 13.5px; font-weight: 650; position: relative; transition: background .16s var(--ease); }
+.cta:hover { background: var(--ink); color: var(--bg); }
+.card .grow { flex: 1; min-height: 4px; }
+/* skeletons share the card's geometry, so nothing moves when the real ones arrive */
+.card.sk { pointer-events: none; content-visibility: visible; }
+.sk .pic, .sk .ln { background: linear-gradient(90deg, var(--chip) 25%, color-mix(in srgb, var(--chip) 40%, var(--panel)) 50%, var(--chip) 75%); background-size: 200% 100%; animation: sk 1.3s linear infinite; }
+.sk .ln { height: 14px; border-radius: 6px; } .sk .ln.p { height: 24px; width: 55%; } .sk .ln.s { width: 70%; } .sk .ln.b { height: var(--tap); margin-top: auto; border-radius: var(--r-m); }
+@keyframes sk { to { background-position: -200% 0; } }
+.empty { grid-column: 1 / -1; text-align: center; padding: 48px 16px; background: var(--panel); border: 1px dashed var(--line); border-radius: var(--r-l); }
+.empty .ico { width: 52px; height: 52px; border-radius: 50%; background: var(--chip); display: grid; place-items: center; margin: 0 auto 12px; color: var(--muted); }
+.empty h3 { margin: 0 0 6px; font-size: 17px; }
+.empty p { margin: 0 auto 16px; color: var(--muted); max-width: 46ch; font-size: 14px; }
+.empty .row { justify-content: center; }
+#more { height: 1px; }
+.morebusy { grid-column: 1 / -1; display: flex; justify-content: center; padding: 16px; color: var(--muted); font-size: 13px; }
+.newpill { position: fixed; top: calc(var(--hdr) + 10px); left: 50%; transform: translateX(-50%); z-index: 9; border: 0; border-radius: 999px; background: var(--accent);
+  color: var(--accent-ink); font-weight: 700; font-size: 14px; padding: 0 16px; min-height: 40px; box-shadow: 0 6px 20px rgba(0,0,0,.22); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; }
+@media (prefers-reduced-motion: no-preference) { .newpill { animation: drop .22s var(--ease); } }
+@keyframes drop { from { transform: translate(-50%, -12px); opacity: 0; } }
+
+/* ---------- buttons ---------- */
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: var(--r-m); padding: 0 16px; min-height: var(--tap); cursor: pointer; text-decoration: none;
+  font-size: 14px; font-weight: 600; display: inline-flex; gap: 8px; align-items: center; justify-content: center; white-space: nowrap; color: var(--ink); }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.05); }
+.btn.dark { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.small { min-height: 36px; padding: 0 12px; font-size: 13px; }
+
+/* ---------- dialogs ---------- */
+dialog { border: 1px solid var(--line); border-radius: var(--r-l); background: var(--panel); color: var(--ink); width: min(760px, calc(100vw - 32px));
+  max-height: min(880px, calc(100dvh - 48px)); padding: 0; overscroll-behavior: contain; }
+dialog::backdrop { background: var(--scrim); }
+@media (prefers-reduced-motion: no-preference) { dialog[open] { animation: pop .2s var(--ease); } }
+@keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.99); } }
+.dlg { padding: 20px 20px 0; position: relative; }
+.dlg > :last-child { margin-bottom: 20px; }
+.x { position: absolute; top: 10px; inset-inline-end: 10px; background: var(--chip); border: 0; border-radius: 50%; width: var(--tap); height: var(--tap); cursor: pointer;
+  color: var(--muted); display: grid; place-items: center; z-index: 2; }
+.x:hover { color: var(--ink); }
+.dh { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 16px; align-items: start; padding-inline-end: 44px; }
+.dh .img { aspect-ratio: 1; background: var(--pic); border-radius: var(--r-m); display: grid; place-items: center; border: 1px solid var(--line); overflow: hidden; position: relative; }
+.dh .img img { width: 88%; height: 88%; object-fit: contain; }
+.dh h2 { font-size: 17px; margin: 4px 0 8px; line-height: 1.45; font-weight: 650; }
+.dprice { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.bigprice { font-size: 28px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
+.bigprice small { font-size: 14px; color: var(--muted); font-weight: 650; letter-spacing: 0; }
+.dprice .off { position: static; }
+.verdict { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: var(--r-m); margin: 16px 0 0; background: var(--chip); }
+.verdict .pill { font-size: 13px; line-height: 26px; padding: 0 12px; flex: none; }
+.verdict span { font-size: 14px; }
+.note { margin: 10px 0 0; padding: 10px 14px; border-radius: var(--r-m); border: 1px dashed var(--line); font-size: 14px; }
+.why { margin: 10px 0 0; padding: 12px 14px; background: var(--chip); border-radius: var(--r-m); display: flex; gap: 14px; align-items: center; }
+.why .score { position: static; width: 52px; height: 52px; }
+.why ul { margin: 0; padding-inline-start: 18px; font-size: 14px; }
+h4 { margin: 20px 0 6px; font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .02em; }
+.chart { width: 100%; height: 200px; display: block; touch-action: pan-y; direction: ltr; }
+.chart .ln { fill: none; stroke: var(--accent); stroke-width: 2.2; vector-effect: non-scaling-stroke; }
+.chart .ar { fill: color-mix(in srgb, var(--accent) 10%, transparent); }
+.chart .ax { stroke: var(--line); }
+.chart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .hover line { stroke: var(--muted); stroke-dasharray: 3 3; }
+.chart .hover circle { fill: var(--accent); }
+.chart-sk { height: 200px; border-radius: var(--r-m); background: var(--chip); }
+.tip { font-size: 13px; color: var(--muted); min-height: 20px; }
+table.cmp { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.cmp td { padding: 8px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
+table.cmp td:last-child { text-align: end; }
+table.cmp .best { color: var(--good); font-weight: 700; }
+.alert { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 16px; font-size: 14px; padding: 12px 14px; border-radius: var(--r-m); border: 1px solid var(--line); }
+.alert label { flex: 1 1 100%; font-weight: 600; }
+.alert input { width: 120px; height: var(--tap); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-s); padding: 0 10px; }
+.actions { position: sticky; bottom: 0; z-index: 1; background: var(--panel); margin: 16px -20px 0; padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line); display: flex; gap: 8px; flex-wrap: wrap; }
+.actions .primary { flex: 1 1 220px; }
+.panel h2 { margin: 0 0 12px; font-size: 19px; padding-inline-end: 44px; line-height: 1.35; }
+.set { display: grid; gap: 2px; margin-top: 4px; }
+.set > label { display: flex; gap: 10px; align-items: center; font-size: 14px; min-height: var(--tap); flex-wrap: wrap; }
+.set input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; flex: none; }
+.set input[type=number] { width: 80px; height: 40px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-s); padding: 0 8px; }
+.set input[type=text] { width: 100%; height: var(--tap); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-s); padding: 0 10px; margin-top: 4px; }
+.set .grp { padding: 8px 0; }
+.pick { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.pick label { background: var(--chip); padding: 0 12px; min-height: 36px; border-radius: 999px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.pick label:has(input:checked) { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); color: var(--ink); }
+.pick input { accent-color: var(--accent); }
+.steps { padding-inline-start: 20px; line-height: 1.8; }
+.bk td:nth-child(2), .bk td:nth-child(3) { white-space: nowrap; }
+.qty { display: inline-flex; gap: 6px; align-items: center; }
+.qty button { width: 36px; height: 36px; border-radius: var(--r-s); border: 1px solid var(--line); background: var(--panel); cursor: pointer; font-size: 16px; }
+.menu { display: grid; gap: 4px; }
+.mi { display: flex; align-items: center; gap: 12px; min-height: 52px; border: 0; background: none; padding: 0 12px; border-radius: var(--r-m); cursor: pointer; font-size: 15px;
+  font-weight: 600; text-align: start; width: 100%; text-decoration: none; }
+.mi:hover { background: var(--chip); }
+.mi svg { color: var(--muted); }
+.mi small { margin-inline-start: auto; color: var(--muted); font-weight: 500; font-size: 13px; }
+.strow { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.strow .s { color: var(--muted); font-size: 12.5px; grid-column: 2 / -1; }
+
+.toasts { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 30; display: flex; flex-direction: column;
+  gap: 8px; width: min(440px, calc(100vw - 32px)); pointer-events: none; }
+.toast { background: var(--ink); color: var(--bg); padding: 12px 16px; border-radius: var(--r-m); font-size: 14px; box-shadow: 0 8px 28px rgba(0,0,0,.25); cursor: pointer; pointer-events: auto; }
+@media (prefers-reduced-motion: no-preference) { .toast { animation: up .2s var(--ease); } }
+@keyframes up { from { transform: translateY(10px); opacity: 0; } }
+
+.foot { color: var(--muted); font-size: 12.5px; text-align: center; padding: 32px 0 calc(16px + env(safe-area-inset-bottom)); line-height: 1.8; border-top: 1px solid var(--line); margin-top: 32px; }
+.foot nav { display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; }
+.foot nav a { min-height: var(--tap); display: inline-flex; align-items: center; padding: 0 10px; text-decoration: none; color: var(--ink); font-weight: 550; }
+.foot p { margin: 4px auto 0; max-width: 70ch; }
+
+@media (min-width: 1200px) { .grid { grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); gap: 14px; } }
+@media (min-width: 901px) and (pointer: fine) {
+  .seg button, .opt { min-height: 34px; }
+}
+/* ---------- phones and small tablets ---------- */
+@media (max-width: 900px) {
+  :root { --hdr: 60px; }
+  .wrap { padding: 0 12px; }
+  .top { gap: 2px; }
+  .brand .t, .dt { display: none; }
+  .ph-only { display: inline-flex; }
+  .search { margin-inline: 8px 4px; }
+  .kbd { display: none; }
+  .ib { min-width: var(--tap); padding: 0 6px; }
+  .layout { display: block; padding-top: 12px; }
+  aside { position: fixed; inset: auto 0 0 0; top: auto; max-height: 88dvh; z-index: 25; border-radius: var(--r-l) var(--r-l) 0 0; border: 0;
+    padding: 0 16px; transform: translateY(105%); visibility: hidden; transition: transform .22s var(--ease), visibility 0s .22s; box-shadow: var(--sheet); }
+  aside.open { transform: none; visibility: visible; transition: transform .22s var(--ease); }
+  .grab { display: block; width: 40px; height: 4px; background: var(--line); border-radius: 2px; margin: 8px auto 0; }
+  .sheet-h { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--panel); z-index: 2; min-height: 52px; }
+  .sheet-h b { font-size: 17px; }
+  .sheet-h .x { position: static; }
+  .sheet-f { position: sticky; bottom: 0; background: var(--panel); padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); z-index: 2; }
+  .sheet-f .primary { display: inline-flex; flex: 2; }
+  .seg button, .opt { min-height: var(--tap); }
+  /* every tap target at least 44 px on touch screens */
+  .chip { min-width: var(--tap); justify-content: center; }
+  .nav a, .chip, .hubbar button, .tbtn, .sortw select, .fresh, .stat, .pick label, .qty button, .btn.small, .best { min-height: var(--tap); }
+  .qty button { width: var(--tap); }
+  .hubbar { min-height: var(--tap); }
+  .tick { min-height: 32px; }
+  .scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 24; }
+  .filterbtn { display: inline-flex; }
+  .bar { position: sticky; top: var(--hdr); z-index: 8; background: var(--bg); margin: 0 -12px 10px; padding: 6px 12px; gap: 8px; }
+  .count { font-size: 15px; flex: none; } .count small { font-size: 13px; }
+  .bar .spacer { flex: 0 0 0; margin-inline-start: auto; }
+  .tbtn { flex: none; padding: 0 12px; }
+  .brief { padding: 14px; min-height: 0; }
+  .brief .subt { display: none; }
+  .stats { display: flex; overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px; scroll-snap-type: x proximity; }
+  .stats::-webkit-scrollbar { display: none; }
+  .st { flex: 0 0 auto; min-width: 128px; scroll-snap-align: start; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 10px; }
+  .body { padding: 8px 10px 10px; gap: 5px; }
+  .now { font-size: 19px; }
+  .spark { width: 46px; }
+  .score { width: 30px; height: 30px; }
+  .newpill { top: calc(var(--hdr) + 60px); }
+  dialog { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: var(--r-l) var(--r-l) 0 0; max-height: 92dvh; border-bottom: 0; }
+  @media (prefers-reduced-motion: no-preference) { dialog[open] { animation: rise .22s var(--ease); } }
+  .dlg { padding: 16px 16px 0; }
+  .actions { margin: 16px -16px 0; padding-inline: 16px; }
+  .dh { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; }
+  .bigprice { font-size: 24px; }
+  .statusline .stat .lng { display: none; }
+}
+@keyframes rise { from { transform: translateY(40px); opacity: .4; } }
+@media (max-width: 360px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .cta { font-size: 12.5px; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0s !important; animation-iteration-count: 1 !important; transition: none !important; scroll-behavior: auto !important; }
+  .ticker { height: auto; -webkit-mask-image: none; mask-image: none; }
+  .ticker-track { animation: none !important; padding-left: 0; overflow-x: auto; max-width: 100%; display: flex; }
+  .ring.run .fg { stroke-dashoffset: 0; }
+}
+</style>
+<script src="/i18n.js"></script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></g></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
+  <symbol id="i-basket" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9h17l-1.6 9.2a2 2 0 0 1-2 1.8H7.1a2 2 0 0 1-2-1.8z"/><path d="m8 9 3-5M16 9l-3-5M9 13v3M15 13v3"/></g></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></g></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></g></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></g></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></g></symbol>
+  <symbol id="i-sort" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M17 20V4M13.5 7.5 17 4l3.5 3.5"/></g></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></g></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.6 3.6 5.4 3.6 8.5s-1 5.9-3.6 8.5c-2.6-2.6-3.6-5.4-3.6-8.5S9.4 6.1 12 3.5z"/></g></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 5 12 2.5-6h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"><path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1 1 0 0 1 0 1.4l-7.3 7.3a1 1 0 0 1-1.4 0z"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/></g></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8M5 12.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-6.5"/></g></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.8 16a4.8 4.8 0 0 1 6.4 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/></g></symbol>
+</svg>
+<header class="hdr">
+  <div class="wrap top">
+    <a class="brand" href="/" aria-label="Live deals"><span class="mark"><svg width="20" height="20"><use href="#i-tag"/></svg><span class="pulse"></span></span><span class="t">Live deals</span></a>
+    <label class="search"><svg width="18" height="18"><use href="#i-search"/></svg>
+      <input type="search" id="q" placeholder="Try: milk under 50 at talabat · حفاضات أرخص للكيلو" aria-label="Search" autocomplete="off" enterkeyhint="search">
+      <span class="kbd" aria-hidden="true">/</span>
+      <button type="button" class="mic" id="mic" title="Search by voice" aria-label="Search by voice" hidden><svg width="20" height="20"><use href="#i-mic"/></svg></button></label>
+    <button class="ib" id="watchBtn" title="Watchlist" aria-label="Watchlist" aria-pressed="false"><svg width="22" height="22"><use href="#i-star"/></svg><span class="n" id="watchN" hidden>0</span></button>
+    <button class="ib" id="basketBtn" title="Basket" aria-label="Basket"><svg width="22" height="22"><use href="#i-basket"/></svg><span class="n" id="basketN" hidden>0</span></button>
+    <button class="ib dt" id="alertsBtn" title="Price-drop alerts" aria-label="Price-drop alerts"><svg width="22" height="22"><use href="#i-bell"/></svg></button>
+    <button class="ib dt" id="installBtn" title="Install the app" aria-label="Install the app" hidden><svg width="20" height="20"><use href="#i-down"/></svg><span>Install</span></button>
+    <button class="ib dt lang" id="langBtn" title="العربية" aria-label="Language">ع</button>
+    <button class="ib ph-only" id="moreBtn" title="More" aria-label="More"><svg width="22" height="22"><use href="#i-more"/></svg></button>
+  </div>
+</header>
+<div class="wrap sub">
+  <nav class="nav" id="nav" aria-label="Sections"><a href="/">Home</a><a href="/?deals=1&amp;sort=newest&amp;status=new">Just dropped</a><a href="/cats">Categories</a><a href="/stores">Stores</a><a href="/coupons">🎟️ Coupons</a><a href="/?recent=1">Recently viewed</a></nav>
+  <div class="interp" id="interp" hidden></div>
+  <div class="statusline">
+    <button class="fresh" id="fresh" title="Refresh now" aria-label="Refresh now"><svg class="ring" viewBox="0 0 16 16" aria-hidden="true"><circle class="bgc" cx="8" cy="8" r="6"/><circle class="fg" cx="8" cy="8" r="6"/></svg><span id="freshT">connecting…</span></button>
+    <button class="stat" id="status" title="Store status" aria-label="Store status"></button>
+  </div>
+</div>
+<div class="ticker" id="ticker"><div class="ticker-track" id="tickerTrack" hidden></div><span class="idle" id="tickerIdle">Watching every store for price changes…</span></div>
+
+<div class="wrap layout">
+  <aside id="filters" aria-label="Filters">
+    <div class="sheet-h"><b>Filters</b><button class="x" id="sheetX" aria-label="Close"><svg width="20" height="20"><use href="#i-x"/></svg></button></div>
+    <div class="fgroup"><h3>Show</h3>
+      <div class="seg" data-key="deals"><button data-v="1">Deals</button><button data-v="0">All products</button></div></div>
+    <div class="fgroup"><h3>Store</h3><div class="opts" id="fStores"><label class="opt"><input type="checkbox" value="talabat"> <span class="dot" style="background:var(--talabat)"></span>talabat mart<span class="c"></span></label><label class="opt"><input type="checkbox" value="amazon_eg"> <span class="dot" style="background:var(--amazon_eg)"></span>Amazon.eg<span class="c"></span></label><label class="opt"><input type="checkbox" value="breadfast"> <span class="dot" style="background:var(--breadfast)"></span>Breadfast<span class="c"></span></label><label class="opt"><input type="checkbox" value="jumia"> <span class="dot" style="background:var(--jumia)"></span>Jumia<span class="c"></span></label><label class="opt"><input type="checkbox" value="dream2000"> <span class="dot" style="background:var(--dream2000)"></span>Dream 2000<span class="c"></span></label><label class="opt"><input type="checkbox" value="kenzz"> <span class="dot" style="background:var(--kenzz)"></span>Kenzz<span class="c"></span></label><label class="opt"><input type="checkbox" value="raya"> <span class="dot" style="background:var(--raya)"></span>Raya Shop<span class="c"></span></label></div></div>
+    <div class="fgroup" id="hubGroup"><h3>talabat hub</h3><div class="opts" id="fHubs"></div></div>
+    <div class="fgroup"><h3>Discount type</h3>
+      <div class="seg" data-key="kind"><button data-v="">Any</button><button data-v="platform">Platform</button><button data-v="drop">Price drop</button></div>
+      <div class="meta" style="margin-top:8px;min-height:18px" id="kindCounts"></div></div>
+    <div class="fgroup"><h3>Discount <span class="pctlabel" id="pctLabel"></span></h3>
+      <div class="slider"><div class="rail"></div><div class="fill" id="pctFill"></div>
+        <input type="range" id="pmin" min="0" max="90" step="5" aria-label="Minimum discount">
+        <input type="range" id="pmax" min="0" max="90" step="5" aria-label="Maximum discount"></div></div>
+    <div class="fgroup"><h3>Availability</h3>
+      <div class="seg" data-key="stock"><button data-v="in">In stock</button><button data-v="out">Out</button><button data-v="all">All</button></div></div>
+    <div class="fgroup"><h3>Status</h3><div class="opts" id="fStatus">
+      <label class="opt" title="Hides discounts whose price never moves"><input type="checkbox" value="real"> Real deals only</label>
+      <label class="opt"><input type="checkbox" value="new"> Changed in the last 24 h</label>
+      <label class="opt"><input type="checkbox" value="lowest"> Lowest price in 90 days</label>
+      <label class="opt"><input type="checkbox" value="label"> Store event deals</label>
+      <label class="opt"><input type="checkbox" value="back"> Back in stock</label>
+      <label class="opt"><input type="checkbox" value="compare"> Sold in other stores too</label>
+      <label class="opt" title="A 'discount' whose price never moves: probably the normal price"><input type="checkbox" value="fake"> 🕵️ Fake discounts caught</label>
+      <label class="opt"><input type="checkbox" value="promo"> 🎟️ Extra off with a code</label>
+      <label class="opt"><input type="checkbox" value="soon"> ⏳ Sale due within 3 days</label>
+      <label class="opt"><input type="checkbox" id="fBest"> Cheapest across stores</label>
+      <label class="opt"><input type="checkbox" id="fWatch"> My watchlist</label>
+    </div></div>
+    <div class="fgroup"><h3>Category</h3><select class="full" id="fCat" aria-label="Category"><option value="">All categories</option></select></div>
+    <div class="fgroup"><h3>Price (EGP)</h3>
+      <div class="range"><label>From<input type="number" id="prmin" min="0" inputmode="decimal" placeholder="0"></label>
+        <label>To<input type="number" id="prmax" min="0" inputmode="decimal" placeholder="no limit"></label></div></div>
+    <div class="sheet-f"><button class="btn" id="reset">Reset filters</button><button class="btn primary" id="sheetDone">Show results</button></div>
+  </aside>
+
+  <main id="main">
+    <section class="brief" id="brief" aria-labelledby="briefH"><div class="brief-h"><h2 id="briefH">⚡ Today in 30 seconds</h2></div><div class="stats"><div class="st sk"></div><div class="st sk"></div><div class="st sk"></div><div class="st sk"></div><div class="st sk"></div><div class="st sk"></div></div><div class="best"></div></section>
+    <div class="hubbar" id="hubBar"></div>
+    <div class="bar" id="bar">
+      <button class="tbtn filterbtn" id="filterBtn" aria-label="Filters"><svg width="18" height="18"><use href="#i-sliders"/></svg><span>Filters</span><span class="n" id="filterN" hidden>0</span></button>
+      <span class="count" id="count" aria-live="polite"></span>
+      <span class="spacer"></span>
+      <label class="sortw"><svg width="16" height="16"><use href="#i-sort"/></svg><select id="sort" aria-label="Sort by">
+        <option value="score">Best deals first</option>
+        <option value="discount">Biggest discount %</option>
+        <option value="saving">Biggest saving (EGP)</option>
+        <option value="newest">Just changed</option>
+        <option value="drop">Biggest drop vs usual</option>
+        <option value="price">Price: low to high</option>
+        <option value="price_desc">Price: high to low</option>
+        <option value="unit">Price per kg / L / piece</option>
+        <option value="popular">Best sellers</option>
+        <option value="name">Name</option>
+      </select></label>
+    </div>
+    <div class="chips" id="activeChips"></div>
+    <div class="grid" id="grid" aria-busy="true"><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div></div>
+    <div id="more"></div>
+  </main>
+</div>
+<footer class="foot wrap"><nav aria-label="About this site"><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/contact">Contact</a></nav>
+  <p>Some links earn us a small commission from the store, at no extra cost to you. As an Amazon Associate we earn from qualifying purchases.</p></footer>
+
+<button class="newpill" id="newPill" hidden></button>
+<dialog id="dlg" aria-labelledby="dname"><div class="dlg" id="dbody"></div></dialog>
+<dialog id="panel" aria-labelledby="ptitle"><div class="dlg panel" id="pbody"></div></dialog>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+const T = s => window.I18N ? I18N.tr(s) : s;   // for text inside SVG, which the translator skips
+const AR = () => document.documentElement.lang === "ar";
+const ago = t => { if (!t) return "—"; const s = Math.max(0, Date.now() / 1000 - t);
+  return s < 60 ? Math.round(s) + " s ago" : s < 3600 ? Math.round(s / 60) + " min ago" : s < 86400 ? Math.round(s / 3600) + " h ago" : Math.round(s / 86400) + " d ago"; };
+const mins = s => s < 90 ? Math.round(s) + " s" : Math.round(s / 60) + " min";
+const isAndroid = /Android/i.test(navigator.userAgent), isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+const appHref = d => (isAndroid ? d.links?.android : isIOS ? d.links?.ios : d.links?.web) || d.links?.web || d.url || "#";
+const appLabel = { talabat: "talabat", amazon_eg: "Amazon", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz", raya: "Raya" };
+const icon = (id, s = 20) => `<svg width="${s}" height="${s}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+const dateLocale = () => AR() ? "ar-EG-u-nu-latn" : "en-GB";
+const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+
+document.querySelectorAll("#nav a").forEach(a => { const u = new URL(a.href);
+  if (u.pathname === location.pathname && u.search === location.search) a.classList.add("on"); });
+
+// ---------- watchlist and price alerts (kept in this browser) ----------
+function saveWatch() { store.set("watch", watch); if (typeof syncAlerts === "function") syncAlerts(); const n = Object.keys(watch).length;
+  $("watchN").hidden = !n; $("watchN").textContent = n; }
+function askNotify() { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); }
+function toggleWatch(d, btn) {
+  if (watch[d.id]) { delete watch[d.id]; toast("Removed from your watchlist."); }
+  else { watch[d.id] = { target: null, last: d.price, name: d.name, store: d.store };
+         toast(`Watching it. You'll hear when the price drops.`); askNotify(); }
+  saveWatch();
+  if (btn) btn.setAttribute("aria-pressed", String(!!watch[d.id]));
+  const c = cards.get(d.id); if (c) c.sig = sigOf(d);
+}
+async function checkWatch() {
+  const ids = Object.keys(watch);
+  if (!ids.length) return;
+  try {
+    const r = await (await fetch(`/api/deals?deals=0&stock=all&limit=500&fields=card&ids=${ids.join(",")}`)).json();
+    for (const d of r.items) {
+      const w = watch[d.id]; if (!w) continue;
+      const hitTarget = w.target && d.price <= w.target && (w.last == null || w.last > w.target);
+      const dropped = w.last != null && d.price < w.last;
+      if (hitTarget || dropped) notify(hitTarget ? "Target reached" : "Price drop", d.name,
+        `${fmt(w.last)} → ${fmt(d.price)} EGP at ${LABELS[d.store] || d.store}`, d.id);
+      w.last = d.price;
+    }
+    saveWatch();
+  } catch {}
+}
+function notify(kind, name, body, id) {
+  if (typeof chime === "function") chime();
+  toast(`<b>${esc(kind)}</b>: <span dir="auto">${esc(name)}</span><br><span>${esc(body)}</span>`, () => showProduct(id), true);
+  if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
+    const n = new Notification(`${T(kind)}: ${name}`, { body: T(body), icon: "/icon-192.png", tag: "deal-" + id });
+    n.onclick = () => { window.focus(); showProduct(id); };
+  }
+}
+function toast(html, onclick, raw, ms = 6000) {
+  const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); t.innerHTML = raw ? html : esc(html);
+  t.onclick = () => { if (onclick) onclick(); t.remove(); };
+  $("toasts").append(t); setTimeout(() => t.remove(), ms);
+  return t;
+}
+
+// ---------- filter panel ----------
+function syncControls() {
+  document.querySelectorAll(".seg").forEach(seg => seg.querySelectorAll("button").forEach(b =>
+    b.setAttribute("aria-pressed", String(String(F[seg.dataset.key]) === b.dataset.v))));
+  $("pmin").value = F.min; $("pmax").value = F.max; paintSlider();
+  $("fStatus").querySelectorAll("input[value]").forEach(i => i.checked = F.status.includes(i.value));
+  $("fBest").checked = F.best; $("fWatch").checked = F.watch;
+  $("prmin").value = F.pmin; $("prmax").value = F.pmax; $("sort").value = F.sort; $("q").value = F.q;
+  $("fStores").querySelectorAll("input").forEach(i => i.checked = F.stores.includes(i.value));
+  $("fCat").value = F.category;
+  $("watchBtn").setAttribute("aria-pressed", String(F.watch));
+}
+function paintSlider() {
+  const a = +$("pmin").value, b = +$("pmax").value;
+  $("pctFill").style.left = (a / 90 * 100) + "%"; $("pctFill").style.right = (100 - b / 90 * 100) + "%";
+  $("pctLabel").textContent = a === 0 && b === 90 ? "any" : b === 90 ? `${a}%+` : `${a}–${b}%`;
+}
+let facetSig = "";
+function renderFacets(r) {
+  const fs = r.facets?.store || {}, all = [...new Set([...Object.keys(LABELS), ...Object.keys(fs)])];
+  // one entry per hub: products saved before the hub had a name carry its number instead
+  const hubMap = {};
+  for (const [k, n] of Object.entries(r.facets?.hub || {})) { const [id, name] = k.split("|");
+    const h = hubMap[id] || (hubMap[id] = { name, n: 0 }); h.n += n; if (/^\d+$/.test(h.name) && !/^\d+$/.test(name)) h.name = name; }
+  const fh = Object.entries(hubMap).sort((a, b) => b[1].n - a[1].n).map(([id, h]) => [id, /^\d+$/.test(h.name) ? "Hub " + id : h.name, h.n]);
+  const fc = r.facets?.category || {}, cats = Object.keys(fc);
+  if (F.category && !cats.includes(F.category)) cats.unshift(F.category);
+  const k = r.facets?.kind || {};
+  const sig = JSON.stringify([all, fh.map(h => h[0] + h[1]), cats, F.stores, F.hubs, F.category]);
+  if (sig === facetSig) {  // same options: only the numbers move (keeps focus and scroll inside the panel)
+    all.forEach(s => { const c = $("fStores").querySelector(`input[value="${CSS.escape(s)}"] ~ .c`); if (c) c.textContent = int(fs[s] ?? 0); });
+    fh.forEach(([id, , n]) => { const c = $("fHubs").querySelector(`input[value="${CSS.escape(id)}"] ~ .c`); if (c) c.textContent = int(n);
+      const b = $("hubBar").querySelector(`button[data-h="${CSS.escape(id)}"] .c`); if (b) b.textContent = int(n); });
+    [...$("fCat").options].forEach(o => { if (o.value) o.textContent = `${o.value} (${int(fc[o.value] ?? 0)})`; });
+  } else {
+    facetSig = sig;
+    $("fStores").innerHTML = all.map(s => `<label class="opt"><input type="checkbox" value="${esc(s)}" ${F.stores.includes(s) ? "checked" : ""}>
+      <span class="dot" style="background:var(--${esc(s)},#888)"></span>${esc(r.labels?.[s] || LABELS[s] || s)}<span class="c">${int(fs[s] ?? 0)}</span></label>`).join("");
+    $("fHubs").innerHTML = fh.map(([id, name, n]) =>
+      `<label class="opt"><input type="checkbox" value="${esc(id)}" ${F.hubs.includes(id) ? "checked" : ""}> <span${/^Hub \d+$/.test(name) ? "" : ' dir="auto"'}>${esc(name)}</span><span class="c">${int(n)}</span></label>`).join("");
+    // the same choice as a bar above the deals: which talabat hubs' stock and prices to show (remembered)
+    const showBar = fh.length >= 2 || F.hubs.length > 0;
+    if (r.facets?.hub) { store.set("hubBarShown", showBar); document.documentElement.classList.toggle("has-hubs", showBar); }  // not before the answer
+    $("hubBar").innerHTML = !showBar ? "" : `<span class="lbl">📍 talabat hubs:</span><button data-h="" class="${F.hubs.length ? "" : "on"}">All hubs</button>` +
+      fh.map(([id, name, n]) => `<button data-h="${esc(id)}" class="${F.hubs.includes(id) ? "on" : ""}"><span${/^Hub \d+$/.test(name) ? "" : ' dir="auto"'}>${esc(name)}</span><span class="c">${int(n)}</span></button>`).join("");
+    $("fCat").innerHTML = `<option value="">All categories</option>` + cats.map(c =>
+      `<option value="${esc(c)}" ${c === F.category ? "selected" : ""}>${esc(c)} (${int(fc[c] ?? 0)})</option>`).join("");
+  }
+  $("kindCounts").textContent = `${k.platform || 0} platform discounts · ${k.drop || 0} price drops`;
+}
+$("fStores").addEventListener("change", () => { F.stores = [...$("fStores").querySelectorAll("input:checked")].map(x => x.value); apply(); });
+$("fHubs").addEventListener("change", () => setHubs([...$("fHubs").querySelectorAll("input:checked")].map(x => x.value)));
+$("hubBar").addEventListener("click", e => { const b = e.target.closest("button[data-h]"); if (!b) return; const id = b.dataset.h;
+  setHubs(!id ? [] : F.hubs.includes(id) ? F.hubs.filter(x => x !== id) : [...F.hubs, id]); });
+
+function activeChips() {
+  const chips = [];
+  if (F.deals === "0") chips.push(["All products", () => F.deals = "1"]);
+  F.stores.forEach(s => chips.push([LABELS[s] || s, () => F.stores = F.stores.filter(x => x !== s)]));
+  if (F.hubs.length) chips.push([`${F.hubs.length} talabat hub${F.hubs.length > 1 ? "s" : ""}`, () => { F.hubs = []; store.set("myHubs", []); }]);
+  if (F.kind) chips.push([F.kind === "platform" ? "Platform discount" : "Price drop", () => F.kind = ""]);
+  if (F.min || F.max < 90) chips.push([$("pctLabel").textContent + " off", () => { F.min = 0; F.max = 90; }]);
+  if (F.stock !== "in") chips.push([F.stock === "out" ? "Out of stock" : "Any availability", () => F.stock = "in"]);
+  const names = { real: "Real deals", new: "Changed 24 h", lowest: "Lowest 90 d", label: "Event deals", back: "Back in stock", compare: "In other stores",
+                  fake: "🕵️ Fake discounts caught", promo: "🎟️ Extra off with a code", soon: "⏳ Sale due within 3 days" };
+  F.status.forEach(s => chips.push([names[s] || s, () => F.status = F.status.filter(x => x !== s)]));
+  if (F.best) chips.push(["Cheapest across stores", () => F.best = false]);
+  if (F.watch) chips.push(["Watchlist", () => F.watch = false]);
+  if (F.recent) chips.push(["Recently viewed", () => F.recent = false]);
+  if (F.category) chips.push([F.category, () => F.category = "", true]);
+  if (F.q) chips.push([`“${F.q}”`, () => F.q = "", true]);
+  if (F.pmin || F.pmax) chips.push([`${F.pmin || 0}–${F.pmax || "∞"} EGP`, () => { F.pmin = ""; F.pmax = ""; }]);
+  $("activeChips").innerHTML = chips.map(([t, , raw], i) => `<button class="chip" data-i="${i}" aria-label="Remove filter: ${esc(t)}"><span${raw ? ' dir="auto"' : ""}>${esc(t)}</span><span class="x" aria-hidden="true">×</span></button>`).join("")
+    + (chips.length > 1 ? `<button class="chip clear" data-all="1">Clear all</button>` : "");
+  $("activeChips").querySelectorAll(".chip").forEach(b => b.onclick = () => {
+    if (b.dataset.all) resetFilters(); else { chips[+b.dataset.i][1](); syncControls(); apply(); } });
+  $("filterN").hidden = !chips.length; $("filterN").textContent = chips.length;
+}
+
+// ---------- cards ----------
+function sparkSVG(pts, w = 64, h = 24) {
+  if (!pts || pts.length < 2) return "";
+  const t0 = pts[0][0], t1 = pts[pts.length - 1][0], ps = pts.map(p => p[1]);
+  const lo = Math.min(...ps), hi = Math.max(...ps), span = hi - lo || 1;
+  const X = t => 2 + (w - 4) * (t - t0) / ((t1 - t0) || 1), Y = v => hi === lo ? h / 2 : 3 + (h - 6) * (1 - (v - lo) / span);
+  let d = `M${X(pts[0][0]).toFixed(1)} ${Y(pts[0][1]).toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) d += ` H${X(pts[i][0]).toFixed(1)} V${Y(pts[i][1]).toFixed(1)}`;
+  const first = ps[0], last = ps[ps.length - 1];
+  const col = last < first ? "var(--good)" : last > first ? "var(--accent)" : "var(--faint)";
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d}" fill="none" stroke="${col}" stroke-width="1.8"/>
+    <circle cx="${X(t1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="2.4" fill="${col}"/></svg>`;
+}
+function scoreSVG(s) {
+  const r = 15, c = 2 * Math.PI * r, col = s >= 70 ? "#1f9d5c" : s >= 40 ? "#e0a100" : "#b9b4aa";
+  return `<svg class="score" viewBox="0 0 38 38" role="img" aria-label="Deal score ${s} of 100">
+    <circle cx="19" cy="19" r="18" fill="rgba(255,255,255,.96)"/>
+    <circle cx="19" cy="19" r="${r}" fill="none" stroke="#ece9e2" stroke-width="3"/>
+    <circle cx="19" cy="19" r="${r}" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${(c * s / 100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 19 19)"/>
+    <text x="19" y="23.5" text-anchor="middle">${s}</text></svg>`;
+}
+function verdictPill(d) {
+  if (!d.verdict || d.verdict.label === "Fair price" || d.verdict.label === "Out of stock") return "";
+  return `<span class="pill ${esc(d.verdict.tone || "muted")}" title="${esc(d.verdict.why)}">${esc(d.verdict.label)}</span>`;
+}
+function tagsFor(d) {
+  const t = [];
+  if (d.deal_label) t.push(`<span class="tag hot" dir="auto">${esc(d.deal_label)}</span>`);
+  if (d.flags.includes("lowest")) t.push('<span class="tag good">lowest in 90 days</span>');
+  if (d.flags.includes("new")) t.push(d.prev_price != null && d.price > d.prev_price
+    ? `<span class="tag warn" data-ago="${d.since}" data-pre="went up">went up ${ago(d.since)}</span>` : `<span class="tag" data-ago="${d.since}" data-pre="dropped">dropped ${ago(d.since)}</span>`);
+  if (d.flags.includes("rose")) t.push(`<span class="tag warn">was ${fmt(d.recent_low)} lately</span>`);
+  if (d.flags.includes("back")) t.push('<span class="tag good">back in stock</span>');
+  if (d.cheapest && d.matches?.length) t.push('<span class="tag good">cheapest of all stores</span>');
+  else if (d.matches?.length) { const m = d.matches.find(x => x.in_stock && x.price < d.price);
+    if (m) t.push(`<span class="tag warn">${fmt(m.price)} at ${esc(LABELS[m.store] || m.store)}</span>`); }
+  if (d.flags.includes("steady")) t.push('<span class="tag warn">discount never moves</span>');
+  if (d.flags.includes("inflated")) t.push('<span class="tag warn">⚠️ "was" price looks inflated</span>');
+  if (d.promo_code) t.push(`<span class="tag hot" title="Code">🎟️ <span data-noi18n>${esc(d.promo_code)}</span>: ${fmt(d.promo_price)}</span>`);
+  if (d.rhythm && d.rhythm.next_in_days != null && d.rhythm.next_in_days <= 3) t.push(`<span class="tag warn">⏳ sale due soon</span>`);
+  if (!d.in_stock) t.push('<span class="tag">out of stock</span>');
+  return t;
+}
+const initial = n => esc((n || "?").trim()[0] || "?");
+// the fields a card shows: when none of them moved, the card is left alone
+function sigOf(d) {
+  return JSON.stringify([d.name, d.image, d.price, d.original_price, d.usual_price, d.discount_pct, d.kind, d.saving, d.flags, d.deal_label, d.score,
+    d.since, d.prev_price, d.recent_low, d.in_stock, d.unit_text, d.hub_name, d.cheapest, d.promo_code, d.promo_price,
+    d.verdict && [d.verdict.label, d.verdict.tone, d.verdict.why], (d.matches || []).map(m => [m.store, m.price, m.in_stock]),
+    d.rhythm && d.rhythm.next_in_days, d.spark && d.spark.length, d.spark && d.spark[d.spark.length - 1], appHref(d), !!watch[d.id]]);
+}
+function card(d, cls = "", eager = false) {
+  const off = d.discount_pct > 0 ? `<span class="off ${d.kind === "drop" ? "drop" : ""}" title="${d.kind === "drop" ? "under its usual price" : "the store's own discount"}">−${Math.round(d.discount_pct)}%</span>` : "";
+  const was = d.kind === "platform" && d.original_price > d.price ? `<s class="was">${fmt(d.original_price)}</s>` : "";
+  const tags = tagsFor(d).slice(0, 2).join("");
+  const meta = [`<span class="st-n"><span class="dot" style="background:var(--${esc(d.store)},#555)"></span>${esc(LABELS[d.store] || d.store)}</span>`,
+    d.hub_name ? `<span title="talabat hub">📍 <span dir="auto">${esc(d.hub_name)}</span></span>` : "",
+    d.kind === "drop" && d.usual_price ? `<span>usually ${fmt(d.usual_price)}</span>` : "",
+    d.saving > 0 ? `<span>save ${fmt(d.saving)}</span>` : "", d.unit_text ? `<span class="unit">${esc(d.unit_text)}</span>` : ""].join("");
+  return `<article class="card${d.in_stock ? "" : " out"}${cls ? " " + cls : ""}" data-id="${d.id}">
+    <div class="pic">${d.image ? `<img ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async" width="240" height="240" src="${esc(d.image)}" alt="" data-i="${initial(d.name)}">` : `<span class="ph" aria-hidden="true">${initial(d.name)}</span>`}
+      ${off}${d.discount_pct > 0 && d.score != null ? scoreSVG(d.score) : ""}
+      <button class="watch" aria-label="Watch this price" aria-pressed="${!!watch[d.id]}" data-watch><i>${icon("star", 18)}</i></button></div>
+    <div class="body">
+      <div class="priceline"><div><span class="now">${fmt(d.price)} <small>EGP</small></span>${was}</div>${sparkSVG(d.spark)}</div>
+      <a class="name" href="/p/${d.id}" dir="auto" data-quick>${esc(d.name)}</a>
+      <div class="tags">${verdictPill(d)}${tags}</div>
+      <div class="meta">${meta}</div>
+      <span class="grow"></span>
+      <a class="cta" href="${esc(appHref(d))}" target="_blank" rel="noopener" data-open>Open in ${esc(appLabel[d.store] || "store")} ↗</a>
+    </div></article>`;
+}
+const skeleton = n => Array.from({ length: n }, () => `<div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div>`).join("");
+// a picture that fails to load becomes the product's first letter
+document.addEventListener("error", e => { const img = e.target;
+  if (img.tagName === "IMG" && img.dataset.i) { const s = document.createElement("span"); s.className = "ph"; s.textContent = img.dataset.i; img.replaceWith(s); }
+}, true);
+
+// ---------- the list on screen ----------
+let items = [], total = 0, gen = 1, ctrl = BOOT.ctrl, moreCtrl = null, loadingMore = false, pending = null, viewV = null;
+let lastStatus = [], lastChanges = 0, shownFrom = null, lastData = null, netLoaded = false;
+const cards = new Map();   // id -> {el, sig}
+function emptyState() {
+  const anyFilter = !isHome() && !F.watch && !F.recent;
+  const [h, p, btns] = F.watch ? ["Your watchlist is empty", "Your watchlist is empty: tap ★ on any product to follow its price.", `<a class="btn primary" href="/">Browse deals</a>`]
+    : F.recent ? ["Nothing viewed yet", "Products you open appear here, so you can pick up where you left off.", `<a class="btn primary" href="/">Browse deals</a>`]
+    : !lastStatus.length ? ["Starting up", "Nothing matches these filters yet. The first sweep of each store takes about 15 minutes, and price-drop deals need a few days of history.", `<button class="btn" data-act="retry">Try again</button>`]
+    : ["Nothing matches these filters", "Try removing a filter or two, or search for something broader.",
+       (F.q ? `<button class="btn" data-act="clearq">Clear the search</button>` : "") + (anyFilter ? `<button class="btn primary" data-act="reset">Reset filters</button>` : "")];
+  return `<div class="empty"><div class="ico">${icon(F.watch ? "star" : "search", 24)}</div><h3>${h}</h3><p>${p}</p><div class="row">${btns}</div></div>`;
+}
+function errorState(offline) {
+  return `<div class="empty"><div class="ico">${icon("wifi", 24)}</div><h3>${offline ? "You're offline" : "Can't reach the server"}</h3>
+    <p>${offline ? "Prices will load as soon as you're back online." : "Check your connection. We'll keep trying every 30 seconds."}</p>
+    <div class="row"><button class="btn primary" data-act="retry">Try again</button></div></div>`;
+}
+$("grid").addEventListener("click", e => {
+  const act = e.target.closest("[data-act]");
+  if (act) { const a = act.dataset.act; if (a === "reset") resetFilters(); else if (a === "clearq") { F.q = ""; syncControls(); apply(); } else loadView(); return; }
+  const c = e.target.closest(".card"); if (!c || c.classList.contains("sk")) return;
+  const id = +c.dataset.id, d = items.find(x => x.id === id); if (!d) return;
+  const w = e.target.closest("[data-watch]");
+  if (w) { e.preventDefault(); toggleWatch(d, w); return; }
+  if (e.target.closest("[data-open]")) return;  // the link opens the store's app at this product
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;  // new tab: the product page
+  e.preventDefault(); showProduct(id, d);
+});
+function setCount() {
+  $("count").innerHTML = `${int(total)} <small>${F.deals === "1" && !F.watch && !F.recent ? (total === 1 ? "deal" : "deals") : "products"}</small>`;
+  $("sheetDone").textContent = `Show ${int(total)} results`;
+}
+function renderMeta(r) {
+  if (r.status) lastStatus = r.status;
+  if (r.changes_last_hour != null) lastChanges = r.changes_last_hour;
+  renderStatus(); renderFacets(r); total = r.total; window.lastFacets = r.facets; setCount();
+}
+// a whole new list: a first load or another filter
+function renderList(r) {
+  lastData = r; renderMeta(r); document.documentElement.classList.add("loaded");
+  items = r.items; cards.clear(); pending = null; updatePill();
+  const g = $("grid");
+  g.innerHTML = items.length ? items.map((d, i) => card(d, "", i < 4)).join("") : emptyState();
+  for (const el of g.children) if (el.dataset.id) { const id = +el.dataset.id; cards.set(id, { el, sig: sigOf(items.find(x => x.id === id)) }); }
+  g.setAttribute("aria-busy", "false");
+}
+function makeCard(d, cls) { const t = document.createElement("template"); t.innerHTML = card(d, cls).trim(); return t.content.firstElementChild; }
+function flag(el, cls) { el.classList.add(cls); setTimeout(() => el.classList.remove(cls), 2700); }
+// patch, don't redraw: same id and same fields = same element
+function reconcile(next, highlight) {
+  const g = $("grid"), had = new Set(items.map(d => d.id));
+  if (!next.length) { renderList({ ...lastData, items: next }); return; }
+  if (!items.length) g.innerHTML = "";
+  const want = [];
+  for (const d of next) {
+    const sig = sigOf(d), c = cards.get(d.id);
+    if (c && c.sig === sig) { want.push(c.el); continue; }
+    const el = makeCard(d);
+    if (c) { c.el.replaceWith(el); if (highlight) flag(el, "is-changed"); }
+    else if (highlight && had.size) flag(el, "is-new");
+    cards.set(d.id, { el, sig }); want.push(el);
+  }
+  const keep = new Set(want);
+  for (const el of [...g.children]) if (!keep.has(el)) { el.remove(); if (el.dataset.id) cards.delete(+el.dataset.id); }
+  let ref = g.firstElementChild;
+  for (const el of want) { if (el !== ref) g.insertBefore(el, ref); else ref = ref.nextElementSibling; }
+  items = next;
+}
+// scrolled down: change what changed where it is, keep the rest for later
+function patchInPlace(next) {
+  const byId = new Map(next.map(d => [d.id, d]));
+  items = items.map(old => { const d = byId.get(old.id); if (!d) return old;
+    const c = cards.get(d.id), sig = sigOf(d);
+    if (c && c.sig !== sig) { const el = makeCard(d); c.el.replaceWith(el); flag(el, "is-changed"); cards.set(d.id, { el, sig }); }
+    return d; });
+}
+const atTop = () => window.scrollY < Math.max(200, $("grid").offsetTop - 80);
+function merge(next) {
+  const nextIds = new Set(next.map(d => d.id));
+  const tail = items.slice(next.length).filter(d => !nextIds.has(d.id));
+  const full = next.concat(tail);
+  if (atTop()) { reconcile(full, true); pending = null; }
+  else { patchInPlace(full); pending = full; }
+  updatePill();
+}
+function updatePill() {
+  const have = new Set(items.map(d => d.id));
+  const n = pending ? pending.slice(0, Math.max(PAGE, items.length)).filter(d => !have.has(d.id)).length : 0;
+  $("newPill").hidden = !n;
+  if (n) $("newPill").textContent = `${n} new deal${n === 1 ? "" : "s"} ↑`;
+}
+$("newPill").onclick = () => {
+  window.scrollTo({ top: 0, behavior: reduced.matches ? "auto" : "smooth" });
+  if (pending) { reconcile(pending, true); pending = null; } updatePill();
+};
+let scrollRAF = 0;
+addEventListener("scroll", () => { if (!pending || scrollRAF) return; scrollRAF = requestAnimationFrame(() => { scrollRAF = 0;
+  if (pending && atTop()) { reconcile(pending, true); pending = null; updatePill(); } }); }, { passive: true });
+
+// a filter change: cancel what's in flight, show the shape of the answer at once
+async function loadView() {
+  ctrl?.abort(); moreCtrl?.abort(); loadingMore = false;
+  ctrl = new AbortController(); const my = ++gen, signal = ctrl.signal;
+  const qs = params(0, PAGE), hit = VIEWS.get(qs.toString());
+  if (hit) renderList(hit.data);   // seen this view a moment ago: show it now, check it below
+  else { $("grid").innerHTML = skeleton(8); $("grid").setAttribute("aria-busy", "true"); items = []; cards.clear(); }
+  try {
+    const { data, same } = await getView(qs, signal, isHome());
+    if (my !== gen) return;
+    if (!hit) renderList(data); else if (!same) { lastData = data; renderMeta(data); reconcile(data.items, false); }
+    viewV = data.v ?? viewV; netLoaded = true; setError(false);
+  } catch (e) {
+    if (e.name === "AbortError" || my !== gen) return;
+    if (!hit) { $("grid").innerHTML = errorState(!navigator.onLine); $("grid").setAttribute("aria-busy", "false"); }
+    setError(true);
+  }
+}
+async function loadMore() {
+  if (loadingMore || !items.length || items.length >= total) return;
+  loadingMore = true; moreCtrl = new AbortController(); const my = gen;
+  $("grid").insertAdjacentHTML("beforeend", skeleton(4));
+  try {
+    const { data } = await getView(params(items.length, PAGE), moreCtrl.signal);
+    if (my !== gen) return;
+    const have = new Set(items.map(d => d.id)), add = data.items.filter(d => !have.has(d.id));
+    $("grid").querySelectorAll(".sk").forEach(x => x.remove());
+    const frag = document.createDocumentFragment();
+    for (const d of add) { const el = makeCard(d); cards.set(d.id, { el, sig: sigOf(d) }); frag.append(el); }
+    $("grid").append(frag); items = items.concat(add); total = data.total; setCount();
+  } catch { $("grid").querySelectorAll(".sk").forEach(x => x.remove()); }
+  finally { if (my === gen) loadingMore = false; }
+}
+new IntersectionObserver(es => { if (es[0].isIntersecting) loadMore(); }, { rootMargin: "900px" }).observe($("more"));
+// the same view again (a new catalogue version, or the old-server fallback): only what changed moves
+let refreshing = false;
+async function refreshView() {
+  if (refreshing || !items.length && !$("grid").querySelector(".empty")) return false;
+  refreshing = true; const my = gen;
+  try {
+    const n = items.length <= PAGE ? PAGE : Math.min(items.length, 240);
+    const { data, same } = await getView(params(0, n), ctrl.signal, isHome() && n === PAGE);
+    if (my !== gen || same) return false;
+    viewV = data.v ?? viewV; netLoaded = true; lastData = data; renderMeta(data);
+    if (!items.length) { if (data.items.length) renderList(data); return data.items.length > 0; }
+    const before = items.slice(0, data.items.length).map(d => d.id + (cards.get(d.id)?.sig || "")).join();
+    if (data.items.map(d => d.id + sigOf(d)).join() === before) return false;   // an old server without ETags: same list
+    merge(data.items); return true;
+  } catch (e) { if (e.name !== "AbortError") throw e; return false; }
+  finally { refreshing = false; }
+}
+function apply() { writeURL(); activeChips(); showUnderstood(); loadView(); showBrief(); }
+
+// ---------- freshness: one quiet line ----------
+let lastFresh = 0, errState = false, offState = !navigator.onLine;
+function renderStatus() {
+  const live = lastStatus.filter(s => s.live).length, paused = lastStatus.filter(s => s.paused_until).length;
+  const st = $("status");
+  st.innerHTML = !lastStatus.length ? "starting: the first prices arrive within a minute"
+    : `${int(lastChanges)} price changes in the last hour<span class="lng"> · ${lastStatus.length} stores${paused ? ` · ${paused} paused` : ""}</span>`;
+}
+function markFresh() { lastFresh = Date.now(); const r = $("fresh").querySelector(".ring"); r.classList.remove("run"); void r.getBoundingClientRect(); r.classList.add("run"); tickFresh(); }
+function setError(on) { errState = on; tickFresh(); }
+function tickFresh() {
+  const b = $("fresh"), t = $("freshT");
+  b.classList.toggle("err", errState && !offState); b.classList.toggle("off", offState);
+  const s = offState ? (lastFresh ? "offline · saved prices" : "offline") : errState ? "can't reach the server, retrying…"
+    : !lastFresh ? (shownFrom === "cache" ? "saved prices · updating…" : "connecting…")
+    : `updated ${ago(lastFresh / 1000)}`;
+  if (t.textContent !== s && t.dataset.raw !== s) { t.dataset.raw = s; t.textContent = s; }
+}
+setInterval(() => { if (!document.hidden) { tickFresh(); tickAgo(); } }, 1000);
+let agoTick = 0;
+function tickAgo() {  // "dropped 3 min ago" stays true without redrawing the cards
+  if (++agoTick % 30) return;
+  document.querySelectorAll("#grid [data-ago]").forEach(el => { const s = `${el.dataset.pre} ${ago(+el.dataset.ago)}`;
+    if (el.dataset.raw !== s) { el.dataset.raw = s; el.textContent = s; } });
+}
+$("fresh").onclick = () => pulse(true);
+$("status").onclick = () => {
+  panel(`<h2 id="ptitle">Store status</h2><p class="tip">${int(lastChanges)} price changes in the last hour</p>` + (lastStatus.length ? lastStatus.map(s => {
+    const state = s.paused_until ? `paused, back in ${mins(s.paused_until - Date.now() / 1000)}` : s.live ? (s.last_change ? `changed ${ago(s.last_change)}` : "watching") : ago(s.updated);
+    return `<div class="strow"><span class="dot" style="background:var(--${esc(s.store)},#888)"></span><b>${esc(s.label)}</b><span class="num">${int(s.products)}</span>
+      <span class="s">${esc(state)}${s.cycle_secs ? ` · full sweep ${mins(s.cycle_secs)}` : s.live ? " · first sweep" : ""}</span></div>`; }).join("")
+    : `<p>starting: the first prices arrive within a minute</p>`));
+};
+
+// ---------- the one loop: every 30 s ask /api/pulse; only a new version costs more ----------
+let V = null, mode = "pulse", pulseTimer = 0, pulsing = false, ticks = 0;
+const EVERY = 30000;
+function schedule() { clearTimeout(pulseTimer); if (!document.hidden && navigator.onLine) pulseTimer = setTimeout(pulse, EVERY); }
+async function pulse(manual) {
+  clearTimeout(pulseTimer);
+  if (pulsing || document.hidden) return;
+  if (!navigator.onLine) { offState = true; tickFresh(); return; }
+  pulsing = true; offState = false;
+  try {
+    if (mode === "pulse") {
+      const r = await fetch("/api/pulse", { cache: "no-store" });
+      if (r.status === 404) { mode = "fallback"; pulsing = false; return pulse(manual); }   // an older server
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const p = await r.json();
+      if (p.status) lastStatus = p.status;
+      if (p.changes_last_hour != null) lastChanges = p.changes_last_hour;
+      renderStatus();
+      if (p.brief) briefNumbers(p.brief);
+      const changed = V == null ? (viewV != null && p.v !== viewV) : p.v !== V;
+      V = p.v;
+      if (changed || !netLoaded) await onNewVersion();   // or the list never came from the network yet
+    } else {
+      ticks++;
+      const changed = await refreshView();
+      if (changed || ticks % 2 === 0) loadTicker();
+      if (ticks % 2 === 0) { checkWatch(); if (isHome()) loadBrief(); }
+    }
+    markFresh(); setError(false);
+  } catch (e) { setError(true); }
+  finally { pulsing = false; schedule(); }
+}
+async function onNewVersion() {
+  await refreshView();
+  loadTicker(); checkWatch();
+  if (isHome() && !$("brief").hidden) loadBrief();   // the "biggest saving" line; the numbers came with the pulse
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden) clearTimeout(pulseTimer); else pulse(); });
+addEventListener("online", () => { offState = false; pulse(); });
+addEventListener("offline", () => { offState = true; clearTimeout(pulseTimer); tickFresh(); });
+
+// ---------- ticker ----------
+let tickerSig = "";
+async function loadTicker() {
+  try {
+    const r = await (await fetch("/api/changes?limit=24")).json();
+    const ch = (r.changes || []).filter(c => c.before != null && c.before !== c.price);
+    const sig = JSON.stringify(ch.map(c => [c.id, c.price, c.at]));
+    if (sig === tickerSig) return; tickerSig = sig;
+    $("tickerTrack").hidden = !ch.length; $("tickerIdle").hidden = !!ch.length;
+    if (!ch.length) return;
+    $("tickerTrack").innerHTML = ch.map(c => { const down = c.price < c.before;
+      return `<button class="tick" data-id="${c.id}"><b dir="auto">${esc(c.name.slice(0, 42))}</b> <span class="pair">${fmt(c.before)} → <span class="${down ? "down" : "up"}">${fmt(c.price)} ${down ? "▼" : "▲"}</span></span> · ${esc(c.label)} · ${ago(c.at)}</button>`;
+    }).join("");
+    $("tickerTrack").style.animationDuration = Math.max(40, ch.length * 6) + "s";
+  } catch {}
+}
+$("tickerTrack").addEventListener("click", e => { const t = e.target.closest(".tick"); if (t) showProduct(+t.dataset.id); });
+
+// ---------- today in 30 seconds (the home page, before any filter) ----------
+const BRIEF_KEYS = [["dropped_24h", "price drops in 24 h", "new"], ["record_lows", "lowest price in 90 days", "lowest"], ["fake", "fake discounts caught", "fake"],
+                    ["soon", "sales due within 3 days", "soon"], ["promo", "extra off with a code", "promo"], ["deals", "real deals right now", "real"]];
+let briefData = null;
+function showBrief() {
+  const on = isHome();
+  document.documentElement.classList.toggle("home", on);
+  if (!on) { $("brief").hidden = true; return; }
+  if (!briefData) { $("brief").hidden = false; $("brief").innerHTML = `<div class="brief-h"><h2 id="briefH">⚡ Today in 30 seconds</h2></div><div class="stats">${'<div class="st sk"></div>'.repeat(6)}</div><div class="best"></div>`; return; }
+  renderBrief(briefData);
+}
+function renderBrief(b) {
+  briefData = b;
+  if (!isHome()) return;
+  if (!b || !b.deals) { $("brief").hidden = true; return; }
+  const tiles = BRIEF_KEYS.filter(([k]) => k === "dropped_24h" || k === "deals" || b[k]);
+  const best = b.biggest_saving;
+  $("brief").innerHTML = `<div class="brief-h"><h2 id="briefH">⚡ Today in 30 seconds</h2><span class="subt">What the stores changed while you weren't looking</span></div>
+    <div class="stats">${tiles.map(([k, label, act]) => `<button class="st" data-act="${act}" data-k="${k}"><b>${int(b[k])}</b><span>${label}</span></button>`).join("")}</div>
+    ${best ? `<button class="best" data-id="${best.id}">💰 Biggest saving now: <b dir="auto">${esc(best.name.slice(0, 60))}</b> · save ${fmt(best.saving)} EGP</button>` : ""}`;
+  $("brief").hidden = false;
+}
+function briefNumbers(nb) {  // the pulse carries the numbers: change the digits, not the layout
+  if (!briefData) return;
+  const shownKeys = [...$("brief").querySelectorAll(".st[data-k]")].map(x => x.dataset.k).join();
+  const merged = { ...briefData, ...nb };
+  const wantKeys = BRIEF_KEYS.filter(([k]) => k === "dropped_24h" || k === "deals" || merged[k]).map(x => x[0]).join();
+  if (shownKeys !== wantKeys) return renderBrief(merged);
+  briefData = merged;
+  $("brief").querySelectorAll(".st[data-k]").forEach(x => { const s = int(merged[x.dataset.k]); const b = x.querySelector("b"); if (b.textContent !== s) b.textContent = s; });
+}
+async function loadBrief() {
+  try { const r = await fetch("/api/brief"); if (r.ok) renderBrief(await r.json()); } catch {}
+}
+$("brief").addEventListener("click", e => {
+  const x = e.target.closest(".st[data-act]"), bs = e.target.closest(".best");
+  if (bs) return showProduct(+bs.dataset.id);
+  if (!x) return;
+  F.status = [x.dataset.act]; if (x.dataset.act === "soon") F.deals = "0";
+  F.sort = x.dataset.act === "new" ? "newest" : "score"; syncControls(); apply();
+});
+
+// ---------- product detail: opens at once from the card, fills in when the history arrives ----------
+let dlgId = 0;
+function dialogHTML(id, p, d, h, matches) {
+  const w = watch[id], full = h != null;
+  const rows = d && full ? [d, ...(matches || [])].sort((a, b) => a.price - b.price) : [];
+  const link = d && d.links ? appHref(d) : p.url || "#";
+  const browserLink = d && d.links && p.store !== "talabat" ? (isAndroid ? d.links.browser : d.links.web) : null;
+  const off = d && d.discount_pct > 0 ? `<span class="off ${d.kind === "drop" ? "drop" : ""}">−${Math.round(d.discount_pct)}%</span>` : "";
+  return `<button class="x" aria-label="Close" data-close>${icon("x")}</button>
+    <div class="dh"><div class="img">${p.image ? `<img src="${esc(p.image)}" alt="" decoding="async" data-i="${initial(p.name)}">` : `<span class="ph">${initial(p.name)}</span>`}</div>
+      <div><div class="meta"><span class="st-n"><span class="dot" style="background:var(--${esc(p.store)},#555)"></span>${esc(LABELS[p.store] || p.store)}</span>${p.category ? `<span>${esc(p.category)}</span>` : ""}${p.first_seen ? `<span>tracked ${ago(p.first_seen).replace(" ago", "")}</span>` : ""}</div>
+        <h2 id="dname" dir="auto">${esc(p.name)}</h2>
+        <div class="dprice"><span class="bigprice">${fmt(p.price)} <small>EGP</small></span>
+          ${d && d.kind === "platform" && d.original_price > p.price ? `<s class="was">${fmt(d.original_price)}</s>` : ""}${off}
+          ${d && d.unit_text ? `<span class="meta unit">${esc(d.unit_text)}</span>` : ""}</div>
+        <div class="tags" style="margin-top:8px">${d ? tagsFor(d).join("") : ""}</div></div></div>
+    ${d && d.verdict ? `<div class="verdict"><span class="pill ${esc(d.verdict.tone || "muted")}">${esc(d.verdict.label)}</span><span>${esc(d.verdict.why)}</span></div>` : ""}
+    ${d && d.rhythm ? `<div class="note">⏳ <b>Sale rhythm</b><br>${esc(d.rhythm.text)}</div>` : ""}
+    ${d && d.promo_code ? `<div class="note">🎟️ With the code <b data-noi18n>${esc(d.promo_code)}</b> at checkout: ${fmt(d.promo_price)} EGP</div>` : ""}
+    ${d && d.why && d.why.length ? `<div class="why">${scoreSVG(d.score)}<ul>${d.why.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+    <h4>Price history</h4>
+    ${full ? `<svg class="chart" id="chart" viewBox="0 0 640 200" preserveAspectRatio="none" role="img" aria-label="Price history"></svg>
+      <div class="tip" id="tip">${h.length > 1 ? "Touch or point at the chart to see each price." : "One price so far: the chart fills in as it changes."}</div>`
+      : `<div class="chart-sk"></div><div class="tip">Loading price history…</div>`}
+    ${rows.length > 1 ? `<h4>Same product in other stores</h4><table class="cmp">${rows.map((x, i) => `<tr>
+      <td><span class="st-n"><span class="dot" style="background:var(--${esc(x.store)},#555)"></span>${esc(LABELS[x.store] || x.store)}</span><br><span class="meta" style="display:inline" dir="auto">${esc((x.name || "").slice(0, 60))}</span></td>
+      <td class="${i === 0 ? "best" : ""}">${fmt(x.price)} EGP${i === 0 ? "<br>cheapest" : ""}${x.in_stock ? "" : "<br>out of stock"}</td>
+      <td><a class="btn small" href="${esc(appHref(x))}" target="_blank" rel="noopener">Open ↗</a></td></tr>`).join("")}</table>` : ""}
+    <div class="alert"><label for="target">Tell me when it's at or below</label>
+      <input id="target" type="number" inputmode="decimal" min="0" step="0.5" placeholder="${Math.floor(p.price * 0.9)}" value="${w && w.target ? w.target : ""}"> EGP
+      <button class="btn" id="setTarget">${w ? "Update alert" : "Watch"}</button></div>
+    <div class="actions">
+      <a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener">Open in ${esc(appLabel[p.store] || "store")} app ↗</a>
+      ${browserLink && browserLink !== link ? `<a class="btn" href="${esc(browserLink)}" target="_blank" rel="noopener">Open in browser</a>` : ""}
+      <button class="btn" id="toBasket">🧺 ${basket[id] ? "In basket (" + basket[id] + ")" : "Add to basket"}</button>
+      <button class="btn" id="share">${icon("share", 18)}<span>Share</span></button>
+      <a class="btn" href="/p/${id}">Product page</a>
+    </div>`;
+}
+async function showProduct(id, quick) {
+  dlgId = id;
+  if (!quick) quick = items.find(x => x.id === id);
+  if (quick) {   // the card already knows the price and the name: open now
+    fillDialog(id, { id, name: quick.name, store: quick.store, image: quick.image, price: quick.price, category: quick.top_category, url: quick.links?.web }, quick, null, null);
+  }
+  store.set("recent", [id, ...store.get("recent", []).filter(x => x !== id)].slice(0, 60));
+  const u = new URLSearchParams(location.search); u.set("p", id); history.replaceState(null, "", "?" + u);
+  let r;
+  try { r = await (await fetch("/api/product/" + id)).json(); }
+  catch { if (dlgId === id) { const t = $("dbody").querySelector(".tip"); if (t && $("dlg").open) t.textContent = "Couldn't load the price history. Try again."; else toast("Couldn't load the price history. Try again."); } return; }
+  if (dlgId !== id) return;
+  if (r.error) { if (!quick) toast("This product isn't tracked (any more)."); return; }
+  const d = r.item && r.item.id ? r.item : quick || null;
+  const sc = $("dlg").open ? $("dlg").scrollTop : 0;
+  fillDialog(id, r.product, d, r.history || [], r.matches);
+  $("dlg").scrollTop = sc;
+}
+function fillDialog(id, p, d, h, matches) {
+  const focused = $("dbody").contains(document.activeElement) ? document.activeElement.id || "close" : null;
+  $("dbody").innerHTML = dialogHTML(id, p, d, h, matches);
+  if (focused) ($(focused) || $("dbody").querySelector("[data-close]")).focus({ preventScroll: true });   // keep the keyboard inside
+  if (!$("dlg").open) { lastFocus = document.activeElement; $("dlg").showModal(); $("dbody").querySelector("[data-close]").focus({ preventScroll: true }); }
+  if (h) drawChart(h, p.price);
+  $("setTarget").onclick = () => {
+    const v = parseFloat($("target").value);
+    watch[id] = { ...(watch[id] || { last: p.price, name: p.name, store: p.store }), target: isFinite(v) ? v : null };
+    saveWatch(); askNotify();
+    toast(isFinite(v) ? `We'll tell you when it's ${fmt(v)} EGP or less.` : "Watching for any price drop.");
+    $("setTarget").textContent = "Update alert";
+    document.querySelectorAll(`.card[data-id="${id}"] [data-watch]`).forEach(b => b.setAttribute("aria-pressed", "true"));
+    const c = cards.get(id), it = items.find(x => x.id === id); if (c && it) c.sig = sigOf(it);
+  };
+  $("toBasket").onclick = () => { basket[id] = (basket[id] || 0) + 1; saveBasket(); $("toBasket").textContent = `🧺 In basket (${basket[id]})`;
+    toast("Added to your basket. 🧺 shows where it's cheapest."); };
+  $("share").onclick = async () => {
+    const url = location.origin + "/p/" + id, text = `${p.name}: ${fmt(p.price)} EGP`;
+    try { if (navigator.share) await navigator.share({ title: text, text, url });
+          else { await navigator.clipboard.writeText(url); toast("Link copied."); } } catch {}
+  };
+}
+let lastFocus = null;
+document.addEventListener("click", e => { const c = e.target.closest("[data-close]"); if (c) c.closest("dialog").close(); });
+for (const id of ["dlg", "panel"]) $(id).addEventListener("click", e => { if (e.target === $(id)) $(id).close(); });  // a tap on the backdrop
+$("dlg").addEventListener("close", () => { dlgId = 0; const u = new URLSearchParams(location.search); u.delete("p");
+  history.replaceState(null, "", u.toString() ? "?" + u : location.pathname); lastFocus?.focus?.({ preventScroll: true }); });
+
+function drawChart(h, current) {
+  const now = Date.now() / 1000;
+  const pts = h.filter(r => r.in_stock).map(r => [r.at, r.price]);
+  if (!pts.length) pts.push([now - 60, current]);
+  pts.push([now, pts[pts.length - 1][1]]);
+  const W = 640, H = 200, L = 46, R = 8, Tp = 10, B = 24;
+  const t0 = pts[0][0], t1 = Math.max(now, t0 + 1), ps = pts.map(p => p[1]);
+  const lo = Math.min(...ps), hi = Math.max(...ps), pad = (hi - lo) * .15 || hi * .05 || 1;
+  const X = t => L + (W - L - R) * (t - t0) / (t1 - t0), Y = v => Tp + (H - Tp - B) * (1 - (v - (lo - pad)) / ((hi + pad) - (lo - pad)));
+  let d = `M${X(pts[0][0]).toFixed(1)} ${Y(pts[0][1]).toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) d += ` H${X(pts[i][0]).toFixed(1)} V${Y(pts[i][1]).toFixed(1)}`;
+  const area = d + ` V${H - B} H${X(pts[0][0]).toFixed(1)} Z`;
+  const date = t => new Date(t * 1000).toLocaleDateString(dateLocale(), { day: "numeric", month: "short" });
+  const svg = $("chart");
+  svg.innerHTML = `<path class="ar" d="${area}"/><path class="ln" d="${d}"/>
+    <line class="ax" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>
+    <text x="4" y="${Y(hi) + 4}">${fmt(hi)}</text>${hi !== lo ? `<text x="4" y="${Y(lo) + 4}">${fmt(lo)}</text>` : ""}
+    <text x="${L}" y="${H - 6}">${esc(date(t0))}</text><text x="${W - R}" y="${H - 6}" text-anchor="end">${esc(T("now"))}</text>
+    <g class="hover" visibility="hidden"><line y1="${Tp}" y2="${H - B}"/><circle r="4"/></g>`;
+  const g = svg.querySelector(".hover");
+  const move = e => {
+    const rect = svg.getBoundingClientRect(), x = Math.max(L, Math.min(W - R, (e.clientX - rect.left) / rect.width * W));
+    const t = t0 + (x - L) / (W - L - R) * (t1 - t0);
+    let i = 0; while (i + 1 < pts.length && pts[i + 1][0] <= t) i++;
+    const v = pts[i][1];
+    g.setAttribute("visibility", "visible");
+    g.querySelector("line").setAttribute("x1", x); g.querySelector("line").setAttribute("x2", x);
+    g.querySelector("circle").setAttribute("cx", x); g.querySelector("circle").setAttribute("cy", Y(v));
+    $("tip").textContent = `${fmt(v)} EGP on ${new Date(Math.min(t, now) * 1000).toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" })}`;
+  };
+  svg.onpointermove = move; svg.onpointerdown = move;
+}
+
+// ---------- wiring ----------
+document.querySelectorAll(".seg").forEach(seg => seg.querySelectorAll("button").forEach(b => b.onclick = () => {
+  F[seg.dataset.key] = b.dataset.v; syncControls(); apply(); }));
+let slideT;
+["pmin", "pmax"].forEach(id => $(id).oninput = () => {
+  let a = +$("pmin").value, b = +$("pmax").value;
+  if (a > b) { if (id === "pmin") $("pmax").value = b = a; else $("pmin").value = a = b; }
+  paintSlider(); clearTimeout(slideT); slideT = setTimeout(() => { F.min = a; F.max = b; apply(); }, 250); });
+$("fStatus").querySelectorAll("input[value]").forEach(i => i.onchange = () => {
+  F.status = [...$("fStatus").querySelectorAll("input[value]:checked")].map(x => x.value); apply(); });
+$("fBest").onchange = () => { F.best = $("fBest").checked; apply(); };
+$("fWatch").onchange = () => { F.watch = $("fWatch").checked; syncControls(); apply(); };
+$("fCat").onchange = () => { F.category = $("fCat").value; apply(); };
+let priceT;
+["prmin", "prmax"].forEach(id => $(id).oninput = () => { clearTimeout(priceT); priceT = setTimeout(() => {
+  F.pmin = $("prmin").value; F.pmax = $("prmax").value; apply(); }, 400); });
+$("sort").onchange = () => { F.sort = $("sort").value; apply(); };
+let typing;
+$("q").oninput = () => { clearTimeout(typing); typing = setTimeout(() => { if (F.q === $("q").value) return; F.q = $("q").value; apply(); }, 300); };
+$("q").onkeydown = e => { if (e.key === "Enter") { clearTimeout(typing); if (F.q !== $("q").value) { F.q = $("q").value; apply(); } if (matchMedia("(max-width: 900px)").matches) $("q").blur(); }
+  if (e.key === "Escape" && $("q").value) { e.stopPropagation(); $("q").value = ""; F.q = ""; apply(); } };
+function resetFilters() { F = { ...DEFAULTS, stores: [], hubs: [], status: [] }; store.set("myHubs", []); syncControls(); apply(); }
+$("reset").onclick = resetFilters;
+function setHubs(ids) { F.hubs = ids; store.set("myHubs", ids); apply(); }
+$("watchBtn").onclick = () => { F.watch = !F.watch; if (F.watch) F.recent = false; syncControls(); apply(); };
+// filters: a bottom sheet on phones
+let sheetFocus = null;
+const isSheet = () => matchMedia("(max-width: 900px)").matches;
+function sheet(open) {
+  const a = $("filters");
+  a.classList.toggle("open", open);
+  document.querySelector(".scrim")?.remove();
+  document.documentElement.style.overflow = open ? "hidden" : "";
+  if (open) {
+    a.setAttribute("role", "dialog"); a.setAttribute("aria-modal", "true");
+    const s = document.createElement("div"); s.className = "scrim"; s.onclick = () => sheet(false); document.body.append(s);
+    sheetFocus = document.activeElement; setTimeout(() => $("sheetX").focus({ preventScroll: true }), 30);
+  } else { a.removeAttribute("role"); a.removeAttribute("aria-modal"); sheetFocus?.focus?.({ preventScroll: true }); }
+}
+if (!$("filters").querySelector(".grab")) $("filters").insertAdjacentHTML("afterbegin", '<div class="grab" aria-hidden="true"></div>');
+$("filterBtn").onclick = () => sheet(true);
+$("sheetDone").onclick = () => { sheet(false); window.scrollTo({ top: 0 }); };
+$("sheetX").onclick = () => sheet(false);
+$("filters").addEventListener("keydown", e => {   // keep the keyboard inside the open sheet
+  if (e.key !== "Tab" || !$("filters").classList.contains("open")) return;
+  const f = [...$("filters").querySelectorAll("button, input, select")].filter(x => x.offsetParent);
+  if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+  else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+});
+document.addEventListener("keydown", e => {
+  const tag = document.activeElement.tagName;
+  if (e.key === "/" && !["INPUT", "SELECT", "TEXTAREA"].includes(tag) && !document.querySelector("dialog[open]")) { e.preventDefault(); $("q").focus(); $("q").select(); }
+  if (e.key === "Escape" && $("filters").classList.contains("open")) sheet(false);
+});
+
 function showUnderstood() {
   const nl = understand(F.q);
   $("interp").hidden = !nl.said.length;
-  $("interp").innerHTML = nl.said.length ? "Understood: " + nl.said.map(x => `<b>${esc(x)}</b>`).join(" ") + (nl.q ? ` <b>“${esc(nl.q)}”</b>` : "") : "";
+  $("interp").innerHTML = nl.said.length ? "Understood: " + nl.said.map(x => `<b>${esc(x)}</b>`).join(" ") + (nl.q ? ` <b dir="auto">“${esc(nl.q)}”</b>` : "") : "";
 }
 
 // ---------- voice search ----------
@@ -807,9 +1358,9 @@ if (SR) {
   $("mic").hidden = false;
   $("mic").onclick = () => {
     const r = new SR();
-    r.lang = /^ar/i.test(navigator.language) ? "ar-EG" : "en-US"; r.interimResults = false; r.maxAlternatives = 1;
+    r.lang = AR() || /^ar/i.test(navigator.language) ? "ar-EG" : "en-US"; r.interimResults = false; r.maxAlternatives = 1;
     $("mic").classList.add("on");
-    r.onresult = e => { $("q").value = e.results[0][0].transcript; F.q = $("q").value; showUnderstood(); apply(); };
+    r.onresult = e => { $("q").value = e.results[0][0].transcript; F.q = $("q").value; apply(); };
     r.onend = () => $("mic").classList.remove("on");
     r.onerror = () => { $("mic").classList.remove("on"); toast("Couldn't hear that: try again, or type."); };
     r.start();
@@ -834,24 +1385,41 @@ function chime() {
   } catch {}
 }
 
-// ---------- installable app ----------
+// ---------- panels: alerts, basket, install, the phone menu ----------
+function panel(html) {
+  $("pbody").innerHTML = `<button class="x" aria-label="Close" data-close>${icon("x")}</button>` + html;
+  if (!$("panel").open) { lastPanelFocus = document.activeElement; $("panel").showModal(); }
+}
+let lastPanelFocus = null;
+$("panel").addEventListener("close", () => lastPanelFocus?.focus?.({ preventScroll: true }));
+
 let installEvent = null;
 const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvent = e; $("installBtn").hidden = false; });
 if (!standalone && isIOS) $("installBtn").hidden = false;
 $("installBtn").onclick = async () => {
   if (installEvent) { installEvent.prompt(); const r = await installEvent.userChoice; if (r.outcome === "accepted") $("installBtn").hidden = true; installEvent = null; return; }
-  panel(`<h2>Install Live deals</h2>${isIOS ? `<ol><li>Tap the <b>Share</b> button (the square with an arrow) at the bottom of Safari.</li>
-    <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li><li>Open it from the new icon. Alerts work only from the installed app on iPhone (iOS 16.4 or later).</li></ol>`
-    : `<ol><li>In Chrome, open the <b>⋮</b> menu.</li><li>Choose <b>Install app</b> (or <b>Add to Home screen</b>).</li></ol>`}`);
+  panel(`<h2 id="ptitle">Install Live deals</h2>${isIOS ? `<ol class="steps"><li>Tap the Share button (the square with an arrow) at the bottom of Safari.</li>
+    <li>Choose Add to Home Screen, then Add.</li><li>Open it from the new icon. Alerts work only from the installed app on iPhone (iOS 16.4 or later).</li></ol>`
+    : `<ol class="steps"><li>In Chrome, open the ⋮ menu.</li><li>Choose Install app (or Add to Home screen).</li></ol>`}`);
 };
 window.addEventListener("appinstalled", () => { $("installBtn").hidden = true; toast("Installed. Find Live deals on your home screen."); });
+$("moreBtn").onclick = () => {
+  const ar = AR();
+  panel(`<h2 id="ptitle">Menu</h2><div class="menu">
+    <button class="mi" data-do="lang" data-noi18n>${icon("globe", 22)}<span>${ar ? "English" : "العربية"}</span></button>
+    <button class="mi" data-do="alerts">${icon("bell", 22)}<span>Price-drop alerts</span></button>
+    ${$("installBtn").hidden ? "" : `<button class="mi" data-do="install">${icon("down", 22)}<span>Install the app</span></button>`}
+    <button class="mi" data-do="status">${icon("pulse", 22)}<span>Store status</span><small class="num">${int(lastChanges)}</small></button></div>`);
+  $("pbody").querySelectorAll("[data-do]").forEach(b => b.onclick = () => {
+    const d = b.dataset.do; $("panel").close();
+    ({ lang: () => $("langBtn").click(), alerts: () => $("alertsBtn").click(), install: () => $("installBtn").click(), status: () => $("status").click() })[d]();
+  });
+};
 
-// ---------- price-drop alerts (push) ----------
+// price-drop alerts (push)
 function alertsPrefs() { return Object.assign({ enabled: false, all_drops: false, min_drop: 20, stores: [], hubs: [], categories: [], words: [], sound: true, predict: true },
   store.get("alerts", {})); }
-function panel(html) { $("pbody").innerHTML = `<button class="x" aria-label="Close" onclick="this.closest('dialog').close()">×</button>` + html; if (!$("panel").open) $("panel").showModal(); }
 async function pushSubscription(create) {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
   const reg = await navigator.serviceWorker.ready;
@@ -881,29 +1449,29 @@ $("alertsBtn").onclick = async () => {
   const facets = window.lastFacets || {};
   const cats = Object.keys(facets.category || {}).slice(0, 30);
   const hubs = Object.keys(facets.hub || {});
-  panel(`<h2>🔔 Price-drop alerts</h2>
+  panel(`<h2 id="ptitle">🔔 Price-drop alerts</h2>
     ${supported ? "" : `<p class="tip">${isIOS ? "On iPhone, alerts work from the installed app: tap ⬇︎ Install first (iOS 16.4+)." : "This browser can't receive alerts."}</p>`}
     <div class="set">
       <label><input type="checkbox" id="aOn" ${a.enabled ? "checked" : ""} ${supported ? "" : "disabled"}> <b>Alerts on this device</b></label>
       <label><input type="checkbox" checked disabled> Products on my watchlist ★ (and their target prices)</label>
       <label><input type="checkbox" id="aPredict" ${a.predict !== false ? "checked" : ""}> ⏳ Before a watched product's predicted sale</label>
       <label><input type="checkbox" id="aAll" ${a.all_drops ? "checked" : ""}> Any price drop of at least <input type="number" id="aMin" min="5" max="90" step="5" value="${a.min_drop}"> %</label>
-      <div><div class="tip">…only at these stores (none = all)</div><div class="pick" id="aStores">${Object.entries(LABELS).map(([k, l]) =>
+      <div class="grp"><div class="tip">…only at these stores (none = all)</div><div class="pick" id="aStores">${Object.entries(LABELS).map(([k, l]) =>
         `<label><input type="checkbox" value="${k}" ${a.stores.includes(k) ? "checked" : ""}> ${esc(l)}</label>`).join("")}</div></div>
-      ${hubs.length > 1 ? `<div><div class="tip">…only these talabat hubs</div><div class="pick" id="aHubs">${hubs.map(h => { const [id, n] = h.split("|");
-        return `<label><input type="checkbox" value="${id}" ${a.hubs.map(String).includes(id) ? "checked" : ""}> ${esc(n)}</label>`; }).join("")}</div></div>` : ""}
-      <div><div class="tip">…only these categories</div><div class="pick" id="aCats">${cats.map(c =>
-        `<label><input type="checkbox" value="${esc(c)}" ${a.categories.includes(c) ? "checked" : ""}> ${esc(c)}</label>`).join("")}</div></div>
-      <label style="display:block">…only names containing (comma-separated)<input type="text" id="aWords" value="${esc(a.words.join(", "))}" placeholder="milk, nescafe, حفاضات"></label>
+      ${hubs.length > 1 ? `<div class="grp"><div class="tip">…only these talabat hubs</div><div class="pick" id="aHubs">${hubs.map(h => { const [id, n] = h.split("|");
+        return `<label><input type="checkbox" value="${id}" ${a.hubs.map(String).includes(id) ? "checked" : ""}> ${/^\d+$/.test(n) ? `<span>Hub ${esc(id)}</span>` : `<span dir="auto">${esc(n)}</span>`}</label>`; }).join("")}</div></div>` : ""}
+      ${cats.length ? `<div class="grp"><div class="tip">…only these categories</div><div class="pick" id="aCats">${cats.map(c =>
+        `<label><input type="checkbox" value="${esc(c)}" ${a.categories.includes(c) ? "checked" : ""}> <span dir="auto">${esc(c)}</span></label>`).join("")}</div></div>` : ""}
+      <label class="grp" style="display:block">…only names containing (comma-separated)<input type="text" id="aWords" value="${esc(a.words.join(", "))}" placeholder="milk, nescafe, حفاضات"></label>
       <label><input type="checkbox" id="aSound" ${a.sound ? "checked" : ""}> Deals chime and buzz while the site is open</label>
     </div>
-    <div class="row"><button class="btn primary" id="aSave">Save</button><button class="btn" id="aTest">Send a test</button><button class="btn" id="aHear">▶ Hear the chime</button></div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="aSave">Save</button><button class="btn" id="aTest">Send a test</button><button class="btn" id="aHear">▶ Hear the chime</button></div>
     <p class="tip">Alerts arrive even when the site is closed, at most one bundle every 5 minutes. When the site is closed, the phone plays its notification sound with the deals buzz pattern; browsers don't allow a custom sound there.</p>`);
   $("aHear").onclick = () => { const was = alertsPrefs(); store.set("alerts", { ...was, sound: true }); chime(); store.set("alerts", was); };
   $("aSave").onclick = async () => {
     const pick = id => [...document.querySelectorAll(`#${id} input:checked`)].map(i => i.value);
     const next = { enabled: $("aOn").checked, all_drops: $("aAll").checked, min_drop: +$("aMin").value || 20,
-      stores: pick("aStores"), hubs: document.getElementById("aHubs") ? pick("aHubs").map(Number) : [], categories: pick("aCats"),
+      stores: pick("aStores"), hubs: document.getElementById("aHubs") ? pick("aHubs").map(Number) : [], categories: document.getElementById("aCats") ? pick("aCats") : [],
       words: $("aWords").value.split(",").map(x => x.trim()).filter(Boolean), sound: $("aSound").checked,
       predict: $("aPredict").checked };
     try {
@@ -927,31 +1495,31 @@ $("alertsBtn").onclick = async () => {
     const j = await r.json().catch(() => ({})); toast(r.ok ? "Test sent: it should arrive in a few seconds." : (j.error || "Test failed."));
   };
 };
-navigator.serviceWorker && navigator.serviceWorker.addEventListener("message", e => {
-  if (e.data && e.data.type === "deal-push") { chime(); toast(`<b>${esc(e.data.m.title)}</b><br>${esc(e.data.m.body)}`, () => location.href = e.data.m.url || "/", true); }
-});
 
-// ---------- basket: where each item is cheapest ----------
+// basket: where each item is cheapest
 let basket = store.get("basket", {});
 function saveBasket() { store.set("basket", basket); const n = Object.values(basket).reduce((a, b) => a + b, 0); $("basketN").hidden = !n; $("basketN").textContent = n; }
 async function showBasket() {
   const ids = Object.keys(basket);
-  if (!ids.length) { panel(`<h2>🧺 Basket</h2><p class="tip">Open any product and tap <b>Add to basket</b>. The basket shows the cheapest store for each item, using the same products found in other stores.</p>`); return; }
-  const r = await (await fetch(`/api/deals?deals=0&stock=all&limit=500&ids=${ids.join(",")}`)).json();
+  if (!ids.length) { panel(`<h2 id="ptitle">🧺 Basket</h2><div class="empty" style="border:0;padding:24px 8px"><div class="ico">${icon("basket", 24)}</div>
+    <p>Open any product and tap Add to basket. The basket shows the cheapest store for each item, using the same products found in other stores.</p></div>`); return; }
+  panel(`<h2 id="ptitle">🧺 Basket</h2><div class="chart-sk" style="height:120px"></div>`);
+  let r; try { r = await (await fetch(`/api/deals?deals=0&stock=all&limit=500&fields=card&ids=${ids.join(",")}`)).json(); }
+  catch { panel(`<h2 id="ptitle">🧺 Basket</h2>${errorState(!navigator.onLine)}`); return; }
   const rows = r.items.map(d => {
-    const opts = [{ id: d.id, store: d.store, price: d.price, in_stock: d.in_stock }, ...d.matches].filter(o => o.in_stock);
+    const opts = [{ id: d.id, store: d.store, price: d.price, in_stock: d.in_stock }, ...(d.matches || [])].filter(o => o.in_stock);
     const best = opts.sort((a, b) => a.price - b.price)[0] || { ...d };
     return { d, best, qty: basket[d.id] || 1, saving: Math.max(0, d.price - best.price) };
   });
-  const total = rows.reduce((s, x) => s + x.best.price * x.qty, 0), listed = rows.reduce((s, x) => s + x.d.price * x.qty, 0);
+  const sum = rows.reduce((s, x) => s + x.best.price * x.qty, 0), listed = rows.reduce((s, x) => s + x.d.price * x.qty, 0);
   const byStore = {}; rows.forEach(x => byStore[x.best.store] = (byStore[x.best.store] || 0) + x.best.price * x.qty);
-  panel(`<h2>🧺 Basket</h2>
-    <table class="cmp bk">${rows.map(x => `<tr><td dir="auto">${esc(x.d.name.slice(0, 48))}${x.d.in_stock ? "" : " <span class='tag'>out of stock</span>"}</td>
-      <td><span style="color:var(--${x.best.store});font-weight:650">${esc(LABELS[x.best.store] || x.best.store)}</span><br>${fmt(x.best.price)} EGP${x.saving ? `<br><span class="tag good">save ${fmt(x.saving * x.qty)}</span>` : ""}</td>
-      <td><span class="qty"><button data-q="${x.d.id}" data-d="-1">−</button>${x.qty}<button data-q="${x.d.id}" data-d="1">+</button></span></td></tr>`).join("")}</table>
+  panel(`<h2 id="ptitle">🧺 Basket</h2>
+    <table class="cmp bk">${rows.map(x => `<tr><td><span dir="auto">${esc(x.d.name.slice(0, 48))}</span>${x.d.in_stock ? "" : " <span class='tag'>out of stock</span>"}</td>
+      <td><span class="st-n"><span class="dot" style="background:var(--${x.best.store})"></span>${esc(LABELS[x.best.store] || x.best.store)}</span><br>${fmt(x.best.price)} EGP${x.saving ? `<br><span class="tag good">save ${fmt(x.saving * x.qty)}</span>` : ""}</td>
+      <td><span class="qty"><button data-q="${x.d.id}" data-d="-1" aria-label="One less">−</button><span class="num">${x.qty}</span><button data-q="${x.d.id}" data-d="1" aria-label="One more">+</button></span></td></tr>`).join("")}</table>
     <h4>Cheapest plan</h4>
     <p>${Object.entries(byStore).map(([s, v]) => `<b>${esc(LABELS[s] || s)}</b> ${fmt(v)} EGP`).join(" · ")}</p>
-    <p class="bigprice">${fmt(total)} EGP</p>${listed > total ? `<p class="tag good">saves ${fmt(listed - total)} EGP against buying each where you found it</p>` : ""}
+    <p class="bigprice">${fmt(sum)} EGP</p>${listed > sum ? `<p><span class="tag good">saves ${fmt(listed - sum)} EGP against buying each where you found it</span></p>` : ""}
     <div class="row"><button class="btn" id="bClear">Empty basket</button></div>`);
   document.querySelectorAll("[data-q]").forEach(b => b.onclick = () => { const id = b.dataset.q;
     basket[id] = (basket[id] || 0) + +b.dataset.d; if (basket[id] <= 0) delete basket[id]; saveBasket(); showBasket(); });
@@ -959,29 +1527,40 @@ async function showBasket() {
 }
 $("basketBtn").onclick = showBasket;
 
-// ---------- today in 30 seconds (the home page, before any filter) ----------
-const isHome = () => { const p = new URLSearchParams(location.search); p.delete("hubs"); return !p.toString(); };
-async function loadBrief() {
-  if (!isHome()) { $("brief").hidden = true; return; }
-  let b; try { b = await (await fetch("/api/brief")).json(); } catch { return; }
-  if (!b.deals) return;
-  const st = (n, label, act) => `<button class="st" data-act="${act}"><b>${n.toLocaleString()}</b><span>${label}</span></button>`;
-  const best = b.biggest_saving;
-  $("brief").innerHTML = `<h2>⚡ Today in 30 seconds</h2><div class="sub">What the stores changed while you weren't looking</div>
-    <div class="stats">${st(b.dropped_24h, "price drops in 24 h", "new")}${b.record_lows ? st(b.record_lows, "lowest price in 90 days", "lowest") : ""}
-      ${b.fake ? st(b.fake, "fake discounts caught", "fake") : ""}${b.soon ? st(b.soon, "sales due within 3 days", "soon") : ""}
-      ${b.promo ? st(b.promo, "extra off with a code", "promo") : ""}${st(b.deals, "real deals right now", "real")}</div>
-    ${best ? `<div class="best" data-id="${best.id}">💰 Biggest saving now: <b dir="auto">${esc(best.name.slice(0, 60))}</b> · save ${fmt(best.saving)} EGP</div>` : ""}`;
-  $("brief").hidden = false;
-  $("brief").querySelectorAll(".st").forEach(x => x.onclick = () => {
-    F.status = [x.dataset.act]; if (x.dataset.act === "soon") F.deals = "0";
-    F.sort = x.dataset.act === "new" ? "newest" : "score"; syncControls(); apply(); $("brief").hidden = true; });
-  const bs = $("brief").querySelector(".best"); if (bs) bs.onclick = () => showProduct(+bs.dataset.id);
+// ---------- service worker: the shell and the last home view come from the device next time ----------
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", e => {
+    if (e.data && e.data.type === "deal-push") { chime(); toast(`<b>${esc(e.data.m.title)}</b><br>${esc(e.data.m.body)}`, () => location.href = e.data.m.url || "/", true); }
+    if (e.data && e.data.type === "shell-updated" && !shellToast) shellToast = toast("A new version of the site is ready. Tap to reload.", () => location.reload(), false, 30000);
+  });
 }
-readURL(); syncControls(); saveWatch(); saveBasket(); activeChips(); showUnderstood(); load(); loadTicker(); loadBrief();
-setInterval(loadBrief, 60000);
-setInterval(loadTicker, 15000); setInterval(checkWatch, 60000); checkWatch();
-const pid = new URLSearchParams(location.search).get("p"); if (pid) showProduct(+pid);
+let shellToast = null;
+
+// ---------- start: cards first, everything else after ----------
+syncControls(); saveWatch(); saveBasket(); activeChips(); showUnderstood(); renderFacets({ facets: {} }); showBrief(); renderStatus(); tickFresh();
+let started = false;
+function afterFirst() {
+  if (started) return; started = true;
+  const later = window.requestIdleCallback || (f => setTimeout(f, 200));
+  if (BOOT.brief) BOOT.brief.then(b => { if (b) renderBrief(b); else if (!briefData) $("brief").hidden = true; });
+  later(() => { loadTicker(); checkWatch(); }, { timeout: 2000 });
+  if ("serviceWorker" in navigator) later(() => navigator.serviceWorker.register("/sw.js").catch(() => {}), { timeout: 4000 });
+  // the very first visit isn't served by the worker yet: keep this answer for the next one ourselves
+  if (isHome() && lastData && "caches" in window && !navigator.serviceWorker?.controller)
+    later(() => caches.open(DATA_CACHE).then(c => c.put("/api/deals?" + BOOT.key, new Response(JSON.stringify(lastData), { headers: { "Content-Type": "application/json" } }))).catch(() => {}), { timeout: 5000 });
+  markFresh(); schedule();
+}
+BOOT.saved.then(d => { if (d && d.items && d.items.length && !shownFrom && gen === 1) { shownFrom = "cache"; renderList(d); tickFresh(); } });
+BOOT.net.then(({ data }) => {
+  if (gen !== 1) return;
+  if (shownFrom === "cache") { lastData = data; renderMeta(data); reconcile(data.items, true); } else renderList(data);
+  shownFrom = "net"; netLoaded = true; viewV = data.v ?? null; V = data.v ?? null; afterFirst();
+}).catch(e => {
+  if (gen !== 1 || e.name === "AbortError") return;
+  if (!shownFrom) { $("grid").innerHTML = errorState(!navigator.onLine); $("grid").setAttribute("aria-busy", "false"); }
+  setError(true); afterFirst();
+});
+const pid = new URLSearchParams(location.search).get("p"); if (pid) BOOT.net.then(() => showProduct(+pid), () => showProduct(+pid));
 </script>
 </body>
 </html>
