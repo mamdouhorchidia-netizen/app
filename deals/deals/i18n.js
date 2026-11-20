@@ -13,7 +13,7 @@
     "Live deals": "عروض لحظة بلحظة", "connecting…": "بيتصل…", "Filters": "فلاتر", "Install": "تثبيت",
     "More": "المزيد", "Search": "دوّر", "Search by voice": "دوّر بالصوت", "Basket": "السلة", "Alerts": "التنبيهات", "Language": "اللغة",
     "Install the app": "ثبّت التطبيق", "Price-drop alerts": "تنبيهات نزول الأسعار", "Watch this price": "تابع السعر ده",
-    "Quick filters": "فلاتر سريعة", "Real only": "حقيقي بس", "Sort by": "رتّب حسب", "Main": "الرئيسية", "Pages": "الصفحات", "Close": "اقفل",
+    "Skip to deals": "روح للعروض", "tracked since": "متابَع من", "Quick filters": "فلاتر سريعة", "Real only": "حقيقي بس", "Sort by": "رتّب حسب", "Main": "الرئيسية", "Pages": "الصفحات", "Close": "اقفل",
     "Store status": "حالة المتاجر", "Minimum discount": "أقل خصم", "Maximum discount": "أكبر خصم",
     "under its usual price": "أقل من سعره المعتاد", "the store's own discount": "خصم من المتجر نفسه",
     "Hides discounts whose price never moves": "بيخبي الخصومات اللي سعرها ما بيتغيرش",
@@ -225,8 +225,13 @@
       else m.addedNodes.forEach(walk);
     }
   });
+  // text the server wrote in both languages (dates on /p/ID, also inside an svg <title>): English in the element, Arabic in data-ar
+  function both(root) {
+    if (lang === "ar") root.querySelectorAll("[data-ar]").forEach(n => { if (n.textContent !== n.dataset.ar) n.textContent = n.dataset.ar; });
+  }
   function start() {
     setDir();
+    both(document);
     walk(document.body);
     mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
     const b = document.getElementById("langBtn");

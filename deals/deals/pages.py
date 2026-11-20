@@ -68,7 +68,14 @@ main { padding: var(--sp-5) 0 60px; } h1.title { font-size: var(--fs-5); margin:
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2); margin-top: var(--sp-4); }
 .stat { background: var(--surface-2); border-radius: var(--r-1); padding: var(--sp-2) var(--sp-3); } .stat b { display: block; font-size: var(--fs-3); font-variant-numeric: tabular-nums; }
 .stat span { font-size: var(--fs-1); color: var(--ink-2); }
-svg.chart { width: 100%; height: 190px; display: block; direction: ltr; }
+/* the chart: its numbers and dates are page text beside the drawing (not inside the stretched svg), so they keep
+   their shape at any width; time runs left to right in both languages */
+.chartbox { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 6px; direction: ltr; font-size: 11px; color: var(--ink-2);
+  font-variant-numeric: tabular-nums; }
+.chartbox .ys { position: relative; width: 4.8em; }
+.chartbox .ys span { position: absolute; right: 0; transform: translateY(-50%); white-space: nowrap; }
+.chartbox .xl { grid-column: 2; display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; white-space: nowrap; }
+svg.chart { width: 100%; height: 170px; display: block; direction: ltr; overflow: visible; }
 table { width: 100%; border-collapse: collapse; } td { padding: var(--sp-2) 6px; border-top: 1px solid var(--line); vertical-align: middle; }
 td.n { text-align: end; white-space: nowrap; font-weight: 650; }
 ul.why { margin: var(--sp-2) 0 0; padding-inline-start: 18px; }
@@ -164,13 +171,32 @@ def mini_card(d: dict) -> str:
             f'<div class="small muted">{e(LABELS.get(d["store"], d["store"]))}</div></div></a>')
 
 
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+MONTHS_AR = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"]
+
+
+def date_text(t: float, year: bool = False) -> tuple[str, str]:
+    """("2 Nov", "2 نوفمبر") in Cairo time: the page's two languages, with the same Western digits as its prices."""
+    d = datetime.fromtimestamp(t, CAIRO)
+    y = f" {d.year}" if year else ""
+    return f"{d.day} {MONTHS[d.month - 1]}{y}", f"{d.day} {MONTHS_AR[d.month - 1]}{y}"
+
+
+def date_html(t: float, year: bool = False, tag: str = "span", pre: str = "") -> str:
+    """A date in English, which i18n.js swaps for its Arabic (data-ar) when the page is in Arabic. `pre`: text
+    before it in both (a price), e.g. an svg <title>, which the translator doesn't walk into."""
+    en, ar = date_text(t, year)
+    return f'<{tag} data-ar="{e(pre + ar)}" data-noi18n>{e(pre + en)}</{tag}>'
+
+
 def chart(history: list[dict], now: float) -> str:
-    """The price over time as a step line, drawn here so the page needs no script for it."""
+    """The price over time as a step line, drawn here so the page needs no script for it. The prices on its
+    side and the dates under it are HTML next to the svg (an svg stretched to the width would squeeze them)."""
     pts = [(h["at"], h["price"]) for h in history if h.get("price") is not None]
     if not pts:
         return ""
     pts.append((now, pts[-1][1]))
-    W, H, L, R, T, B = 640, 190, 50, 10, 12, 26
+    W, H, L, R, T, B = 640, 170, 4, 6, 10, 4
     t0, t1 = pts[0][0], max(pts[-1][0], pts[0][0] + 1)
     lo, hi = min(p for _, p in pts), max(p for _, p in pts)
     if hi - lo < 0.01:
@@ -183,19 +209,20 @@ def chart(history: list[dict], now: float) -> str:
     for (t, p), (_, prev) in zip(pts[1:], pts):
         d += f" L{X(t):.1f},{Y(prev):.1f} L{X(t):.1f},{Y(p):.1f}"
     area = d + f" L{X(pts[-1][0]):.1f},{H - B} L{X(pts[0][0]):.1f},{H - B} Z"
-    grid = ""
+    grid, ys = "", ""
     for i in range(4):
         v = lo + (hi - lo) * (i + 0.5) / 4
-        grid += (f'<line x1="{L}" x2="{W - R}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" stroke="var(--line)"/>'
-                 f'<text x="{L - 6}" y="{Y(v) + 4:.1f}" text-anchor="end" font-size="11" fill="var(--muted)">{money(round(v, 1))}</text>')
-    day = lambda t: datetime.fromtimestamp(t, CAIRO).strftime("%d/%m")
-    labels = (f'<text x="{L}" y="{H - 6}" font-size="11" fill="var(--muted)">{day(t0)}</text>'
-              f'<text x="{W - R}" y="{H - 6}" font-size="11" text-anchor="end" fill="var(--muted)">{day(t1)}</text>')
-    dots = "".join(f'<circle cx="{X(t):.1f}" cy="{Y(p):.1f}" r="3" fill="var(--accent)"><title>{money(p)} · {day(t)}</title></circle>'
+        grid += f'<line x1="0" x2="{W}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" stroke="var(--line)" vector-effect="non-scaling-stroke"/>'
+        ys += f'<span style="top:{Y(v) / H * 100:.1f}%">{money(round(v, 1))}</span>'
+    # each price as a dot: a zero-length round-capped stroke, which stays round however the svg is stretched
+    dots = "".join(f'<path d="M{X(t):.1f},{Y(p):.1f}h0" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" '
+                   f'vector-effect="non-scaling-stroke">{date_html(t, tag="title", pre=money(p) + " · ")}</path>'
                    for t, p in pts[:-1][-40:])
-    return (f'<svg class="chart" viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label="Price history">'
-            f'{grid}<path d="{area}" fill="var(--accent)" opacity=".08"/><path d="{d}" fill="none" stroke="var(--accent)" '
-            f'stroke-width="2.2"/>{dots}{labels}</svg>')
+    svg = (f'<svg class="chart" viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label="Price history">'
+           f'{grid}<path d="{area}" fill="var(--accent)" opacity=".08"/><path d="{d}" fill="none" stroke="var(--accent)" '
+           f'stroke-width="2.2" vector-effect="non-scaling-stroke"/>{dots}</svg>')
+    return (f'<div class="chartbox"><div class="ys" aria-hidden="true">{ys}</div>{svg}'
+            f'<div class="xl">{date_html(t0)}{date_html(t1)}</div></div>')
 
 
 def product_page(p: dict, d: dict, history: list[dict], matches: list[dict], related: list[dict],
@@ -244,7 +271,7 @@ def product_page(p: dict, d: dict, history: list[dict], matches: list[dict], rel
     rel = ('<h2>More deals like this</h2><div class="grid">' + "".join(mini_card(r) for r in related) + "</div>"
            if related else "")
     hub = f' · <span>📍 {e(d["hub_name"])}</span>' if d.get("hub_name") else ""
-    first = datetime.fromtimestamp(p["first_seen"], CAIRO).strftime("%d/%m/%Y")
+    first = date_html(p["first_seen"], year=True)
     img = f'<img src="{e(p["image"])}" alt="" onerror="this.remove()">' if p.get("image") else ""
     label = "Open in " + APP.get(store, "store") + " ↗"
     body = f"""

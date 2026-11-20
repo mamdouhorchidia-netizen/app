@@ -430,7 +430,7 @@ class Http(unittest.TestCase):
         self.assertEqual(r.status, 200)
         self.assertNotEqual(r.getheader("ETag"), d_etag)
         self.assertEqual(json.loads(body)["v"], pulse["v"] + 1)
-        soap = next(x for x in json.loads(body)["items"] if x["sku"] == "a2")
+        soap = next(x for x in json.loads(body)["items"] if x["name"] == "Steady Soap 125g")
         self.assertEqual(soap["price"], 70)
 
     def test_changes_after_a_rowid(self):

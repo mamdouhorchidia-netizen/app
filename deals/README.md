@@ -54,8 +54,8 @@ never how often a store is asked.
   `/api/status` carry an ETag and answer `304` to `If-None-Match` while what they show is unchanged (the
   time fields `now`, ages and sparkline end points don't count). `/api/changes?after=ROWID` gives only newer
   moves for the ticker, and `/api/seen?ids=…` when each card's product was last checked.
-- **Transport:** HTTP/1.1 keep-alive, gzip for text and JSON when the browser takes it (a 60-card page is
-  ~104 KB, ~14 KB gzipped), and the page, scripts and icons kept in memory with an ETag and `no-cache`
+- **Transport:** HTTP/1.1 keep-alive, gzip for text and JSON when the browser takes it (a 48-card page
+  is ~33 KB, ~5 KB gzipped: only the fields the cards use; `?full=1` gives every field), and the page, scripts and icons kept in memory with an ETag and `no-cache`
   (the browser keeps them but asks every time, so a deploy shows at once). API answers stay `no-store`.
 - The **page** asks for news every 10 seconds, redraws only when something changed, and shows each store's
   last change ("last change 8 s ago"), its pass time and the price changes in the last hour.

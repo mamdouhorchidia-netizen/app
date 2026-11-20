@@ -20,6 +20,11 @@ button, input, select { font: inherit; color: inherit; }
 a { color: inherit; }
 .wrap { max-width: 1400px; margin: 0 auto; padding: 0 var(--sp-4); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* "Skip to deals": the first thing Tab reaches; out of sight until it has focus */
+.skip { position: fixed; top: var(--sp-2); inset-inline-start: var(--sp-2); z-index: 40; display: inline-flex; align-items: center; min-height: var(--tap);
+  padding: 0 var(--sp-4); border-radius: var(--r-2); background: var(--ink); color: var(--bg); font-weight: 650; text-decoration: none;
+  transform: translateY(calc(-100% - var(--sp-4))); }
+.skip:focus { transform: none; }
 .slider, .badge, .score, .num { direction: ltr; unicode-bidi: isolate; }
 .unit { direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
 svg.chart { direction: ltr; }
@@ -139,7 +144,7 @@ aside { position: sticky; top: 168px; align-self: start; max-height: calc(100vh 
   min-height: 36px; position: relative; }
 .chip::after { content: ""; position: absolute; inset: -4px 0; }
 .chip:hover { border-color: var(--ink-3); }
-.chip .x { color: var(--ink-3); }
+.chip .cx { color: var(--ink-3); }  /* not .x: that is the dialogs' close button */
 .chips:empty { display: none; }
 /* the freshness pill: "● Live · updated 8 s ago" (amber when stale, red when offline); opens each store's status */
 .fresh { display: inline-flex; align-items: center; gap: var(--sp-2); height: 32px; position: relative; padding: 0 var(--sp-3); border-radius: var(--r-pill);
@@ -179,10 +184,14 @@ aside { position: sticky; top: 168px; align-self: start; max-height: calc(100vh 
 .drops[hidden] { display: none; }
 .drops h2 { margin: 0; font-size: var(--fs-1); font-weight: 700; color: var(--accent-text); flex: none; width: 56px; line-height: 1.25; }
 .drops-track { gap: var(--sp-2); min-width: 0; flex: 1; }
-.tick { flex: none; width: 208px; min-height: var(--tap); padding: 6px 10px; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-1);
+.tick { flex: none; width: 216px; min-height: var(--tap); padding: 6px 10px; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-1);
   text-align: start; cursor: pointer; font-size: var(--fs-1); color: var(--ink-2); line-height: 1.35; display: grid; }
 .tick b { color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .tick .ln { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.tick .tm { display: flex; min-width: 0; white-space: nowrap; }
+.tick .ts { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tick .tm [data-ago] { flex: none; }
+.tick .tm [data-ago]::before { content: "\00a0· "; }
 .tick .down { color: var(--good); font-weight: 650; } .tick .up { color: var(--accent-text); font-weight: 650; }
 
 .hubbar { display: flex; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: none; padding: 0 0 var(--sp-3); }
@@ -229,6 +238,7 @@ aside { position: sticky; top: 168px; align-self: start; max-height: calc(100vh 
 .pr { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; min-width: 0; white-space: nowrap; }
 .now { font-size: var(--fs-4); font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .now small { font-size: var(--fs-1); font-weight: 600; color: var(--ink-2); }
+.now small.dec { color: inherit; font-weight: 700; }
 .was { color: var(--ink-2); text-decoration: line-through; font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
 .sig { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; min-height: 22px; }
 .vchip { font-size: var(--fs-1); font-weight: 700; line-height: 1; padding: 5px 7px; border-radius: 6px; background: var(--surface-2); color: var(--ink-2);
@@ -252,9 +262,10 @@ aside { position: sticky; top: 168px; align-self: start; max-height: calc(100vh 
   .card:has(.name a:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
 }
 .foot { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: auto; }
-.store { flex: 0 1 auto; min-width: 0; font-size: var(--fs-1); font-weight: 650; line-height: 1; padding: 4px 6px; border-radius: 5px;
+.store { flex: 0 1 auto; min-width: 0; max-width: 64%; font-size: var(--fs-1); font-weight: 650; line-height: 1; padding: 4px 6px; border-radius: 5px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.store .hb::before { content: " · "; }
+.foot:has(.meta:empty) .store { max-width: none; }
+.store .hs { white-space: pre; }  /* " · " between the store and its hub, outside the hub's own direction */
 .meta { font-size: var(--fs-1); color: var(--ink-2); display: flex; gap: 6px; min-width: 0; flex: 1 1 0; white-space: nowrap; overflow: hidden; }
 .meta > span { overflow: hidden; text-overflow: ellipsis; }
 .cta { display: flex; }
@@ -288,13 +299,19 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
 .tag.vd-warn { background: var(--warn-bg); color: var(--warn); font-weight: 700; }
 .tag.vd-muted { font-weight: 600; }
 .x { position: absolute; top: var(--sp-2); inset-inline-end: var(--sp-2); background: var(--surface-2); border: 0; border-radius: 50%; width: var(--tap); height: var(--tap); cursor: pointer; font-size: var(--fs-4); color: var(--ink-2); }
-.bigprice { font-size: var(--fs-6); font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.bigprice { font-size: var(--fs-6); font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bigprice small { font-size: var(--fs-3); font-weight: 650; color: var(--ink-2); letter-spacing: 0; }
+.dprice { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-3); margin-top: var(--sp-3); min-width: 0; }
+.dprice .was { font-size: var(--fs-2); }
+.dprice .unit { font-size: var(--fs-2); color: var(--ink-2); }
+.dprice .dspark { margin-inline-start: auto; align-self: center; margin-top: 0; max-width: 100%; }
+.dlg > .tags { margin-top: var(--sp-2); }
 .why { margin: var(--sp-4) 0; padding: var(--sp-3) var(--sp-4); background: var(--surface-2); border-radius: var(--r-2); display: flex; gap: var(--sp-4); align-items: center; }
 .why ul { margin: 0; padding-inline-start: 18px; font-size: var(--fs-2); }
 .score { flex: none; width: 52px; height: 52px; }
 .score text { font-size: 12px; font-weight: 750; fill: #1b1a17; }
-.dspark { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-1); color: var(--ink-2); margin-top: var(--sp-2); }
-.spark { width: 96px; height: 28px; flex: none; }
+.dspark { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-1); color: var(--ink-2); margin-top: var(--sp-2); min-width: 0; }
+.spark { width: 96px; height: 28px; flex: none; max-width: 100%; }
 .chart { width: 100%; height: 200px; display: block; touch-action: pan-y; }
 .chart .ln { fill: none; stroke: var(--accent); stroke-width: 2.2; vector-effect: non-scaling-stroke; }
 .chart .ar { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
@@ -419,6 +436,7 @@ h4 { margin: var(--sp-5) 0 4px; font-size: var(--fs-1); text-transform: uppercas
 <script src="/i18n.js"></script>
 </head>
 <body>
+<a class="skip" href="#grid" id="skip">Skip to deals</a>
 <header>
   <h1 class="sr">Live deals</h1>
   <div class="wrap">
@@ -542,6 +560,10 @@ h4 { margin: var(--sp-5) 0 4px; font-size: var(--fs-1); text-transform: uppercas
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = n => n == null ? "" : Number(n).toLocaleString("en-EG", { maximumFractionDigits: 2 });
+// a price on a card: the piasters in small type (so "3,299.62 EGP" and its was-price fit one line of a phone card);
+// the struck-through was-price in whole pounds from 1,000 up (the exact one is in the product view)
+const money = n => { const [i, d] = fmt(n).split("."); return d ? `${i}<small class="dec">.${d.padEnd(2, "0")}</small>` : i; };
+const fmtWas = n => n != null && n >= 1000 ? fmt(Math.round(n)) : fmt(n);
 // the server's clock: "ago" is measured from it, so a phone whose clock is off still says the right thing
 let skew = 0;
 const nowS = () => Date.now() / 1000 + skew;
@@ -704,7 +726,7 @@ function activeChips() {
   if (F.category) chips.push([F.category, () => F.category = ""]);
   if (F.q) chips.push([`“${F.q}”`, () => F.q = ""]);
   if (F.pmin || F.pmax) chips.push([`${F.pmin || 0}–${F.pmax || "∞"} EGP`, () => { F.pmin = ""; F.pmax = ""; }]);
-  $("activeChips").innerHTML = chips.map(([t], i) => `<button class="chip" data-i="${i}">${esc(t)} <span class="x">×</span></button>`).join("");
+  $("activeChips").innerHTML = chips.map(([t], i) => `<button class="chip" data-i="${i}">${esc(t)} <span class="cx" aria-hidden="true">×</span></button>`).join("");
   $("activeChips").querySelectorAll(".chip").forEach(b => b.onclick = () => { chips[+b.dataset.i][1](); syncControls(); apply(); });
   $("filterN").hidden = !chips.length; $("filterN").textContent = chips.length;
 }
@@ -732,8 +754,6 @@ function scoreSVG(s) {
 }
 function tagsFor(d) {
   const t = [];
-  if (d.verdict && d.verdict.label !== "Fair price" && d.verdict.label !== "Out of stock")
-    t.push(`<span class="tag vd-${d.verdict.tone}" title="${esc(d.verdict.why)}">${esc(d.verdict.label)}</span>`);
   if (d.deal_label) t.push(`<span class="tag hot">${esc(d.deal_label)}</span>`);
   if (d.flags.includes("lowest")) t.push('<span class="tag good">lowest in 90 days</span>');
   if (d.flags.includes("new")) t.push(d.prev_price != null && d.price > d.prev_price
@@ -778,8 +798,8 @@ function partsOf(d) {
   const vd = verdictChip(d);
   return {
     marks: badge, vd, vdKey: vd.replace(/ title="[^"]*"/g, ""),  // the verdict's explanation follows the clock: not a change
-    price: `<span class="now">${fmt(d.price)} <small>EGP</small></span>${d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : ""}`,
-    store: `<span class="sn">${esc(LABELS[d.store] || d.store)}</span>` + (d.hub_name ? `<bdi class="hb" dir="auto">${esc(d.hub_name)}</bdi>` : ""),
+    price: `<span class="now">${money(d.price)} <small>EGP</small></span>${d.kind === "platform" ? `<span class="was">${fmtWas(d.original_price)}</span>` : ""}`,
+    store: `<span class="sn">${esc(LABELS[d.store] || d.store)}</span>` + (d.hub_name ? `<span class="hs"> · </span><bdi class="hb" dir="auto">${esc(d.hub_name)}</bdi>` : ""),
     meta: d.saving > 0 ? `<span>save ${fmt(d.saving >= 100 ? Math.round(d.saving) : d.saving)}</span>` : d.unit_text ? `<span class="unit">${esc(d.unit_text)}</span>`
       : d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : "",
     name: d.name || "", href: appHref(d), img: d.image || "",
@@ -1173,7 +1193,7 @@ function renderFresh() {
   const sub = L("Prices come from each store's own pages; this page asks for news every 10 seconds.", "الأسعار من صفحات المتاجر نفسها، والصفحة دي بتسأل على الجديد كل 10 ثواني.");
   if ($("statusSub").textContent !== sub) $("statusSub").textContent = sub;
 }
-$("fresh").onclick = () => { renderStatus(); $("statusDlg").showModal(); };
+$("fresh").onclick = () => { renderStatus(); openDialog($("statusDlg")); };
 let secs = 0;
 setInterval(() => { if (document.hidden) return; renderStatus(); if (++secs % 5 === 0) tickAgo(); }, 1000);
 
@@ -1194,7 +1214,7 @@ async function loadTicker() {
   for (const n of track.children) have.set(+n.dataset.row, n);
   const nodes = ticks.map(c => { let n = have.get(c.rowid); if (n) return n;
     const down = c.price < c.before, t = document.createElement("template");
-    t.innerHTML = `<button type="button" class="tick" data-id="${c.id}" data-row="${c.rowid}"><b dir="auto">${esc(c.name.slice(0, 60))}</b><span class="ln">${fmt(c.before)} ${rtl ? "←" : "→"} <span class="${down ? "down" : "up"}">${fmt(c.price)} ${down ? "▼" : "▲"}</span> · ${esc(c.label)} · <span data-ago="${+c.at || 0}" data-noi18n>${agoL(c.at)}</span></span></button>`;
+    t.innerHTML = `<button type="button" class="tick" data-id="${c.id}" data-row="${c.rowid}"><b dir="auto">${esc(c.name.slice(0, 60))}</b><span class="ln">${fmt(c.before)} ${rtl ? "←" : "→"} <span class="${down ? "down" : "up"}">${fmt(c.price)} ${down ? "▼" : "▲"}</span></span><span class="tm"><span class="ts">${esc(c.label)}</span><span data-ago="${+c.at || 0}" data-noi18n>${agoL(c.at)}</span></span></button>`;
     n = t.content.firstElementChild; n.onclick = () => showProduct(+n.dataset.id); return n; });
   const keep = new Set(nodes);
   for (const n of [...track.children]) if (!keep.has(n)) n.remove();
@@ -1215,12 +1235,12 @@ async function showProduct(id) {
   $("dbody").innerHTML = `<button class="x" aria-label="Close" onclick="this.closest('dialog').close()">×</button>
     <div class="dlg-head"><div class="img">${p.image ? `<img src="${esc(p.image)}" alt="" onerror="this.remove()">` : ""}</div>
       <div><h2 id="dname" dir="auto">${esc(p.name)}</h2>
-        <div class="meta"><span style="color:var(--${esc(p.store)});font-weight:650">${esc(LABELS[p.store] || p.store)}</span><span dir="auto">${esc(p.category || "")}</span><span>tracked ${ago(p.first_seen).replace(" ago", "")}</span></div>
-        <div style="margin-top:8px"><span class="bigprice">${fmt(p.price)} EGP</span>
-          ${d && d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : ""}
-          ${d && d.unit_text ? `<span class="meta unit" style="display:inline;margin-inline-start:8px">${esc(d.unit_text)}</span>` : ""}</div>
-        ${d && d.spark && d.spark.length > 1 ? `<div class="dspark">${sparkSVG(d.spark, 96, 28)}</div>` : ""}
-        <div class="tags" style="margin-top:6px">${d ? tagsFor(d) : ""}</div></div></div>
+        <div class="meta"><span style="color:var(--${esc(p.store)});font-weight:650">${esc(LABELS[p.store] || p.store)}</span><span dir="auto">${esc(p.category || "")}</span><span>tracked ${ago(p.first_seen).replace(" ago", "")}</span></div></div></div>
+    <div class="dprice"><span class="bigprice">${fmt(p.price)} <small>EGP</small></span>
+      ${d && d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : ""}
+      ${d && d.unit_text ? `<span class="unit">${esc(d.unit_text)}</span>` : ""}
+      ${d && d.spark && d.spark.length > 1 ? `<span class="dspark">${sparkSVG(d.spark, 96, 28)}</span>` : ""}</div>
+    ${d && tagsFor(d) ? `<div class="tags">${tagsFor(d)}</div>` : ""}
     ${d && d.verdict ? `<div class="verdict ${d.verdict.tone}"><b>${esc(d.verdict.label)}</b><span>${esc(d.verdict.why)}</span></div>` : ""}
     ${d && d.rhythm ? `<div class="rhythm">⏳ <b>Sale rhythm</b><br>${esc(d.rhythm.text)}</div>` : ""}
     ${d && d.promo_code ? `<div class="rhythm">🎟️ With the code <b data-noi18n>${esc(d.promo_code)}</b> at checkout: ${fmt(d.promo_price)} EGP</div>` : ""}
@@ -1244,7 +1264,7 @@ async function showProduct(id) {
       <a class="btn" href="/p/${id}">Product page</a>
     </div>`;
   tickAgo($("dbody"));
-  if (!$("dlg").open) $("dlg").showModal();
+  openDialog($("dlg"));
   drawChart(h, p.price);
   $("setTarget").onclick = () => {
     const v = parseFloat($("target").value);
@@ -1270,7 +1290,8 @@ function drawChart(h, current) {
   const pts = h.filter(r => r.in_stock).map(r => [r.at, r.price]);
   if (!pts.length) pts.push([now - 60, current]);
   pts.push([now, pts[pts.length - 1][1]]);
-  const W = 640, H = 200, L = 46, R = 8, T = 10, B = 24;
+  const svg = $("chart"), W = Math.max(280, Math.round(svg.getBoundingClientRect().width) || 640), H = 200, L = 46, R = 8, T = 10, B = 24;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const t0 = pts[0][0], t1 = Math.max(now, t0 + 1), ps = pts.map(p => p[1]);
   const lo = Math.min(...ps), hi = Math.max(...ps), pad = (hi - lo) * .15 || hi * .05 || 1;
   const X = t => L + (W - L - R) * (t - t0) / (t1 - t0), Y = v => T + (H - T - B) * (1 - (v - (lo - pad)) / ((hi + pad) - (lo - pad)));
@@ -1278,7 +1299,6 @@ function drawChart(h, current) {
   for (let i = 1; i < pts.length; i++) d += ` H${X(pts[i][0]).toFixed(1)} V${Y(pts[i][1]).toFixed(1)}`;
   const area = d + ` V${H - B} H${X(pts[0][0]).toFixed(1)} Z`;
   const date = t => new Date(t * 1000).toLocaleDateString(LOC(), { day: "numeric", month: "short" });
-  const svg = $("chart");
   svg.innerHTML = `<path class="ar" d="${area}"/><path class="ln" d="${d}"/>
     <line class="ax" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>
     <text x="4" y="${Y(hi) + 4}">${fmt(hi)}</text>${hi !== lo ? `<text x="4" y="${Y(lo) + 4}">${fmt(lo)}</text>` : ""}
@@ -1323,8 +1343,10 @@ $("watchBtn").onclick = $("tabWatch").onclick = () => { F.watch = !F.watch; sync
 $("qReal").onclick = () => { F.status = F.status.includes("real") ? F.status.filter(x => x !== "real") : [...F.status, "real"]; syncControls(); apply(); };
 // the filters: a bottom sheet on phones, a side drawer on tablets (the rail on wide screens needs neither)
 let sheetFrom = null;
-const sheet = open => { const was = $("filters").classList.contains("open");
-  $("filters").classList.toggle("open", open);
+const sheet = open => { const was = $("filters").classList.contains("open"), f = $("filters");
+  f.classList.toggle("open", open);
+  // open, it is a modal sheet (focus stays in it, see trapFocus); closed, the rail or nothing
+  if (open) { f.setAttribute("role", "dialog"); f.setAttribute("aria-modal", "true"); } else { f.removeAttribute("role"); f.removeAttribute("aria-modal"); }
   document.querySelector(".scrim")?.remove();
   if (open) { const s = document.createElement("div"); s.className = "scrim"; s.onclick = () => sheet(false); document.body.append(s);
     sheetFrom = document.activeElement; setTimeout(() => $("sheetX").focus({ preventScroll: true }), 50); }
@@ -1358,6 +1380,41 @@ $("grid").addEventListener("keydown", e => {  // Space opens the details too (En
 });
 new IntersectionObserver(es => { if (es[0].isIntersecting && items.length && items.length < total && !loading) load({ append: true }); },
   { rootMargin: "800px" }).observe($("more"));
+// ---------- keyboard: a skip link, focus kept inside whatever is open on top, and back to its opener when it closes ----------
+$("skip").onclick = e => {
+  e.preventDefault();
+  const first = $("grid").querySelector("[data-detail]");
+  if (first) { first.focus({ preventScroll: true }); first.closest(".card").scrollIntoView({ block: "center" }); }
+  else { $("grid").tabIndex = -1; $("grid").focus(); }
+};
+const FOCUSABLE = "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea, [tabindex]:not([tabindex='-1'])";
+const shown = el => el.checkVisibility ? el.checkVisibility({ visibilityProperty: true }) : !!el.offsetParent;
+function topLayer() {  // what keeps focus now: a modal dialog, the ⋯ menu, the filter sheet
+  const dlg = [...document.querySelectorAll("dialog[open]")].pop();
+  if (dlg) return dlg;
+  if (!$("moreMenu").hidden) return $("moreMenu");
+  if ($("filters").classList.contains("open")) return $("filters");
+  return null;
+}
+document.addEventListener("keydown", e => {  // Tab and Shift+Tab go round inside it
+  if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
+  const box = topLayer(); if (!box) return;
+  const f = [...box.querySelectorAll(FOCUSABLE)].filter(shown);
+  if (!f.length) return;
+  const a = document.activeElement, i = f.indexOf(a);
+  if (!box.contains(a) || (e.shiftKey ? i <= 0 : i === f.length - 1)) { e.preventDefault(); (e.shiftKey ? f[f.length - 1] : f[0]).focus(); }
+});
+// a dialog gives focus back to what opened it (a card, a ticker item, the freshness pill, a tab)
+function openDialog(dlg) {
+  if (dlg.open) return;
+  const from = document.activeElement;
+  dlg._from = from && from !== document.body ? from : null;
+  dlg.showModal();
+}
+for (const id of ["dlg", "panel", "statusDlg"]) $(id).addEventListener("close", () => {
+  const from = $(id)._from; $(id)._from = null;
+  if (from && from.isConnected && shown(from)) from.focus({ preventScroll: true });
+});
 document.addEventListener("keydown", e => {
   if (e.key === "/" && !["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) { e.preventDefault(); $("q").focus(); }
   if (e.key === "Escape" && $("filters").classList.contains("open")) sheet(false);
@@ -1439,7 +1496,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvent = e; $("installBtn").hidden = false; });
 if (!standalone && isIOS) $("installBtn").hidden = false;
 $("installBtn").onclick = async () => {
-  menu(false);
+  menu(false); $("moreBtn").focus();
   if (installEvent) { installEvent.prompt(); const r = await installEvent.userChoice; if (r.outcome === "accepted") $("installBtn").hidden = true; installEvent = null; return; }
   panel(`<h2>Install Live deals</h2>${isIOS ? `<ol><li>Tap the <b>Share</b> button (the square with an arrow) at the bottom of Safari.</li>
     <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li><li>Open it from the new icon. Alerts work only from the installed app on iPhone (iOS 16.4 or later).</li></ol>`
@@ -1450,7 +1507,7 @@ window.addEventListener("appinstalled", () => { $("installBtn").hidden = true; t
 // ---------- price-drop alerts (push) ----------
 function alertsPrefs() { return Object.assign({ enabled: false, all_drops: false, min_drop: 20, stores: [], hubs: [], categories: [], words: [], sound: true, predict: true },
   store.get("alerts", {})); }
-function panel(html) { $("pbody").innerHTML = `<button class="x" aria-label="Close" onclick="this.closest('dialog').close()">×</button>` + html; if (!$("panel").open) $("panel").showModal(); }
+function panel(html) { $("pbody").innerHTML = `<button class="x" aria-label="Close" onclick="this.closest('dialog').close()">×</button>` + html; openDialog($("panel")); }
 async function pushSubscription(create) {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
   const reg = await navigator.serviceWorker.ready;
@@ -1558,7 +1615,7 @@ async function showBasket() {
   $("bClear").onclick = () => { basket = {}; saveBasket(); $("panel").close(); };
 }
 $("basketBtn").onclick = $("tabBasket").onclick = showBasket;
-$("alertsMi").onclick = () => { menu(false); $("alertsBtn").onclick(); };
+$("alertsMi").onclick = () => { menu(false); $("moreBtn").focus(); $("alertsBtn").onclick(); };  // its panel gives focus back to ⋯
 $("tabAlerts").onclick = () => $("alertsBtn").onclick();
 
 // ---------- today in 30 seconds (the home page, before any filter) ----------

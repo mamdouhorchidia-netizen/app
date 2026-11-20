@@ -4,6 +4,7 @@
   /api/deals             filters: deals=1|0 stores=a,b kind=platform|drop min= max= stock=in|out|all
                          status=new,lowest,real,label,back,compare category= q= pmin= pmax= ids=1,2 best=1
                          sort=score|discount|saving|newest|drop|price|price_desc|unit|popular|name limit= offset=
+                         each item carries only what the page's cards read (web.LIST_FIELDS); full=1: every field
   /api/changes           the latest price moves (?limit=), or only those newer than a price row (?after=ROWID)
   /api/pulse             tiny and cheap: data version `v`, server time, each store's status, changes in the last hour
   /api/seen?ids=1,2      when each product was last checked (up to 60)
@@ -181,6 +182,49 @@ def recent_changes(con, limit: int = 30, after: int = None, upto: int = None) ->
         r["label"] = LABELS.get(r["store"], r["store"])
         out.append(r)
     return out
+
+
+# /api/deals sends each item with only what the live page reads from a list item: its card (and the patcher that
+# compares cards part by part), the ★ watchlist check and the 🧺 basket. Everything else (sku, category, first_seen,
+# tracked_days, the sparkline, score and why, the sale rhythm, …) is in /api/product/ID, which the product view
+# fetches anyway. `?full=1` gives the whole item, as before, for any other caller.
+LIST_FIELDS = ("id", "store", "name", "image", "in_stock", "price", "original_price", "usual_price", "discount_pct",
+               "kind", "saving", "unit_text", "flags", "deal_label", "promo_code", "promo_price", "hub_name",
+               "matches", "cheapest", "verdict", "last_seen")
+LIST_VOLATILE = frozenset({"last_seen"})  # follows the clock: never a reason for a new ETag (as in livedata.VOLATILE)
+
+
+def list_item(d: dict) -> dict:
+    """The list shape of a catalog item. Empty values (None) are left out: the page reads a missing field as empty.
+    links: "web" always; "android" and "ios" only where they differ from it (the page falls back to "web");
+    "browser" only the product view uses. "url" only when there is no web link (the page's last fallback)."""
+    out = {k: d[k] for k in LIST_FIELDS if d.get(k) is not None}
+    links = d.get("links") or {}
+    web = links.get("web") or ""
+    out["links"] = {"web": web, **{k: links[k] for k in ("android", "ios") if links.get(k) and links[k] != web}}
+    if not web and d.get("url"):
+        out["url"] = d["url"]
+    return out
+
+
+_list_digests: dict = {}  # an item's full digest -> the digest of its list shape (a function of it)
+
+
+def list_digest(d: dict, full_digest: bytes) -> bytes:
+    """8 bytes that change exactly when the list shape changes, leaving out what follows the clock (last_seen,
+    the verdict's wording; its label and tone count), like livedata.item_digest does for the full item. Everything
+    it covers is covered by the full digest too, so it's kept per full digest and computed once per change."""
+    hit = _list_digests.get(full_digest)
+    if hit is None:
+        s = list_item(d)
+        v = s.get("verdict") or {}
+        stable = [(k, x) for k, x in s.items() if k not in LIST_VOLATILE and k != "verdict"]
+        stable.append(("verdict", (v.get("label"), v.get("tone"))))
+        hit = hashlib.blake2b(repr(stable).encode(), digest_size=8).digest()
+        if len(_list_digests) > 400_000:  # a few catalogs' worth; then start again
+            _list_digests.clear()
+        _list_digests[full_digest] = hit
+    return hit
 
 
 def make_handler(db_path: str, requests_file: str = None, keeper: livedata.CatalogKeeper = None):
@@ -396,13 +440,18 @@ def make_handler(db_path: str, requests_file: str = None, keeper: livedata.Catal
                     snap = keeper.get()
                     hits, facets, facets_digest = matches_for(snap, args)
                     page = hits[offset:offset + limit]
-                    # the ETag covers what the cards show; status, changes_last_hour, now and v are left out
-                    etag = etag_of("deals", limit, offset, len(hits), facets_digest,
-                                   b"".join(snap.digests[d["id"]] for d in page))
+                    # the ETag covers what the items carry (only the list shape's fields unless ?full=1); status,
+                    # changes_last_hour, now and v are left out
+                    full = q.get("full") == "1"
+                    digests = (snap.digests[d["id"]] for d in page) if full else \
+                        (list_digest(d, snap.digests[d["id"]]) for d in page)
+                    etag = etag_of("deals-full" if full else "deals", limit, offset, len(hits), facets_digest,
+                                   b"".join(digests))
                     if self.unchanged(etag):
                         return
                     p = pulse(con)
-                    self.json({"items": page, "total": len(hits), "facets": facets, "labels": LABELS,
+                    self.json({"items": page if full else [list_item(d) for d in page], "total": len(hits),
+                               "facets": facets, "labels": LABELS,
                                "status": p["status"], "changes_last_hour": p["changes_last_hour"],
                                "now": int(time.time()), "v": snap.v}, etag=etag)
                 elif u.path == "/api/pulse":
