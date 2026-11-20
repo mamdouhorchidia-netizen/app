@@ -54,6 +54,12 @@ The phone app for [Vorath](https://github.com/mamdouhorchidia-netizen/vorath). I
 The app only reads (`/api/me`, `/api/state`, `/api/autopilot/deck`) and never computes money: every figure is the
 server's. Vorath itself is not changed by this project.
 
+## Install on a phone
+
+Open <https://github.com/mamdouhorchidia-netizen/app/releases/latest> on the phone, tap **vorath.apk**, then Open.
+CI builds, tests on emulators, signs and publishes it: see [docs/RELEASING.md](docs/RELEASING.md), which also covers
+the release key.
+
 ## Build
 
 Needs JDK 17+ and the Android SDK (platform 35).
@@ -63,6 +69,17 @@ Needs JDK 17+ and the Android SDK (platform 35).
 ./gradlew :app:testDebugUnitTest      # parsing, alarm rules, cache, freshness, changes, the client's 304 / keep-alive,
                                       # sign-in (health only on failure, messages), the form checks, link and download
                                       # rules of the in-app page, and the notification channels and grouping
+```
+
+On an emulator or a phone (adb), the tests in `app/src/androidTest`: the real Keystore (session and cache sealed,
+key not exportable), Android's notification manager (channels, grouping, "sign in again"), the background check
+run by WorkManager against a Vorath stand-in on 127.0.0.1 and its 15-minute schedule, and the app's screens
+(sign-in form, Today read from the stand-in, an ended session back to sign-in). Debug builds only may use plain
+http to 127.0.0.1, for that stand-in (`src/debug`):
+
+```
+./gradlew :app:connectedDebugAndroidTest
+tools/emulator-check.sh <release.apk> <out folder>   # those tests, then the release APK installed and opened
 ```
 
 Two more tests are skipped unless asked for:
@@ -100,11 +117,13 @@ VORATH_HOME=/tmp/vhome VORATH_SECRET_KEY=dev-only python tools/vorath_devserver.
 
 ## Not done yet
 
-- Never run on a phone or emulator. It compiles for Android (`assembleDebug`, and a minified `assembleRelease`
-  that passes lint's release checks), and all unit tests pass under the Android build, Robolectric included. The
-  30-second loop, the Keystore, the notifications (and the in-context permission request), the 15-minute check, the
-  in-app Vorath page, touch, scrolling, TalkBack (focus order, the polite alarm announcement) and the flash with the
-  phone's animations off are still unproven until run on a phone or emulator.
+- Run on emulators in CI (API 26 and 34), not yet on a real phone. Proven there: the signed, minified release APK
+  installs like a downloaded file and opens on the sign-in screen without a crash; the Keystore; the notifications
+  and their channels; the background check and its schedule; the sign-in form's own checks; the Today page reading
+  a server; an ended session returning to sign-in. Still unproven until a real phone: the sign-in against a real
+  Vorath over https (with autofill and the keyboard), the 30-second loop over real networks, the 15-minute check
+  in Doze, the in-app Vorath page (cookie, downloads, redirects), touch and scrolling, TalkBack, and the flash with
+  the phone's animations off.
 - The screens have been drawn (`ScreensTest` and `ChangedScreenTest`, with Robolectric's native graphics, not on a
   phone): sign-in, Today in light and dark (full length and phone height), a small phone, the first read as grey
   shapes (phone and tablet), a quiet update, offline with the last answers (light and dark), one section failing,
@@ -116,8 +135,8 @@ VORATH_HOME=/tmp/vhome VORATH_SECRET_KEY=dev-only python tools/vorath_devserver.
 - Release builds are minified with R8 and resource shrinking (about 1.3 MB against 7.4 MB without); the library keep
   rules cover what is made by class name, but the minified build has not been run on a device either. Keep
   `app/build/outputs/mapping/release/mapping.txt` from each release to read its crash reports.
-- The APK in `release/` is a debug build signed with a throwaway key; a permanent signing key is needed for updates.
-  It predates the cache, the 30-second reads and this round's sign-in, in-app page and notification changes.
+- Updates install over each other only once the release key is in the repository's secrets (docs/RELEASING.md);
+  until then each build is signed with its own throwaway key. The old debug APK in `release/` is gone.
 - Alarms are checked every 15 minutes at best; instant push needs a change in Vorath. English only.
 - In the in-app page: the sign-in page is recognised by its path `/login` (where the app already sends people to set
   up 2-step codes); files a page makes in itself (`blob:` / `data:`) cannot be saved from the app and say so; before

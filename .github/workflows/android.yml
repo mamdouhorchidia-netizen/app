@@ -1,0 +1,189 @@
+name: Android
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "gradle/**"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - "gradlew"
+      - "tools/emulator-check.sh"
+      - ".github/workflows/android.yml"
+  push:
+    branches: [ccr-322cc86c-ixmt5w]        # the default branch; PRs are covered by pull_request
+    paths:
+      - "app/**"
+      - "gradle/**"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - "gradlew"
+      - "tools/emulator-check.sh"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Unit tests and signed APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    outputs:
+      key: ${{ steps.key.outputs.kind }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Signing key
+        id: key
+        env:
+          KEYSTORE_B64: ${{ secrets.VORATH_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.VORATH_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.VORATH_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.VORATH_KEY_PASSWORD }}
+        run: |
+          ks="$RUNNER_TEMP/release.jks"
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$ks"
+            echo "kind=release" >> "$GITHUB_OUTPUT"
+            pass="$KEYSTORE_PASSWORD"; alias="$KEY_ALIAS"; keypass="${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
+          else
+            echo "::warning::No VORATH_KEYSTORE_B64 secret: this APK is signed with a throwaway key. It installs, but the next one will not install over it. See docs/RELEASING.md."
+            pass="throwaway-$GITHUB_RUN_ID"; alias=throwaway; keypass="$pass"
+            keytool -genkeypair -keystore "$ks" -storetype PKCS12 -storepass "$pass" -keypass "$pass" -alias "$alias" \
+              -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Vorath throwaway"
+            echo "kind=throwaway" >> "$GITHUB_OUTPUT"
+          fi
+          echo "::add-mask::$pass"
+          echo "::add-mask::$keypass"
+          {
+            echo "VORATH_KEYSTORE=$ks"
+            echo "VORATH_KEYSTORE_PASSWORD=$pass"
+            echo "VORATH_KEY_ALIAS=$alias"
+            echo "VORATH_KEY_PASSWORD=$keypass"
+          } >> "$GITHUB_ENV"
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+
+      - name: Signed release APK
+        env:
+          VORATH_VERSION_CODE: ${{ github.run_number }}
+        run: ./gradlew --no-daemon :app:assembleRelease
+
+      - name: Check the signature
+        run: |
+          signer="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner"
+          apk=app/build/outputs/apk/release/app-release.apk
+          test -f "$apk" || { echo "No signed APK was made"; ls -R app/build/outputs/apk; exit 1; }
+          "$signer" verify --verbose --print-certs "$apk" | tee signature.txt
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" signature.txt
+          mkdir -p out
+          cp "$apk" out/vorath.apk
+          cp app/build/outputs/mapping/release/mapping.txt out/mapping.txt
+          sha256sum out/vorath.apk | tee out/vorath.apk.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vorath-apk
+          path: out/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-reports
+          path: app/build/reports/tests/
+
+  emulator:
+    name: On an emulator (API ${{ matrix.api }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - api: 34
+            arch: x86_64
+          - api: 26
+            arch: x86
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: vorath-apk
+          path: apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Tests and the release APK on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: ${{ matrix.arch }}
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash tools/emulator-check.sh apk/vorath.apk emulator-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emulator-api-${{ matrix.api }}
+          path: |
+            emulator-out/
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+
+  publish:
+    name: Publish the APK for phones
+    needs: [build, emulator]
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vorath-apk
+          path: apk
+      - name: Release notes
+        env:
+          KEY: ${{ needs.build.outputs.key }}
+        run: |
+          {
+            echo "Vorath for Android 0.1.0, build ${{ github.run_number }} (${GITHUB_SHA::7})."
+            echo
+            echo "On the phone, open this page, tap **vorath.apk**, then Open. Android asks once to allow installs from your browser."
+            echo
+            if [ "$KEY" = throwaway ]; then
+              echo "This build is signed with a throwaway key: uninstall the previous Vorath before installing it."
+            else
+              echo "Signed with the Vorath release key: it installs over the previous build."
+            fi
+            echo
+            echo "SHA-256: \`$(cut -d' ' -f1 apk/vorath.apk.sha256)\`"
+          } > notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-0.1.0-build${{ github.run_number }}
+          name: Vorath for Android 0.1.0 (build ${{ github.run_number }})
+          body_path: notes.md
+          target_commitish: ${{ github.sha }}
+          make_latest: "true"
+          files: apk/vorath.apk
