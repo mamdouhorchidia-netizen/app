@@ -1,9 +1,12 @@
-"""The live deals page and its JSON API, on Python's built-in HTTP server.
+"""The live deals page and its JSON API, on Python's built-in HTTP server (HTTP/1.1, kept-alive connections).
 
-  /                      the live page (refreshes itself every 10 seconds)
+  /                      the live page
+  /api/pulse             tiny, from memory: {v, now, changes_last_hour, status, brief counts}. `v` changes when the
+                         catalogue does; a page that saw the same v has nothing to fetch
   /api/deals             filters: deals=1|0 stores=a,b kind=platform|drop min= max= stock=in|out|all
                          status=new,lowest,real,label,back,compare category= q= pmin= pmax= ids=1,2 best=1
                          sort=score|discount|saving|newest|drop|price|price_desc|unit|popular|name limit= offset=
+                         fields=card (only what a card shows) since_v=<v> (304 when nothing changed)
   /api/changes           the latest price moves (?limit=)
   /api/product/ID        one product: history, links, matches in other stores, score and why
   /api/status            each store: products, last check, last change, cycle time, errors
@@ -18,20 +21,29 @@
   /p/ID                  a product's own page (history, verdict, other stores; a preview card on WhatsApp/Telegram)
   /stores, /store/ID     every store, and one store's deals · /cats every category · /coupons the owner's codes
   POST /admin/coupons    {"text": "store | CODE | what it gives | until | link" one per line}; GET /api/coupons
+
+Every answer comes from the shared catalogue (catalog.py), which a background thread keeps up to date: no request
+builds it. Answers made from one snapshot are kept with it (encoded once). Caching: GET answers carry a weak ETag
+and `Cache-Control: no-cache` (store, but ask again; a 304 when nothing changed), icons `public, max-age=86400`;
+only /admin and POST answers are `no-store`.
 """
 
+import hashlib
 import hmac
 import json
 import os
+import queue
 import re
 import sqlite3
 import tempfile
 import threading
 import time
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from . import catalog as catalog_mod
 from . import db, finder, pages, settings
 from .stores import LABELS, breadfast, talabat
 
@@ -63,8 +75,14 @@ def known_hubs(db_path: str = None) -> dict:
 
 MAX_UPLOAD = 300 * 1024 * 1024
 _import_lock = threading.Lock()
-CACHE_SECONDS = 5
-CATALOG_SECONDS = 15
+STARTUP_WAIT = float(os.environ.get("DEALS_STARTUP_WAIT", 30))  # a request during the very first build waits this long
+KEEPALIVE = 120  # seconds an idle kept-alive connection stays open (longer than Traefik's 90 s idle pool)
+JSON = "application/json; charset=utf-8"
+HTML = "text/html; charset=utf-8"
+CARD_FIELDS = ("id", "store", "name", "image", "price", "original_price", "usual_price", "discount_pct", "kind", "saving",
+               "flags", "deal_label", "score", "since", "prev_price", "recent_low", "in_stock", "unit_text", "hub",
+               "hub_name", "spark", "links", "verdict", "matches", "cheapest", "promo_code", "promo_price", "rhythm",
+               "top_category")
 MANIFEST = json.dumps({
     "name": "عروض لحظة بلحظة", "short_name": "العروض", "lang": "ar", "dir": "rtl", "start_url": "/", "scope": "/", "display": "standalone",
     "background_color": "#f6f5f2", "theme_color": "#d6402b", "description": "Live prices and real deals",
@@ -82,54 +100,104 @@ ICON = (b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect wi
         b'stroke-linecap="round" stroke-linejoin="round"/><circle cx="390" cy="180" r="34" fill="#fff"/></svg>')
 
 
-def status(con) -> list[dict]:
-    """One row per store that has products or has been checked."""
-    counts = dict(con.execute("SELECT store, COUNT(*) FROM products GROUP BY store").fetchall())
-    live = {r["store"]: dict(r) for r in con.execute("SELECT * FROM live_status")}
-    runs = {r["store"]: dict(r) for r in con.execute("""
-        SELECT r.* FROM runs r JOIN (SELECT store, MAX(id) id FROM runs WHERE finished IS NOT NULL GROUP BY store) l
-        ON r.id = l.id""")}
-    out = []
-    for store in sorted(set(counts) | set(live) | set(runs)):
-        row = {"store": store, "label": LABELS.get(store, store), "products": counts.get(store, 0)}
-        if store in live:
-            l = live[store]
-            row.update(live=True, updated=l["updated"], last_change=l["last_change"] or None,
-                       cycle_secs=l["cycle_secs"], pages_per_cycle=l["tasks"], error=l["error"],
-                       paused_until=l["paused_until"] if (l["paused_until"] or 0) > time.time() else None)
-        elif store in runs:
-            r = runs[store]
-            row.update(live=False, updated=r["finished"], last_change=None, cycle_secs=None, error=r["error"])
-        out.append(row)
+# status rows, the last hour's count and the latest moves: computed by the catalogue at each refresh
+status = catalog_mod.status
+changes_last_hour = catalog_mod.changes_last_hour
+recent_changes = catalog_mod.recent_changes
+
+
+def dumps(obj) -> bytes:
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode()
+
+
+def etag_of(body: bytes) -> str:
+    return 'W/"' + hashlib.sha1(body).hexdigest()[:16] + '"'
+
+
+def _num(x):
+    """25.0 -> 25: the same number to JavaScript, two bytes shorter."""
+    return int(x) if isinstance(x, float) and x.is_integer() and abs(x) < 1e15 else x
+
+
+def card(d: dict, now: int) -> dict:
+    """What one card on the page shows (fields=card): CARD_FIELDS, a spark of at most 12 points, links without
+    "browser". Whole-number prices are written without ".0", and spark points that repeat the price before them are
+    left out (a step line draws the same thing)."""
+    pts = d["spark"] + [[now, d["spark"][-1][1]]]
+    sp = [pts[0]] + [p for prev, p in zip(pts, pts[1:-1]) if p[1] != prev[1]] + [pts[-1]] if len(pts) > 1 else pts
+    if len(sp) > 12:
+        step = len(sp) / 12
+        sp = [sp[int(i * step)] for i in range(11)] + [sp[-1]]
+    out = {k: d[k] for k in CARD_FIELDS}
+    for k in ("price", "original_price", "usual_price", "discount_pct", "saving", "prev_price", "recent_low",
+              "promo_price"):
+        out[k] = _num(out[k])
+    l, v, r = d["links"], d["verdict"], d["rhythm"]
+    out["spark"] = [[t, _num(p)] for t, p in sp]
+    out["links"] = {"web": l.get("web"), "android": l.get("android"), "ios": l.get("ios")}
+    out["verdict"] = {"label": v["label"], "tone": v["tone"], "why": v["why"]}
+    out["matches"] = [{"id": m["id"], "store": m["store"], "price": _num(m["price"]), "in_stock": m["in_stock"]}
+                      for m in d["matches"]]
+    out["rhythm"] = {"next_in_days": r["next_in_days"], "on_sale": r["on_sale"], "text": r["text"]} if r else None
     return out
 
 
-def changes_last_hour(con) -> int:
-    return con.execute("""SELECT COUNT(*) FROM prices x JOIN products p ON p.id = x.product_id
-                          WHERE x.at > ? AND x.at > p.first_seen""", (int(time.time()) - 3600,)).fetchone()[0]
+class Pool:
+    """A few sqlite connections, reused across requests (each is used by one request at a time)."""
+
+    def __init__(self, path: str, size: int = 8):
+        self.path, self.size, self.q = path, size, queue.LifoQueue()
+
+    @contextmanager
+    def connection(self):
+        try:
+            con = self.q.get_nowait()
+        except queue.Empty:
+            con = sqlite3.connect(self.path, timeout=10, check_same_thread=False)
+            con.row_factory = sqlite3.Row
+        ok = False
+        try:
+            yield con
+            ok = True
+        finally:
+            if ok and not con.in_transaction and self.q.qsize() < self.size:
+                self.q.put(con)
+            else:
+                con.close()
 
 
-def recent_changes(con, limit: int = 30) -> list[dict]:
-    rows = con.execute("""
-        SELECT x.at, x.price, x.in_stock, p.id, p.store, p.name, p.image,
-               (SELECT y.price FROM prices y WHERE y.product_id = x.product_id AND y.at < x.at
-                ORDER BY y.at DESC LIMIT 1) AS before
-        FROM prices x JOIN products p ON p.id = x.product_id
-        WHERE x.at > p.first_seen ORDER BY x.at DESC LIMIT ?""", (limit,))
-    out = []
-    for r in rows:
-        r = dict(r)
-        r["label"] = LABELS.get(r["store"], r["store"])
-        out.append(r)
-    return out
+class _File:
+    """A file next to this module, read again only when it changes on disk."""
+
+    def __init__(self, path: Path):
+        self.path, self.stamp, self.body, self.etag = path, None, b"", ""
+
+    def get(self) -> tuple[bytes, str]:
+        st = os.stat(self.path)
+        stamp = (st.st_mtime_ns, st.st_size)
+        if stamp != self.stamp:
+            body = self.path.read_bytes()
+            self.body, self.etag, self.stamp = body, etag_of(body), stamp
+        return self.body, self.etag
 
 
-def make_handler(db_path: str, requests_file: str = None):
+def make_handler(db_path: str, requests_file: str = None, catalog: "catalog_mod.Catalog" = None):
+    """The request handler class. `catalog`: the shared live catalogue (one is made, and started on first use, when
+    none is given); the class keeps it as Handler.catalog."""
     requests_file = requests_file or breadfast.DEFAULT_REQUESTS_FILE
     coupons_file = os.path.join(os.path.dirname(os.path.abspath(db_path)), "coupons.json")
-    cache, lock = {}, threading.Lock()
-    catalog_state = {"at": 0.0, "items": [], "by_id": {}}
-    catalog_lock = threading.Lock()
+    cat = catalog or catalog_mod.Catalog(db_path)
+    pool = Pool(db_path)
+    files = {name: _File(Path(__file__).with_name(name)) for name in
+             ["live.html", "admin.html"] + [v[0] for v in STATIC.values()]}
+    MANIFEST_TAG, ICON_TAG = etag_of(MANIFEST), etag_of(ICON)
+    started = []
+
+    def snapshot():
+        if not started:
+            cat.start()
+            started.append(True)
+        return cat.snapshot(wait=STARTUP_WAIT)
 
     vapid_box = {}
 
@@ -189,231 +257,339 @@ def make_handler(db_path: str, requests_file: str = None):
         finally:
             con.close()
 
-    def catalog(con) -> list[dict]:
-        with catalog_lock:  # one rebuild at a time; everyone else gets the fresh copy
-            if time.monotonic() - catalog_state["at"] > CATALOG_SECONDS:
-                items = finder.catalog(con)
-                catalog_state.update(at=time.monotonic(), items=items, by_id={d["id"]: d for d in items})
-            return catalog_state["items"]
+    def deals_args(q: dict) -> dict:
+        def nums(key):
+            return [int(x) for x in q[key].split(",") if x.strip().isdigit()] if q.get(key) else None
 
-    def cached(key: str, build):
-        now = time.monotonic()
-        with lock:
-            hit = cache.get(key)
-            if hit and now - hit[0] < CACHE_SECONDS:
-                return hit[1]
-        value = build()
-        with lock:
-            if len(cache) > 500:
-                cache.clear()
-            cache[key] = (now, value)
-        return value
+        def num(key):
+            return float(q[key]) if q.get(key) not in (None, "") else None
+
+        args = dict(deals_only=q.get("deals", "1") != "0",
+                    stores=[x for x in q.get("stores", q.get("store", "")).split(",") if x] or None,
+                    kind=q.get("kind") or None, min_pct=num("min") or 0, max_pct=num("max"),
+                    stock=q.get("stock", "in"), status=[x for x in q.get("status", "").split(",") if x],
+                    category=q.get("category") or None, q=q.get("q") or None,
+                    price_min=num("pmin"), price_max=num("pmax"), ids=nums("ids"),
+                    best=q.get("best") == "1", sort=q.get("sort", "score"), hubs=nums("hubs"),
+                    limit=min(int(q.get("limit", 60)), 500), offset=int(q.get("offset", 0)))
+        if args["ids"] is not None:
+            args["ids"] = set(args["ids"])
+        return args
+
+    def deals_body(snap, args: dict, cards: bool) -> bytes:
+        r = snap.query(**args)
+        meta = cat.meta()
+        now = snap.now
+        r["items"] = [card(d, now) if cards else snap.full(d) for d in r["items"]]
+        r.update(labels=LABELS, status=meta.status, changes_last_hour=meta.changes_last_hour, now=now, v=snap.v)
+        return dumps(r)
+
+    def pulse_tail(snap, meta) -> bytes:
+        b = snap.brief
+        return dumps({"changes_last_hour": meta.changes_last_hour, "status": meta.status,
+                      "brief": {k: b[k] for k in ("deals", "dropped_24h", "record_lows", "fake", "soon", "promo",
+                                                  "biggest_saving")}})[1:]
+
+    def product_body(snap, pid: int):
+        with pool.connection() as con:
+            p = con.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
+            if not p:
+                return None
+            history = db.history(con, pid)
+        by_id = snap.by_id
+        it = by_id.get(pid)
+        item = snap.full(it) if it else {}
+        matches = [dict(by_id[m["id"]], spark=None) for m in item.get("matches", []) if m["id"] in by_id]
+        return dumps({"product": dict(p), "item": item, "history": history, "matches": matches})
+
+    def product_page(snap, pid: int):
+        with pool.connection() as con:
+            p = con.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
+            if not p:
+                return None
+            history = db.history(con, pid)
+        by_id = snap.by_id
+        it = by_id.get(pid)
+        item = snap.full(it) if it else {}
+        matches = [snap.full(by_id[m["id"]]) for m in item.get("matches", []) if m["id"] in by_id]
+        related = []
+        if item:
+            r = snap.query(deals_only=True, category=item["top_category"], stores=[item["store"]], sort="score",
+                           limit=13)
+            related = [snap.full(x) for x in r["items"] if x["id"] != pid][:12]
+        return pages.product_page(dict(p), item, history, matches, related, PUBLIC_URL, now=snap.now)
+
+    def stores_page(snap):
+        deals = snap.query(deals_only=True, limit=0)["facets"]["store"]
+        return pages.stores_page(cat.meta().status, {}, deals, snap.index.best_by(snap.by_id, "store"))
+
+    def cats_page(snap):
+        r = snap.query(deals_only=True, limit=0)["facets"]["category"]
+        top = snap.index.best_by(snap.by_id, "cat")
+        return pages.cats_page(sorted(((c, n, top.get(c, 0)) for c, n in r.items() if n), key=lambda x: -x[1]))
+
+    def coupons_page(snap):
+        found = {}  # codes the stores show on their own products (Kenzz), with how many they cut
+        ix = snap.index
+        for s in catalog_mod.slots_of(ix.masks.get("promo", 0) & ix.masks.get("in", 0)):
+            d = snap.by_id[ix.ids[s]]
+            c = found.setdefault((d["store"], d["promo_code"]), {"n": 0, "best": 0.0})
+            c["n"] += 1
+            c["best"] = max(c["best"], d["price"] - (d["promo_price"] or d["price"]))
+        auto = [{"store": st, "code": code, "auto": True, "url": f"{PUBLIC_URL}/?deals=0&status=promo&stores={st}",
+                 "title": f"Extra off on {v['n']} products, up to {v['best']:,.0f} EGP"}
+                for (st, code), v in sorted(found.items(), key=lambda kv: -kv[1]["n"])[:60]]
+        return pages.coupons_page(pages.load_coupons(coupons_file) + auto)
+
+    def talabat_hubs():
+        chosen = settings.load(settings.path_for(db_path))["talabat_hubs"]
+        hubs = known_hubs(db_path)
+        for h in chosen:
+            hubs.setdefault(h["id"], {**h, "areas": []})
+        rows = []
+        for h in hubs.values():
+            cities = sorted({a["city"] for a in h["areas"]})
+            area_names = [a["name"] for a in h["areas"]]
+            label, words = talabat.district(h["name"], cities)  # the hub's own name decides
+            if not words:  # a name that says nothing: go by the areas it serves
+                label, words = talabat.district(" ".join(area_names[:5]), cities)
+            rows.append({"id": h["id"], "name": h["name"], "aid": h["aid"], "areas": area_names[:40],
+                         "cities": cities, "district": label, "words": words})
+        order = [d[0] for d in talabat.DISTRICTS]
+        rows.sort(key=lambda h: (order.index(h["district"]) if h["district"] in order else 99, h["name"].lower()))
+        return {"selected": [h["id"] for h in chosen], "districts": order, "hubs": rows}
 
     class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+        timeout = KEEPALIVE
+        disable_nagle_algorithm = True
+        server_version = "deals"
+        catalog = cat
+
         def log_message(self, fmt, *args):
             pass
 
-        def send(self, code: int, body: bytes, ctype: str):
+        def fresh(self, etag: str) -> bool:
+            """The client already has this version (If-None-Match)."""
+            given = self.headers.get("If-None-Match")
+            if not given or not etag:
+                return False
+            if given.strip() == "*":
+                return True
+            mine = etag.removeprefix("W/")
+            return any(t.strip().removeprefix("W/") == mine for t in given.split(","))
+
+        def not_modified(self, etag: str, cache: str = "no-cache"):
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", cache)
+            self.end_headers()
+
+        def send(self, code: int, body: bytes, ctype: str, cache: str = "no-cache", etag: str = None,
+                 headers: dict = None):
+            if etag and code == 200 and self.fresh(etag):
+                return self.not_modified(etag, cache)
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Cache-Control", cache)
+            if etag:
+                self.send_header("ETag", etag)
             if ctype == "text/javascript":
                 self.send_header("Service-Worker-Allowed", "/")
             self.send_header("X-Content-Type-Options", "nosniff")
-            self.end_headers()
-            self.wfile.write(body)
+            for k, v in (headers or {}).items():
+                self.send_header(k, v)
+            self._headers_buffer.append(b"\r\n")
+            if self.command != "HEAD":
+                self._headers_buffer.append(body)  # one write for the headers and the body
+            self.flush_headers()
 
-        def json(self, obj, code: int = 200):
-            self.send(code, json.dumps(obj, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+        def json(self, obj, code: int = 200, cache: str = "no-cache", etag: bool = False):
+            body = dumps(obj)
+            self.send(code, body, JSON, cache, etag_of(body) if etag else None)
+
+        def starting(self):
+            self.send(503, dumps({"error": "starting", "detail": "The catalogue is being built; try again in a few"
+                                                                  " seconds."}), JSON, headers={"Retry-After": "5"})
+
+        def do_HEAD(self):
+            self.do_GET()
 
         def do_GET(self):
             u = urlparse(self.path)
             q = {k: v[0] for k, v in parse_qs(u.query).items()}
-            con = None
+            path = u.path
             try:
-                con = sqlite3.connect(db_path, timeout=10)
-                con.row_factory = sqlite3.Row
-                if u.path in ("/", "/live"):
-                    self.send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
-                elif u.path in ("/admin", "/admin/"):
-                    self.send(200, ADMIN_PAGE.read_bytes(), "text/html; charset=utf-8")
-                elif u.path == "/healthz":
-                    con.execute("SELECT 1").fetchone()
+                if path in ("/", "/live"):
+                    body, tag = files["live.html"].get()
+                    self.send(200, body, HTML, etag=tag)
+                elif path in ("/admin", "/admin/"):
+                    self.send(200, files["admin.html"].get()[0], HTML, cache="no-store")
+                elif path == "/healthz":
+                    with pool.connection() as con:
+                        con.execute("SELECT 1").fetchone()
                     self.send(200, b"ok", "text/plain")
-                elif u.path == "/api/deals":
-                    def nums(key):
-                        return [int(x) for x in q[key].split(",") if x.strip().isdigit()] if q.get(key) else None
-
-                    def num(key):
-                        return float(q[key]) if q.get(key) not in (None, "") else None
-
-                    args = dict(deals_only=q.get("deals", "1") != "0",
-                                stores=[x for x in q.get("stores", q.get("store", "")).split(",") if x] or None,
-                                kind=q.get("kind") or None, min_pct=num("min") or 0, max_pct=num("max"),
-                                stock=q.get("stock", "in"), status=[x for x in q.get("status", "").split(",") if x],
-                                category=q.get("category") or None, q=q.get("q") or None,
-                                price_min=num("pmin"), price_max=num("pmax"), ids=nums("ids"),
-                                best=q.get("best") == "1", sort=q.get("sort", "score"), hubs=nums("hubs"),
-                                limit=min(int(q.get("limit", 60)), 500), offset=int(q.get("offset", 0)))
-                    if args["ids"] is not None:
-                        args["ids"] = set(args["ids"])
-
-                    def build():
-                        r = finder.query(catalog(con), **args)
-                        r.update(labels=LABELS, status=status(con), changes_last_hour=changes_last_hour(con),
-                                 now=int(time.time()))
-                        return r
-                    self.json(cached("deals" + json.dumps(args, sort_keys=True, default=sorted), build))
-                elif u.path == "/api/brief":
-                    self.json(cached("brief", lambda: finder.brief(catalog(con))))
-                elif u.path == "/api/changes":
+                elif path == "/api/pulse":
+                    snap = snapshot()
+                    if snap is None:
+                        return self.starting()
+                    meta = cat.meta()
+                    tail = snap.answer(("pulse", id(meta)), lambda: pulse_tail(snap, meta))
+                    body = b'{"v":"%s","now":%d,' % (snap.v.encode(), int(time.time())) + tail
+                    self.send(200, body, JSON)
+                elif path == "/api/deals":
+                    args = deals_args(q)
+                    cards = q.get("fields") == "card"
+                    snap = snapshot()
+                    if snap is None:
+                        return self.starting()
+                    key = json.dumps(args, sort_keys=True, default=sorted) + ("|card" if cards else "")
+                    tag = f'W/"{snap.v}-{hashlib.sha1(key.encode()).hexdigest()[:10]}"'
+                    if q.get("since_v") == snap.v or self.fresh(tag):
+                        return self.not_modified(tag)
+                    self.send(200, snap.answer(("deals", key), lambda: deals_body(snap, args, cards)), JSON, etag=tag)
+                elif path == "/api/brief":
+                    snap = snapshot()
+                    if snap is None:
+                        return self.starting()
+                    tag = f'W/"{snap.v}-brief"'
+                    if self.fresh(tag):
+                        return self.not_modified(tag)
+                    self.send(200, snap.answer("brief", lambda: dumps(snap.brief)), JSON, etag=tag)
+                elif path == "/api/changes":
                     limit = min(int(q.get("limit", 30)), 100)
-                    self.json(cached(f"changes{limit}", lambda: {"changes": recent_changes(con, limit)}))
-                elif u.path.startswith("/api/product/"):
-                    pid = int(u.path.rsplit("/", 1)[1])
-                    p = con.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
-                    if not p:
+                    snap = snapshot()
+                    if snap is None:
+                        return self.starting()
+                    meta = cat.meta()
+                    body, tag = snap.answer(("changes", id(meta), limit), lambda: (
+                        lambda b: (b, etag_of(b)))(dumps({"changes": meta.changes[:max(limit, 0)]})))
+                    self.send(200, body, JSON, etag=tag)
+                elif path.startswith("/api/product/"):
+                    pid = int(path.rsplit("/", 1)[1])
+                    snap = snapshot()
+                    if snap is None:
+                        return self.starting()
+                    tag = f'W/"{snap.v}-p{pid}"'
+                    if self.fresh(tag):
+                        return self.not_modified(tag)
+                    body = snap.answer(("product", pid), lambda: product_body(snap, pid))
+                    if body is None:
                         return self.json({"error": "not found"}, 404)
-                    catalog(con)
-                    item = catalog_state["by_id"].get(pid, {})
-                    matches = [dict(catalog_state["by_id"][m["id"]], spark=None) for m in item.get("matches", [])
-                               if m["id"] in catalog_state["by_id"]]
-                    self.json({"product": dict(p), "item": item, "history": db.history(con, pid), "matches": matches})
-                elif u.path == "/api/talabat/hubs":
-                    chosen = settings.load(settings.path_for(db_path))["talabat_hubs"]
-                    hubs = known_hubs(db_path)
-                    for h in chosen:
-                        hubs.setdefault(h["id"], {**h, "areas": []})
-                    rows = []
-                    for h in hubs.values():
-                        cities = sorted({a["city"] for a in h["areas"]})
-                        area_names = [a["name"] for a in h["areas"]]
-                        label, words = talabat.district(h["name"], cities)  # the hub's own name decides
-                        if not words:  # a name that says nothing: go by the areas it serves
-                            label, words = talabat.district(" ".join(area_names[:5]), cities)
-                        rows.append({"id": h["id"], "name": h["name"], "aid": h["aid"], "areas": area_names[:40],
-                                     "cities": cities, "district": label, "words": words})
-                    order = [d[0] for d in talabat.DISTRICTS]
-                    rows.sort(key=lambda h: (order.index(h["district"]) if h["district"] in order else 99, h["name"].lower()))
-                    self.json({"selected": [h["id"] for h in chosen], "districts": order, "hubs": rows})
-                elif u.path in STATIC:
-                    name, ctype = STATIC[u.path]
-                    self.send(200, (Path(__file__).parent / name).read_bytes(), ctype)
-                elif u.path == "/api/push/key":
-                    self.json({"key": vapid().public_b64})
-                elif u.path == "/manifest.webmanifest":
-                    self.send(200, MANIFEST, "application/manifest+json")
-                elif u.path == "/icon.svg":
-                    self.send(200, ICON, "image/svg+xml")
-                elif re.fullmatch(r"/p/\d+", u.path):
-                    pid = int(u.path[3:])
-                    p = con.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
-                    if not p:
+                    self.send(200, body, JSON, etag=tag)
+                elif path == "/api/talabat/hubs":
+                    self.json(talabat_hubs(), etag=True)
+                elif path in STATIC:
+                    name, ctype = STATIC[path]
+                    body, tag = files[name].get()
+                    self.send(200, body, ctype, "public, max-age=86400" if ctype.startswith("image/") else "no-cache",
+                              tag)
+                elif path == "/api/push/key":
+                    self.json({"key": vapid().public_b64}, etag=True)
+                elif path == "/manifest.webmanifest":
+                    self.send(200, MANIFEST, "application/manifest+json", etag=MANIFEST_TAG)
+                elif path == "/icon.svg":
+                    self.send(200, ICON, "image/svg+xml", "public, max-age=86400", ICON_TAG)
+                elif re.fullmatch(r"/p/\d+", path):
+                    pid = int(path[3:])
+                    snap = snapshot()
+                    if snap is None:
+                        return self.starting()
+                    page = snap.answer(("page", pid), lambda: (lambda b: b and (b, etag_of(b)))(product_page(snap, pid)),
+                                       keep=400)
+                    if not page:
                         return self.send(404, pages.layout("Not found", '<div class="empty">This product isn\'t'
-                                                           ' tracked (any more).</div>'), "text/html; charset=utf-8")
-                    catalog(con)
-                    by_id = catalog_state["by_id"]
-                    item = by_id.get(pid, {})
-                    matches = [by_id[m["id"]] for m in item.get("matches", []) if m["id"] in by_id]
-                    related = []
-                    if item:
-                        r = finder.query(catalog_state["items"], deals_only=True, category=item["top_category"],
-                                         stores=[item["store"]], sort="score", limit=13)
-                        related = [x for x in r["items"] if x["id"] != pid][:12]
-                    self.send(200, pages.product_page(dict(p), item, db.history(con, pid), matches, related, PUBLIC_URL),
-                              "text/html; charset=utf-8")
-                elif u.path == "/stores":
-                    def build_stores():
-                        items = catalog(con)
-                        deals = finder.query(items, deals_only=True, limit=0)["facets"]["store"]
-                        best = {}
-                        for d in items:
-                            if d["in_stock"] and d["discount_pct"] and not {"steady", "inflated", "rose"} & set(d["flags"]):
-                                best[d["store"]] = max(best.get(d["store"], 0), d["discount_pct"])
-                        return pages.stores_page(status(con), {}, deals, best)
-                    self.send(200, cached("stores", build_stores), "text/html; charset=utf-8")
-                elif re.fullmatch(r"/store/[a-z_]+", u.path):
+                                                           ' tracked (any more).</div>'), HTML)
+                    self.send(200, page[0], HTML, etag=page[1])
+                elif path in ("/stores", "/cats", "/coupons"):
+                    snap = snapshot()
+                    if snap is None:
+                        return self.starting()
+                    stamp = os.stat(coupons_file).st_mtime_ns if path == "/coupons" and os.path.exists(coupons_file) else 0
+                    build = {"/stores": stores_page, "/cats": cats_page, "/coupons": coupons_page}[path]
+                    body, tag = snap.answer((path, id(cat.meta()), stamp), lambda: (lambda b: (b, etag_of(b)))(build(snap)))
+                    self.send(200, body, HTML, etag=tag)
+                elif re.fullmatch(r"/store/[a-z_]+", path):
                     self.send_response(302)
-                    self.send_header("Location", "/?deals=1&stores=" + u.path.rsplit("/", 1)[1])
+                    self.send_header("Location", "/?deals=1&stores=" + path.rsplit("/", 1)[1])
                     self.send_header("Content-Length", "0")
+                    self.send_header("Cache-Control", "no-cache")
                     self.end_headers()
-                elif u.path == "/cats":
-                    def build_cats():
-                        items = catalog(con)
-                        r = finder.query(items, deals_only=True, limit=0)["facets"]["category"]
-                        top = {}
-                        for d in items:
-                            if d["in_stock"] and d["discount_pct"] and not {"steady", "inflated", "rose"} & set(d["flags"]):
-                                top[d["top_category"]] = max(top.get(d["top_category"], 0), d["discount_pct"])
-                        rows = sorted(((c, n, top.get(c, 0)) for c, n in r.items() if n), key=lambda x: -x[1])
-                        return pages.cats_page(rows)
-                    self.send(200, cached("cats", build_cats), "text/html; charset=utf-8")
-                elif u.path == "/coupons":
-                    def build_coupons():
-                        found = {}  # codes the stores show on their own products (Kenzz), with how many they cut
-                        for d in catalog(con):
-                            if d.get("promo_code") and d["in_stock"]:
-                                c = found.setdefault((d["store"], d["promo_code"]), {"n": 0, "best": 0.0})
-                                c["n"] += 1
-                                c["best"] = max(c["best"], d["price"] - (d["promo_price"] or d["price"]))
-                        auto = [{"store": st, "code": code, "auto": True, "url": f"{PUBLIC_URL}/?deals=0&status=promo&stores={st}",
-                                 "title": f"Extra off on {v['n']} products, up to {v['best']:,.0f} EGP"}
-                                for (st, code), v in sorted(found.items(), key=lambda kv: -kv[1]["n"])[:60]]
-                        return pages.coupons_page(pages.load_coupons(coupons_file) + auto)
-                    self.send(200, cached("coupons", build_coupons), "text/html; charset=utf-8")
-                elif u.path == "/about":
-                    self.send(200, pages.about_page([pages.AR_STORE.get(k, v) for k, v in LABELS.items()
-                                                     if k in {r["store"] for r in status(con)}]),
-                              "text/html; charset=utf-8")
-                elif u.path == "/privacy":
-                    self.send(200, pages.privacy_page(), "text/html; charset=utf-8")
-                elif u.path == "/contact":
-                    self.send(200, pages.contact_page(os.environ.get("CONTACT_EMAIL", "").strip(),
-                                                      os.environ.get("TELEGRAM_CHANNEL_URL", "").strip()),
-                              "text/html; charset=utf-8")
-                elif u.path == "/api/coupons":
-                    self.json({"coupons": pages.load_coupons(coupons_file)})
-                elif u.path == "/api/status":
-                    self.json({"status": status(con), "changes_last_hour": changes_last_hour(con)})
+                elif path == "/about":
+                    meta = cat.meta() if snapshot() is not None else None
+                    rows = meta.status if meta else []
+                    body = pages.about_page([pages.AR_STORE.get(k, v) for k, v in LABELS.items()
+                                             if k in {r["store"] for r in rows}])
+                    self.send(200, body, HTML, etag=etag_of(body))
+                elif path == "/privacy":
+                    body = pages.privacy_page()
+                    self.send(200, body, HTML, etag=etag_of(body))
+                elif path == "/contact":
+                    body = pages.contact_page(os.environ.get("CONTACT_EMAIL", "").strip(),
+                                              os.environ.get("TELEGRAM_CHANNEL_URL", "").strip())
+                    self.send(200, body, HTML, etag=etag_of(body))
+                elif path == "/api/coupons":
+                    self.json({"coupons": pages.load_coupons(coupons_file)}, etag=True)
+                elif path == "/api/status":
+                    snap = snapshot()
+                    if snap is None:
+                        return self.starting()
+                    meta = cat.meta()
+                    body, tag = snap.answer(("status", id(meta)), lambda: (lambda b: (b, etag_of(b)))(
+                        dumps({"status": meta.status, "changes_last_hour": meta.changes_last_hour})))
+                    self.send(200, body, JSON, etag=tag)
                 else:
                     self.json({"error": "not found"}, 404)
             except (ValueError, KeyError) as e:
                 self.json({"error": str(e)}, 400)
             except sqlite3.Error as e:
                 self.json({"error": f"database: {e}"}, 503)
-            finally:
-                if con:
-                    con.close()
+            except (BrokenPipeError, ConnectionResetError):
+                self.close_connection = True
+            except Exception as e:  # never an empty reply
+                import traceback
+                traceback.print_exc()
+                self.json({"error": f"{type(e).__name__}"}, 500)
 
         def do_POST(self):
+            self.close_connection = True
+            try:
+                self._post()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+        def json_post(self, obj, code: int = 200):
+            self.send(code, dumps(obj), JSON, cache="no-store", headers={"Connection": "close"})
+
+        def _post(self):
             u = urlparse(self.path)
             if u.path in ("/api/push/subscribe", "/api/push/unsubscribe", "/api/push/test"):
                 try:
                     size = int(self.headers.get("Content-Length") or 0)
                     if not 0 < size <= 1 << 16:
-                        return self.json({"error": "Send JSON."}, 413)
+                        return self.json_post({"error": "Send JSON."}, 413)
                     code, out = push_api(u.path, json.loads(self.rfile.read(size)))
                 except (ValueError, TypeError, AttributeError):
                     code, out = 400, {"error": "Send JSON."}
-                return self.json(out, code)
+                return self.json_post(out, code)
             if u.path not in ("/admin/breadfast", "/admin/breadfast-request", "/admin/settings", "/admin/coupons"):
-                return self.json({"error": "not found"}, 404)
+                return self.json_post({"error": "not found"}, 404)
             token = os.environ.get("DEALS_ADMIN_TOKEN", "")
             if len(token) < 16:
-                return self.json({"error": "Uploads are off. Set DEALS_ADMIN_TOKEN (16+ characters) in Coolify's"
-                                           " environment variables for this app and redeploy."}, 403)
+                return self.json_post({"error": "Uploads are off. Set DEALS_ADMIN_TOKEN (16+ characters) in Coolify's"
+                                                " environment variables for this app and redeploy."}, 403)
             given = (self.headers.get("Authorization") or "").removeprefix("Bearer ").strip()
             if not hmac.compare_digest(given.encode(), token.encode()):
                 time.sleep(1.5)  # slows down guessing
-                return self.json({"error": "Wrong admin token."}, 401)
+                return self.json_post({"error": "Wrong admin token."}, 401)
             try:
                 size = int(self.headers.get("Content-Length") or 0)
             except ValueError:
                 size = 0
             if u.path == "/admin/settings":
                 if not 0 < size <= 1 << 16:
-                    return self.json({"error": "Send the settings as JSON."}, 413)
+                    return self.json_post({"error": "Send the settings as JSON."}, 413)
                 try:
                     body = json.loads(self.rfile.read(size))
                     hubs = known_hubs(db_path)
@@ -423,61 +599,61 @@ def make_handler(db_path: str, requests_file: str = None):
                     if "talabat_hubs" in body:
                         ids = [int(x) for x in body["talabat_hubs"]]
                         if not ids:
-                            return self.json({"error": "Choose at least one hub."}, 422)
+                            return self.json_post({"error": "Choose at least one hub."}, 422)
                         unknown = [i for i in ids if i not in hubs and i not in chosen]
                         if unknown:
-                            return self.json({"error": f"Unknown hub(s): {unknown}. Add a hub by its talabat link."}, 422)
+                            return self.json_post({"error": f"Unknown hub(s): {unknown}. Add a hub by its talabat link."}, 422)
                         chosen = {i: chosen.get(i) or {"id": i, "aid": hubs[i]["aid"], "name": hubs[i]["name"]} for i in ids}
                     if body.get("hub_link"):
                         m = re.search(r"talabat\.com/egypt/grocery/(\d+)/", body["hub_link"])
                         if not m:
-                            return self.json({"error": "That isn't a talabat mart link (…talabat.com/egypt/grocery/<hub>/…)."}, 422)
+                            return self.json_post({"error": "That isn't a talabat mart link (…talabat.com/egypt/grocery/<hub>/…)."}, 422)
                         hid = int(m.group(1))
                         aid = re.search(r"[?&]aid=(\d+)", body["hub_link"])
                         known = hubs.get(hid, {})
                         chosen[hid] = {"id": hid, "aid": int(aid.group(1)) if aid else known.get("aid", 9838),
                                        "name": known.get("name") or str(hid)}
                     if len(chosen) > 10:
-                        return self.json({"error": "Up to 10 hubs (each one adds ~15 minutes to a talabat sweep)."}, 422)
+                        return self.json_post({"error": "Up to 10 hubs (each one adds ~15 minutes to a talabat sweep)."}, 422)
                     current["talabat_hubs"] = list(chosen.values())
                     settings.save(path, current)
                 except (ValueError, TypeError, KeyError):
-                    return self.json({"error": "Send {\"talabat_hubs\": [ids]} or {\"hub_link\": \"…\"}."}, 400)
-                return self.json({"selected": [h["id"] for h in current["talabat_hubs"]],
-                                  "hubs": current["talabat_hubs"]})
+                    return self.json_post({"error": "Send {\"talabat_hubs\": [ids]} or {\"hub_link\": \"…\"}."}, 400)
+                return self.json_post({"selected": [h["id"] for h in current["talabat_hubs"]],
+                                       "hubs": current["talabat_hubs"]})
             if u.path == "/admin/coupons":
                 if not 0 < size <= 1 << 18:
-                    return self.json({"error": "Send {\"text\": \"store | CODE | what it gives | until | link\"}."}, 413)
+                    return self.json_post({"error": "Send {\"text\": \"store | CODE | what it gives | until | link\"}."}, 413)
                 try:
                     coupons = pages.parse_coupons(str(json.loads(self.rfile.read(size)).get("text") or ""))
                 except (ValueError, AttributeError):
-                    return self.json({"error": "Send {\"text\": \"...\"}."}, 400)
+                    return self.json_post({"error": "Send {\"text\": \"...\"}."}, 400)
                 tmp = coupons_file + ".tmp"
                 with open(tmp, "w", encoding="utf-8") as f:
                     json.dump(coupons, f, ensure_ascii=False, indent=1)
                 os.replace(tmp, coupons_file)
-                return self.json({"coupons": coupons})
+                return self.json_post({"coupons": coupons})
             if u.path == "/admin/breadfast-request":
                 if not 0 < size <= 1 << 20:
-                    return self.json({"error": "Paste one request (up to 1 MB)."}, 413)
+                    return self.json_post({"error": "Paste one request (up to 1 MB)."}, 413)
                 try:
                     body = json.loads(self.rfile.read(size))
                     divisor = 100.0 if str(body.get("divisor")) == "100" else 1.0
                     with _import_lock:
                         r = breadfast.import_request(db_path, str(body.get("curl") or ""), requests_file, divisor)
                 except breadfast.BadRequest as e:
-                    return self.json({"error": str(e)[:1].upper() + str(e)[1:] + "."}, 422)
+                    return self.json_post({"error": str(e)[:1].upper() + str(e)[1:] + "."}, 422)
                 except (ValueError, AttributeError):
-                    return self.json({"error": "Send {\"curl\": \"...\"}."}, 400)
+                    return self.json_post({"error": "Send {\"curl\": \"...\"}."}, 400)
                 except RuntimeError as e:
-                    return self.json({"error": f"Couldn't reach Breadfast: {e}"}, 502)
-                return self.json(r)
+                    return self.json_post({"error": f"Couldn't reach Breadfast: {e}"}, 502)
+                return self.json_post(r)
             if not 0 < size <= MAX_UPLOAD:
-                return self.json({"error": f"Send the .har file (up to {MAX_UPLOAD // 2**20} MB)."}, 413)
+                return self.json_post({"error": f"Send the .har file (up to {MAX_UPLOAD // 2**20} MB)."}, 413)
             q = {k: v[0] for k, v in parse_qs(u.query).items()}
             divisor = 100.0 if q.get("divisor") == "100" else 1.0
             if not _import_lock.acquire(blocking=False):
-                return self.json({"error": "Another import is running; try again in a minute."}, 409)
+                return self.json_post({"error": "Another import is running; try again in a minute."}, 409)
             fd, tmp = tempfile.mkstemp(prefix=".capture-", suffix=".har", dir=os.path.dirname(os.path.abspath(db_path)))
             try:
                 with os.fdopen(fd, "wb") as f:
@@ -491,11 +667,11 @@ def make_handler(db_path: str, requests_file: str = None):
                 try:
                     r = breadfast.import_capture(db_path, tmp, requests_file, divisor)
                 except (ValueError, KeyError, UnicodeDecodeError) as e:
-                    return self.json({"error": f"That file isn't a HAR export ({type(e).__name__})."}, 400)
+                    return self.json_post({"error": f"That file isn't a HAR export ({type(e).__name__})."}, 400)
                 if not r["products"]:
-                    return self.json({"error": "No products in that capture. Browse a few Breadfast categories while"
-                                               " recording, then export again."}, 422)
-                self.json(r)
+                    return self.json_post({"error": "No products in that capture. Browse a few Breadfast categories"
+                                                    " while recording, then export again."}, 422)
+                self.json_post(r)
             finally:
                 os.unlink(tmp)  # the capture holds the app session: never kept
                 _import_lock.release()
@@ -503,9 +679,12 @@ def make_handler(db_path: str, requests_file: str = None):
     return Handler
 
 
-def serve(db_path: str, host: str = "127.0.0.1", port: int = 8800, requests_file: str = None):
+def serve(db_path: str, host: str = "127.0.0.1", port: int = 8800, requests_file: str = None,
+          catalog: "catalog_mod.Catalog" = None):
     db.connect(db_path).close()  # create the tables
-    server = ThreadingHTTPServer((host, port), make_handler(db_path, requests_file))
+    cat = (catalog or catalog_mod.Catalog(db_path)).start()  # built in the background; requests wait for the first
+    server = ThreadingHTTPServer((host, port), make_handler(db_path, requests_file, cat))
     server.daemon_threads = True
+    server.request_queue_size = 128
     print(f"live deals on http://{host}:{port}/")
     server.serve_forever()

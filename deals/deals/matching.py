@@ -34,22 +34,32 @@ def similar(a: list[str], b: list[str]) -> bool:
     return len(sa & sb) / len(sa | sb) >= 0.5
 
 
-def match(items: list[dict]) -> dict[int, list[int]]:
-    """items: dicts with id, store, name. Returns id -> ids of the same product in other stores."""
-    buckets = defaultdict(list)
-    for it in items:
-        size = pack_size(it["name"])
-        if size:
-            buckets[(round(size[0], 3), size[1])].append((it, words(it["name"])))
+def key(name: str):
+    """The bucket a name is matched in: (pack size, unit, first word), or None when it can't match anything.
+    similar() needs the same first word, so splitting a pack-size bucket by first word finds the same pairs."""
+    return key_words(name)[0]
+
+
+def key_words(name: str):
+    """(key(name), words(name)); (None, None) when the name has no pack size."""
+    size = pack_size(name)
+    if not size:
+        return None, None
+    w = words(name)
+    return ((round(size[0], 3), size[1], w[0]) if w else None), w
+
+
+def match_group(group: list) -> dict:
+    """group: (id, store, words) of one bucket, in catalogue order. Returns id -> ids of the same product in other
+    stores, for the ids in the group that have any."""
     pairs = defaultdict(list)
-    for group in buckets.values():
-        if len(group) < 2 or len({it["store"] for it, _ in group}) < 2:
-            continue
-        for i, (a, wa) in enumerate(group):
-            for b, wb in group[i + 1:]:
-                if a["store"] != b["store"] and similar(wa, wb):
-                    pairs[a["id"]].append((b["id"], b["store"]))
-                    pairs[b["id"]].append((a["id"], a["store"]))
+    if len(group) < 2 or len({store for _, store, _ in group}) < 2:
+        return {}
+    for i, (a, sa, wa) in enumerate(group):
+        for b, sb, wb in group[i + 1:]:
+            if sa != sb and similar(wa, wb):
+                pairs[a].append((b, sb))
+                pairs[b].append((a, sa))
     # Keep a pair only when each is the other's single candidate in that store: a product that fits
     # several products of one store is ambiguous there.
     unique = {}
@@ -58,9 +68,22 @@ def match(items: list[dict]) -> dict[int, list[int]]:
         for oid, store in found:
             per_store[store].append(oid)
         unique[pid] = [oids[0] for oids in per_store.values() if len(oids) == 1]
-    out = defaultdict(list)
+    out = {}
     for pid, oids in unique.items():
-        for oid in oids:
-            if pid in unique.get(oid, []):
-                out[pid].append(oid)
+        mine = [oid for oid in oids if pid in unique.get(oid, [])]
+        if mine:
+            out[pid] = mine
+    return out
+
+
+def match(items: list[dict]) -> dict[int, list[int]]:
+    """items: dicts with id, store, name. Returns id -> ids of the same product in other stores."""
+    buckets = defaultdict(list)
+    for it in items:
+        k, w = key_words(it["name"])
+        if k:
+            buckets[k].append((it["id"], it["store"], w))
+    out = defaultdict(list)
+    for group in buckets.values():
+        out.update(match_group(group))
     return out

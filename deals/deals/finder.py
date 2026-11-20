@@ -1,6 +1,6 @@
 """Every product, judged from its price history, and the filters and sorts the page uses.
 
-catalog() builds one enriched list of all products (the web server keeps it for a few seconds);
+catalog() builds one enriched list of all products (catalog.py keeps it up to date for the whole process);
 query() filters, sorts and counts it.
 
 A product is a deal when it is at least `min` % cheaper than either
@@ -16,6 +16,7 @@ import json
 import math
 import time
 from collections import Counter, defaultdict
+from statistics import median
 
 from . import applinks, forecast, matching
 from .units import unit_price, unit_text
@@ -67,11 +68,17 @@ def analyse(rows: list[dict], first_seen: int, now: int) -> dict:
 
 def _spark(rows: list[dict], now: int, points: int = 24) -> list[list]:
     """Up to `points` (time, price) steps, the last at now."""
+    pts = spark_points(rows, points)
+    return pts + [[now, pts[-1][1]]]
+
+
+def spark_points(rows: list[dict], points: int = 24) -> list[list]:
+    """The spark without its last step at `now` (which only depends on the clock)."""
     pts = [[r["at"], r["price"]] for r in rows if r["in_stock"]] or [[rows[-1]["at"], rows[-1]["price"]]]
     if len(pts) > points:
         step = len(pts) / points
         pts = [pts[int(i * step)] for i in range(points - 1)] + [pts[-1]]
-    return pts + [[now, pts[-1][1]]]
+    return pts
 
 
 def _score(d: dict) -> tuple[int, list[str]]:
@@ -115,96 +122,293 @@ def _score(d: dict) -> tuple[int, list[str]]:
     return max(0, min(100, round(s))), why
 
 
-def catalog(con, now: int = None) -> list[dict]:
-    now = int(now or time.time())
-    products = [dict(r) for r in con.execute("SELECT * FROM products WHERE price > 0")]
-    if not products:
-        return []
+PRODUCT_COLUMNS = ("id, store, sku, name, brand, category, url, image, first_seen, last_seen, price, original_price,"
+                   " in_stock, extra")
+
+
+def load_products(con, ids=None) -> list[dict]:
+    """The products the catalogue shows (a price above 0), in id order; only `ids` when given."""
+    if ids is None:
+        return [dict(r) for r in con.execute(f"SELECT {PRODUCT_COLUMNS} FROM products WHERE price > 0 ORDER BY id")]
+    out = []
+    ids = sorted(ids)
+    for i in range(0, len(ids), 500):
+        part = ids[i:i + 500]
+        out += [dict(r) for r in con.execute(f"SELECT {PRODUCT_COLUMNS} FROM products WHERE price > 0 AND id IN"
+                                             f" ({','.join('?' * len(part))}) ORDER BY id", part)]
+    return out
+
+
+def load_history(con, cutoff: int, ids=None) -> dict:
+    """{product id: price rows, oldest first}: the row each product was at when the window opened (`cutoff`), then
+    every change after it. Rows at the same second keep the order they were written in."""
     hist = defaultdict(list)
-    cutoff = now - WINDOW
-    # the state each product was in when the window opened, then every change inside it
-    for r in con.execute("""SELECT x.product_id, x.at, x.price, x.original_price, x.in_stock FROM prices x
-                            JOIN (SELECT product_id, MAX(at) at FROM prices WHERE at <= ? GROUP BY product_id) l
-                            ON x.product_id = l.product_id AND x.at = l.at""", (cutoff,)):
-        hist[r["product_id"]].append(dict(r))
-    for r in con.execute("SELECT product_id, at, price, original_price, in_stock FROM prices WHERE at > ?"
-                         " ORDER BY at", (cutoff,)):
-        hist[r["product_id"]].append(dict(r))
+    if ids is None:
+        state = defaultdict(list)
+        for r in con.execute("""SELECT x.rowid AS rid, x.product_id, x.at, x.price, x.original_price, x.in_stock
+                                FROM prices x JOIN (SELECT product_id, MAX(at) at FROM prices WHERE at <= ?
+                                                    GROUP BY product_id) l
+                                ON x.product_id = l.product_id AND x.at = l.at""", (cutoff,)):
+            state[r["product_id"]].append(r)
+        for pid, rows in state.items():
+            rows.sort(key=lambda r: r["rid"])
+            hist[pid] = [{"at": r["at"], "price": r["price"], "original_price": r["original_price"],
+                          "in_stock": r["in_stock"]} for r in rows]
+        for r in con.execute("SELECT product_id, at, price, original_price, in_stock FROM prices WHERE at > ?"
+                             " ORDER BY at, rowid", (cutoff,)):
+            hist[r["product_id"]].append({"at": r["at"], "price": r["price"], "original_price": r["original_price"],
+                                          "in_stock": r["in_stock"]})
+        return hist
+    ids = sorted(ids)
+    for i in range(0, len(ids), 500):
+        part = ids[i:i + 500]
+        for r in con.execute("SELECT product_id, at, price, original_price, in_stock FROM prices WHERE product_id IN"
+                             f" ({','.join('?' * len(part))}) ORDER BY product_id, at, rowid", part):
+            hist[r["product_id"]].append({"at": r["at"], "price": r["price"], "original_price": r["original_price"],
+                                          "in_stock": r["in_stock"]})
+    for pid, rows in hist.items():
+        hist[pid] = window(rows, cutoff)
+    return hist
 
-    items = []
-    for p in products:
-        rows = hist.get(p["id"]) or [{"at": p["first_seen"], "price": p["price"], "original_price": p["original_price"],
-                                      "in_stock": p["in_stock"]}]
-        a = analyse(rows, p["first_seen"], now)
-        extra = json.loads(p.get("extra") or "{}")
-        price, orig = p["price"], p["original_price"]
-        store_pct = round(100 * (orig - price) / orig, 1) if orig and orig > price else 0.0
-        drop_pct = round(100 * (a["usual"] - price) / a["usual"], 1) if a["usual"] and a["usual"] > price else 0.0
-        pct = max(store_pct, drop_pct)
-        kind = "platform" if store_pct and store_pct >= drop_pct else "drop" if drop_pct else None
-        reference = orig if kind == "platform" else a["usual"] if kind == "drop" else None
-        flags = []
-        if a["low90"] is not None and price <= a["low90"] and (a["high90"] or 0) > price:
-            flags.append("lowest")
-        if a["changed_recently"]:
-            flags.append("new")
-        if store_pct and not drop_pct and a["days_at_price"] >= 14:
-            flags.append("steady")
-        if a["back_in_stock"]:
-            flags.append("back")
-        if extra.get("deal_label"):
-            flags.append("label")
-        # dearer than it was lately: a struck-through price doesn't make that a deal
-        if a["recent_low"] and price > a["recent_low"] * 1.05:
-            flags.append("rose")
-        # a "was" price more than 70 % above, never seen charged here: an inflated reference, not a discount
-        if store_pct >= 70 and orig and max((r["price"] for r in rows if r["in_stock"]), default=0) < orig * 0.9:
-            flags.append("inflated")
-        up = unit_price(price, p["name"])
-        items.append({
-            "id": p["id"], "store": p["store"], "sku": p["sku"], "name": p["name"], "brand": p["brand"],
-            "category": p["category"],
-            "top_category": (p["category"] or ("Today's Deals" if extra.get("deal_pct") else "Other")).split(" / ")[0],
-            "url": p["url"], "image": p["image"], "in_stock": bool(p["in_stock"]),
-            "price": price, "original_price": orig, "usual_price": a["usual"], "low90": a["low90"],
-            "discount_pct": pct, "store_discount_pct": store_pct, "drop_pct": drop_pct, "kind": kind,
-            "saving": round(reference - price, 2) if reference else 0.0,
-            "flags": flags, "deal_label": extra.get("deal_label"), "rank": extra.get("rank"),
-            "since": rows[-1]["at"], "prev_price": rows[-2]["price"] if len(rows) > 1 else None,
-            "recent_low": a["recent_low"], "recent_low_at": a["recent_low_at"], "first_seen": p["first_seen"], "last_seen": p["last_seen"],
-            "tracked_days": a["tracked_days"], "days_at_price": a["days_at_price"],
-            "unit_price": up[0] if up else None, "unit": up[1] if up else None,
-            "unit_text": unit_text(price, p["name"]),
-            "spark": _spark(rows, now), "links": applinks.links(p["store"], p["url"], extra),
-            "hub": extra.get("hub"), "hub_name": extra.get("hub_name"),
-            "promo_code": extra.get("promo_code"), "promo_price": extra.get("promo_price"),
-            "rhythm": forecast.rhythm(rows, now) if len(rows) >= 3 else None,
-        })
 
-    by_id = {it["id"]: it for it in items}
-    # one talabat item per product for matching (each hub keeps its own copy of the same product)
-    seen_base, to_match = set(), []
-    for it in items:
-        if it["store"] == "talabat":
-            base = it["sku"].split(":", 1)[-1]
-            if base in seen_base:
-                continue
-            seen_base.add(base)
-        to_match.append(it)
-    for pid, others in matching.match(to_match).items():
-        it = by_id[pid]
+def window(rows: list[dict], cutoff: int) -> list[dict]:
+    """A product's whole history (oldest first) cut the way load_history cuts it."""
+    before = [r["at"] for r in rows if r["at"] <= cutoff]
+    if not before:
+        return rows
+    first = max(before)
+    i = next(i for i, r in enumerate(rows) if r["at"] == first)
+    return rows[i:]
+
+
+def item(p: dict, rows: list, now: int, parts: dict = None) -> dict:
+    """One product judged from its history, without what depends on other products (matches, cheapest, the score
+    and the verdict: finish() adds those) and with the spark's last step at `now` left out (catalog() adds it).
+    `parts`, when given, keeps what valid_until() reuses."""
+    rows = rows or [{"at": p["first_seen"], "price": p["price"], "original_price": p["original_price"],
+                     "in_stock": p["in_stock"]}]
+    a = analyse(rows, p["first_seen"], now)
+    extra = json.loads(p.get("extra") or "{}")
+    price, orig = p["price"], p["original_price"]
+    store_pct = round(100 * (orig - price) / orig, 1) if orig and orig > price else 0.0
+    drop_pct = round(100 * (a["usual"] - price) / a["usual"], 1) if a["usual"] and a["usual"] > price else 0.0
+    pct = max(store_pct, drop_pct)
+    kind = "platform" if store_pct and store_pct >= drop_pct else "drop" if drop_pct else None
+    reference = orig if kind == "platform" else a["usual"] if kind == "drop" else None
+    flags = []
+    if a["low90"] is not None and price <= a["low90"] and (a["high90"] or 0) > price:
+        flags.append("lowest")
+    if a["changed_recently"]:
+        flags.append("new")
+    if store_pct and not drop_pct and a["days_at_price"] >= 14:
+        flags.append("steady")
+    if a["back_in_stock"]:
+        flags.append("back")
+    if extra.get("deal_label"):
+        flags.append("label")
+    # dearer than it was lately: a struck-through price doesn't make that a deal
+    if a["recent_low"] and price > a["recent_low"] * 1.05:
+        flags.append("rose")
+    # a "was" price more than 70 % above, never seen charged here: an inflated reference, not a discount
+    if store_pct >= 70 and orig and max((r["price"] for r in rows if r["in_stock"]), default=0) < orig * 0.9:
+        flags.append("inflated")
+    up = unit_price(price, p["name"])
+    return {
+        "id": p["id"], "store": p["store"], "sku": p["sku"], "name": p["name"], "brand": p["brand"],
+        "category": p["category"],
+        "top_category": (p["category"] or ("Today's Deals" if extra.get("deal_pct") else "Other")).split(" / ")[0],
+        "url": p["url"], "image": p["image"], "in_stock": bool(p["in_stock"]),
+        "price": price, "original_price": orig, "usual_price": a["usual"], "low90": a["low90"],
+        "discount_pct": pct, "store_discount_pct": store_pct, "drop_pct": drop_pct, "kind": kind,
+        "saving": round(reference - price, 2) if reference else 0.0,
+        "flags": flags, "deal_label": extra.get("deal_label"), "rank": extra.get("rank"),
+        "since": rows[-1]["at"], "prev_price": rows[-2]["price"] if len(rows) > 1 else None,
+        "recent_low": a["recent_low"], "recent_low_at": a["recent_low_at"], "first_seen": p["first_seen"],
+        "last_seen": p["last_seen"],
+        "tracked_days": a["tracked_days"], "days_at_price": a["days_at_price"],
+        "unit_price": up[0] if up else None, "unit": up[1] if up else None,
+        "unit_text": unit_text(price, p["name"]),
+        "spark": spark_points(rows), "links": applinks.links(p["store"], p["url"], extra),
+        "hub": extra.get("hub"), "hub_name": extra.get("hub_name"),
+        "promo_code": extra.get("promo_code"), "promo_price": extra.get("promo_price"),
+        "rhythm": forecast.rhythm(rows, now, parts) if len(rows) >= 3 else None,
+    }
+
+
+def judge(p: dict, rows: list, now: int) -> tuple[dict, float]:
+    """(item(p, rows, now), valid_until(...)) at the cost of one."""
+    parts = {}
+    it = item(p, rows, now, parts)
+    return it, valid_until(p, rows, it, now, parts)
+
+
+def match_base(it: dict):
+    """The talabat product a hub copy stands for (each hub keeps its own copy of the same product): only the first
+    copy, in catalogue order, is matched with other stores. None for the other stores."""
+    return it["sku"].split(":", 1)[-1] if it["store"] == "talabat" else None
+
+
+def finish(it: dict, by_id: dict, others: list) -> dict:
+    """Adds what depends on the other stores (`others`: the ids matching.match found for it) and the score and
+    verdict that follow from everything. Changes `it` and returns it."""
+    if others:
         it["matches"] = sorted(({"id": o, "store": by_id[o]["store"], "price": by_id[o]["price"],
                                  "in_stock": by_id[o]["in_stock"]} for o in others), key=lambda m: m["price"])
         rivals = [m["price"] for m in it["matches"] if m["in_stock"]]
         it["cheapest"] = bool(rivals) and it["price"] <= min(rivals)
         it["cheaper_by"] = round(min(rivals) - it["price"], 2) if rivals and it["price"] < min(rivals) else 0.0
+    else:
+        it["matches"], it["cheapest"], it["cheaper_by"] = [], False, 0.0
+    it["score"], it["why"] = _score(it)
+    it["verdict"] = verdict(it)
+    return it
+
+
+def with_now(it: dict, now: int) -> dict:
+    """A copy of a catalogue item kept without its spark's last step, with that step at `now`."""
+    sp = it["spark"]
+    return {**it, "spark": sp + [[now, sp[-1][1]]]}
+
+
+def catalog(con, now: int = None) -> list[dict]:
+    now = int(now or time.time())
+    products = load_products(con)
+    if not products:
+        return []
+    hist = load_history(con, now - WINDOW)
+    items = [item(p, hist.get(p["id"]), now) for p in products]
+    by_id = {it["id"]: it for it in items}
+    seen_base, to_match = set(), []
     for it in items:
-        it.setdefault("matches", [])
-        it.setdefault("cheapest", False)
-        it.setdefault("cheaper_by", 0.0)
-        it["score"], it["why"] = _score(it)
-        it["verdict"] = verdict(it)
+        base = match_base(it)
+        if base is not None:
+            if base in seen_base:
+                continue
+            seen_base.add(base)
+        to_match.append(it)
+    found = matching.match(to_match)
+    for it in items:
+        finish(it, by_id, found.get(it["id"]))
+        it["spark"].append([now, it["spark"][-1][1]])
     return items
+
+
+# ---- how long an item stays as it is -------------------------------------------------------------------
+# An item depends on the clock as well as on its rows: "tracked 3.4 days", the 30- and 90-day windows, the 24 h
+# "new" flag, the usual price (a time-weighted median whose weights grow with time), the sale rhythm's "next sale
+# in 2 days". valid_until() says until when an item judged at `now` is certainly unchanged (the spark's last step
+# aside), so the live catalogue only judges a product again when its rows changed or that time has come.
+
+MARGIN = 5  # seconds early, around values rounded for display (floating point can't move them by more)
+NEVER = float("inf")
+
+
+def _rounding_up(origin: float, now: int, step: float = 0.1) -> float:
+    """x = (now - origin) / DAY grows: a time no later than the next change of round(x, 1)."""
+    x = (now - origin) / DAY
+    k = math.ceil((x - MARGIN / DAY) / step - 0.5)
+    return max(now, origin + (k + 0.5) * step * DAY - MARGIN)
+
+
+def _rounding_down(x: float, now: int, whole_days: bool = False) -> float:
+    """x (days) falls by one per day: a time no later than the next change of round(max(0, x), 1) (and, with
+    whole_days, of round(x) and of x >= 1)."""
+    y = x + MARGIN / DAY
+    best = (math.floor(y / 0.1 - 0.5) + 0.5) * 0.1
+    if whole_days:
+        if y >= 1.5:
+            best = max(best, math.floor(y - 0.5) + 0.5)
+        if y >= 1:
+            best = max(best, 1.0)
+    if best < 0:
+        return NEVER
+    return max(now, now + (x - best) * DAY - MARGIN)
+
+
+def _median_until(rows: list[dict], now: int) -> float:
+    """The 30-day time-weighted median: when it may next change with the clock alone. Each in-stock stretch's weight
+    is linear in time (the current one grows, the one the window's start cuts shrinks); the median is the first
+    price whose running share reaches half, so it can only move when one of those shares crosses half."""
+    w0 = now - 30 * DAY
+    groups = {}
+    last = len(rows) - 1
+    for i, r in enumerate(rows):
+        start, end = r["at"], rows[i + 1]["at"] if i < last else now
+        s = max(start, w0)
+        if end > s and r["in_stock"]:
+            slope = (1 if i == last else 0) - (1 if start < w0 else 0)
+            g = groups.setdefault(r["price"], [0, 0])
+            g[0] += end - s
+            g[1] += slope
+    if len(groups) < 2:
+        return NEVER
+    total = sum(g[0] for g in groups.values())
+    total_slope = sum(g[1] for g in groups.values())
+    acc = acc_slope = 0
+    until = NEVER
+    for price in sorted(groups):
+        acc += groups[price][0]
+        acc_slope += groups[price][1]
+        f, slope = 2 * acc - total, 2 * acc_slope - total_slope
+        if not slope:
+            continue
+        if f == 0:
+            return now
+        dt = -f / slope
+        if dt > 0:
+            until = min(until, now + math.floor(dt))
+    return until
+
+
+def _rhythm_until(rows: list[dict], now: int, r, parts: dict = None) -> float:
+    if len(rows) < 3:
+        return NEVER
+    if parts is None or "regular" not in parts:
+        parts = {}
+        forecast.rhythm(rows, now, parts)
+    until = NEVER
+    regular, secs = parts.get("regular"), parts.get("secs")
+    if secs:  # the regular price is the most-seen upper price, and the current one's time keeps growing
+        cur = rows[-1]
+        if cur["in_stock"] and cur["price"] and cur["price"] != regular and cur["price"] >= parts["mid"]:
+            until = max(now, now + (secs[regular] - secs[cur["price"]]) - MARGIN)
+    if r:
+        eps = parts["eps"]
+        if r["on_sale"]:
+            if parts["lasts"] is not None:
+                until = min(until, _rounding_down(parts["lasts"] - (now - eps[-1]["start"]) / DAY, now))
+        else:
+            until = min(until, _rounding_down((eps[-1]["start"] + parts["every"] * DAY - now) / DAY, now,
+                                              whole_days=True))
+    return until
+
+
+def valid_until(p: dict, rows: list, it: dict, now: int, parts: dict = None) -> float:
+    """A time until which item(p, rows, t) == item(p, rows, now) for every t in [now, that time), apart from the
+    spark's last step: the clock alone changes nothing before it. `it` is item(p, rows, now)."""
+    rows = rows or [{"at": p["first_seen"], "price": p["price"], "original_price": p["original_price"],
+                     "in_stock": p["in_stock"]}]
+    first, cur = p["first_seen"], rows[-1]["at"]
+    if first > now or cur > now:
+        return now  # dates in the future: judge it again every time
+    best = min(_rounding_up(first, now), _rounding_up(cur, now))  # "tracked N days", "N days at this price"
+    if cur == now:
+        best = min(best, now + 1)  # the current stretch starts counting in the 30-day median
+    if len(rows) == 1:  # one price: no window, median or rhythm can move
+        return best
+    for t in (cur + DAY, cur + 3 * DAY):  # "new", "back in stock"
+        if now <= t < best:
+            best = t
+    for i, r in enumerate(rows):
+        # the 30-day window passing a change (the median's weights, a stretch ending), the recent low's 31 days,
+        # the 90-day low/high, and the 95-day window dropping its oldest row
+        at = r["at"]
+        for t in ((at + 30 * DAY, at + 31 * DAY, at + 90 * DAY, at + WINDOW) if i else (at + 30 * DAY, at + 31 * DAY)):
+            if t >= now:
+                if t < best:
+                    best = t
+                break
+    return min(best, _median_until(rows, now), _rhythm_until(rows, now, it["rhythm"], parts))
 
 
 def verdict(d: dict) -> dict:

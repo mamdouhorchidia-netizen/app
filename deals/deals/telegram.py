@@ -61,8 +61,10 @@ def worth_posting(d: dict, min_pct: float) -> bool:
 
 class Poster:
     def __init__(self, db_path: str, token: str, chat: str, base_url: str, min_pct: float = 40, per_hour: int = 10,
-                 every: int = 120, send=None, log=print):
+                 every: int = 120, send=None, log=print, catalog=None):
+        """catalog: the process's shared live catalogue (catalog.Catalog); without one each round builds its own."""
         self.db_path, self.token, self.chat, self.base_url = db_path, token, chat, base_url.rstrip("/")
+        self.shared = catalog
         self.min_pct, self.per_hour, self.every, self.log = min_pct, per_hour, every, log
         self.send = send or self._send
         self.since = time.time() - 600  # on start: what moved in the last 10 minutes
@@ -86,7 +88,9 @@ class Poster:
             last = {r["product_id"]: r["price"] for r in con.execute(
                 "SELECT product_id, MIN(price) price FROM telegram_posts WHERE at > ? GROUP BY product_id",
                 (now - 30 * 86400,))}
-            fresh = [d for d in finder.catalog(con, int(now))
+            snap = self.shared.snapshot(wait=120) if self.shared is not None else None
+            items = snap.items if snap is not None else finder.catalog(con, int(now))
+            fresh = [d for d in items
                      if d["since"] >= self.since and worth_posting(d, self.min_pct)
                      and (d["id"] not in last or d["price"] < last[d["id"]] - 0.01)]
             fresh.sort(key=lambda d: (-d["score"], -d["discount_pct"]))
@@ -129,12 +133,12 @@ class Poster:
             time.sleep(self.every)
 
 
-def start(db_path: str, base_url: str, log=print):
+def start(db_path: str, base_url: str, log=print, catalog=None):
     token, chat = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip(), os.environ.get("TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat:
         return None
     p = Poster(db_path, token, chat, base_url, float(os.environ.get("TELEGRAM_MIN_PCT", 40)),
-               int(os.environ.get("TELEGRAM_PER_HOUR", 10)), log=log)
+               int(os.environ.get("TELEGRAM_PER_HOUR", 10)), log=log, catalog=catalog)
     threading.Thread(target=p.run_forever, name="telegram", daemon=True).start()
     log(f"telegram: posting deals of {p.min_pct:g}%+ to {chat}, up to {p.per_hour} an hour")
     return p
