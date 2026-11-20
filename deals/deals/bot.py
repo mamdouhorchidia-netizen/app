@@ -161,7 +161,7 @@ class Bot:
         self.db_path, self.token, self.base_url, self.log = db_path, token, base_url.rstrip("/"), log
         self.call = send or self._call
         self.offset = None
-        self._cat = (0.0, [], {})
+        self._cat = (float("-inf"), [], {})  # never built yet (the monotonic clock starts at boot)
         self.last_check = time.time()
         self.last_forecast = 0
 
