@@ -1064,6 +1064,8 @@ class Pages(unittest.TestCase):
         self.assertIn("📍 El Obour El Hay 9", page)
         self.assertIn('data-android="https://www.talabat.com/egypt/talabat-mart/product/tea/s/T2"', page)
         self.assertNotIn("<500", page)
+        self.assertIn('<link rel="stylesheet" href="/tokens.css">', page)  # the live page's tokens, not a copy
+        self.assertNotIn("#f6f5f2", page)
 
     def test_coupons_lines(self):
         from deals import pages

@@ -10,6 +10,7 @@
   /api/product/ID        one product: history, links, matches in other stores, score and why
   /api/status            each store: products, last check, last change, cycle time, errors
   /manifest.webmanifest, /icon.svg   so the page installs as an app
+  /tokens.css            the design tokens the live page and the server-written pages share
   /healthz               200 when the database answers (Coolify's health check)
   /admin                 the owner's page: talabat hubs to follow, and adding Breadfast
   /api/talabat/hubs      every known talabat mart hub (name, number, areas) and the ones followed
@@ -83,7 +84,8 @@ MANIFEST = json.dumps({
               {"src": "/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}],
 }).encode()
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://deals.vorath.cloud").rstrip("/")
-STATIC = {"/sw.js": ("sw.js", "text/javascript"), "/i18n.js": ("i18n.js", "text/javascript"), "/icon-192.png": ("icon-192.png", "image/png"),
+STATIC = {"/sw.js": ("sw.js", "text/javascript"), "/i18n.js": ("i18n.js", "text/javascript"), "/tokens.css": ("tokens.css", "text/css; charset=utf-8"),
+          "/icon-192.png": ("icon-192.png", "image/png"),
           "/icon-512.png": ("icon-512.png", "image/png"), "/icon-maskable.png": ("icon-maskable.png", "image/png")}
 # the browser push services; the server sends pushes nowhere else
 PUSH_HOSTS = ("fcm.googleapis.com", "push.services.mozilla.com", "push.apple.com", "notify.windows.com")

@@ -11,6 +11,13 @@
   const EXACT = {
     // header and filters
     "Live deals": "عروض لحظة بلحظة", "connecting…": "بيتصل…", "Filters": "فلاتر", "Install": "تثبيت",
+    "More": "المزيد", "Search": "دوّر", "Search by voice": "دوّر بالصوت", "Basket": "السلة", "Alerts": "التنبيهات", "Language": "اللغة",
+    "Install the app": "ثبّت التطبيق", "Price-drop alerts": "تنبيهات نزول الأسعار", "Watch this price": "تابع السعر ده",
+    "Quick filters": "فلاتر سريعة", "Real only": "حقيقي بس", "Sort by": "رتّب حسب", "Main": "الرئيسية", "Pages": "الصفحات", "Close": "اقفل",
+    "Store status": "حالة المتاجر", "Minimum discount": "أقل خصم", "Maximum discount": "أكبر خصم",
+    "under its usual price": "أقل من سعره المعتاد", "the store's own discount": "خصم من المتجر نفسه",
+    "Hides discounts whose price never moves": "بيخبي الخصومات اللي سعرها ما بيتغيرش",
+    "A 'discount' whose price never moves: probably the normal price": "خصم سعره ما بيتغيرش: غالبًا ده سعره العادي",
     "Show": "اعرض", "Deals": "العروض", "All products": "كل المنتجات", "Store": "المتجر", "talabat hub": "فرع طلبات",
     "Discount type": "نوع الخصم", "Any": "أي نوع", "Platform": "خصم المتجر", "Price drop": "نزول السعر", "Discount": "الخصم",
     "any": "أي نسبة", "Availability": "التوفر", "In stock": "متاح", "Out": "خلصان", "All": "الكل", "Status": "الحالة",
@@ -199,7 +206,11 @@
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
     const b = document.getElementById("langBtn");
-    if (b) { b.textContent = lang === "ar" ? "EN" : "ع"; b.title = lang === "ar" ? "English" : "العربية"; }
+    if (b && b.hasAttribute("data-long")) {  // a menu item: its icon and the other language's name
+      b.querySelector(".ic").textContent = lang === "ar" ? "EN" : "ع";
+      b.querySelector(".lt").textContent = lang === "ar" ? "English" : "العربية";
+      b.lang = lang === "ar" ? "en" : "ar";
+    } else if (b) { b.textContent = lang === "ar" ? "EN" : "ع"; b.title = lang === "ar" ? "English" : "العربية"; }
     if (lang === "ar") {
       if (document.title === "Live Deals") document.title = "عروض لحظة بلحظة";
       const q = document.getElementById("q");

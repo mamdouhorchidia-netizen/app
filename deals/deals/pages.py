@@ -29,71 +29,83 @@ def money(n) -> str:
     return f"{n:,.2f}".rstrip("0").rstrip(".")
 
 
+# the colours, type scale, spacing, radii and shadows come from /tokens.css, the same file the live page uses
 CSS = """
-:root { --bg:#f6f5f2; --panel:#fff; --ink:#1b1a17; --muted:#6d6a63; --faint:#a6a29a; --line:#e4e1da; --accent:#d6402b;
-  --good:#1f7a4d; --good-bg:#e3f3ea; --warn:#9a6a00; --warn-bg:#fbf0d4; --chip:#efede8; --shadow:0 1px 2px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.04);
-  --talabat:#ff5a00; --amazon_eg:#232f3e; --breadfast:#a80080; --jumia:#f68b1e; --dream2000:#0b4ea2; --kenzz:#7b2cbf; --raya:#c8102e; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#121211; --panel:#1c1b19; --ink:#f0eee9; --muted:#a29e95;
-  --faint:#6f6b64; --line:#2f2d29; --accent:#ff6b55; --good:#5cc98f; --good-bg:#173326; --warn:#e6b84d; --warn-bg:#3a2f12; --chip:#262421;
-  --shadow:none; --amazon_eg:#8aa0bb; } }
-:root[data-theme="dark"] { --bg:#121211; --panel:#1c1b19; --ink:#f0eee9; --muted:#a29e95; --faint:#6f6b64; --line:#2f2d29; --accent:#ff6b55;
-  --good:#5cc98f; --good-bg:#173326; --warn:#e6b84d; --warn-bg:#3a2f12; --chip:#262421; --shadow:none; --amazon_eg:#8aa0bb; }
 * { box-sizing: border-box; } html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", "Noto Sans Arabic", Tahoma, sans-serif; }
-a { color: inherit; } .wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
-header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
-.top { display: flex; align-items: center; gap: 10px; padding: 12px 0 6px; }
-.logo { font-weight: 750; font-size: 18px; text-decoration: none; display: flex; align-items: center; gap: 8px; margin-inline-end: auto; }
-.pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
-.iconbtn { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; height: 38px; min-width: 38px; padding: 0 10px; cursor: pointer; font: inherit; color: inherit; }
-.nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 0 0 8px; font-size: 13.5px; }
-.nav a { color: var(--muted); text-decoration: none; padding: 5px 11px; border-radius: 999px; white-space: nowrap; }
-.nav a.on { background: var(--chip); color: var(--ink); font-weight: 650; }
-main { padding: 18px 0 60px; } h1.title { font-size: 22px; margin: 4px 0 14px; } h2 { font-size: 17px; margin: 26px 0 10px; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; }
-.muted { color: var(--muted); } .small { font-size: 13px; }
-.chip { display: inline-block; color: #fff; font-size: 12px; font-weight: 650; padding: 2px 8px; border-radius: 6px; }
-.tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--muted); margin: 0 0 4px 4px; }
-.tag.good { background: var(--good-bg); color: var(--good); } .tag.hot { background: var(--accent); color: #fff; } .tag.warn { background: var(--warn-bg); color: var(--warn); }
-.btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); text-decoration: none; font-weight: 600; cursor: pointer; font: inherit; color: inherit; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: var(--fs-3)/1.5 var(--font); }
+[dir=rtl] body { font-family: var(--font-ar); }
+a { color: inherit; } .wrap { max-width: 1100px; margin: 0 auto; padding: 0 var(--sp-4); }
+header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.top { display: flex; align-items: center; gap: var(--sp-2); height: var(--bar-h); }
+.logo { font-weight: 750; font-size: var(--fs-4); text-decoration: none; display: flex; align-items: center; gap: var(--sp-2); margin-inline-end: auto; min-height: var(--tap); }
+.logo .mark { width: 32px; height: 32px; border-radius: var(--r-1); background: var(--accent); display: grid; place-items: center; }
+.logo .mark svg { width: 20px; height: 20px; }
+.iconbtn { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-2); height: var(--tap); min-width: var(--tap); padding: 0 10px; cursor: pointer; font: inherit; color: inherit; }
+.nav { display: flex; gap: var(--sp-1); overflow-x: auto; scrollbar-width: none; font-size: var(--fs-2); margin-top: -4px; }
+.nav a { color: var(--ink-2); text-decoration: none; padding: 0 var(--sp-3); white-space: nowrap; min-height: var(--tap); display: inline-flex; align-items: center; }
+.nav a.on { color: var(--ink); font-weight: 650; box-shadow: inset 0 -2px 0 var(--accent); }
+main { padding: var(--sp-5) 0 60px; } h1.title { font-size: var(--fs-5); margin: 0 0 var(--sp-4); line-height: 1.25; } h2 { font-size: var(--fs-4); margin: var(--sp-6) 0 var(--sp-3); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-2); box-shadow: var(--elev-1); padding: var(--sp-4); }
+.muted { color: var(--ink-2); } .small { font-size: var(--fs-2); }
+.chip { display: inline-block; color: #fff; font-size: var(--fs-1); font-weight: 650; padding: 3px 8px; border-radius: 6px; }
+.tag { display: inline-block; font-size: var(--fs-1); padding: 2px 8px; border-radius: 6px; background: var(--surface-2); color: var(--ink-2); margin: 0 0 4px 4px; }
+.tag.good { background: var(--good-bg); color: var(--good); } .tag.hot { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); color: var(--accent-text); }
+.tag.warn { background: var(--warn-bg); color: var(--warn); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--tap); padding: 0 var(--sp-4); border-radius: var(--r-2); border: 1px solid var(--line);
+  background: var(--surface); text-decoration: none; cursor: pointer; font: inherit; font-size: var(--fs-2); font-weight: 600; color: inherit; }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-4); }
 /* product */
-.prod { display: grid; grid-template-columns: 300px 1fr; gap: 22px; }
-.prod .img { aspect-ratio: 1; background: #fff; border-radius: 12px; display: grid; place-items: center; overflow: hidden; border: 1px solid var(--line); }
-.prod .img img { width: 100%; height: 100%; object-fit: contain; }
-.prod h1 { font-size: 21px; margin: 6px 0 8px; line-height: 1.3; }
-.big { font-size: 30px; font-weight: 800; } .was { color: var(--muted); text-decoration: line-through; margin-inline-start: 8px; }
-.verdict { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--chip); }
+.prod { display: grid; grid-template-columns: 300px 1fr; gap: var(--sp-5); }
+.prod .img { aspect-ratio: 1; background: var(--plate); border-radius: var(--r-2); display: grid; place-items: center; overflow: hidden; border: 1px solid var(--line); isolation: isolate; }
+.prod .img img { width: 86%; height: 86%; object-fit: contain; mix-blend-mode: multiply; }
+.prod h1 { font-size: var(--fs-5); margin: var(--sp-2) 0; line-height: 1.3; }
+.big { font-size: var(--fs-6); font-weight: 800; font-variant-numeric: tabular-nums; } .was { color: var(--ink-2); text-decoration: line-through; margin-inline-start: var(--sp-2); }
+.verdict { margin-top: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-2); background: var(--surface-2); }
 .verdict.good { background: var(--good-bg); color: var(--good); } .verdict.warn { background: var(--warn-bg); color: var(--warn); }
-.verdict b { display: block; font-size: 16px; }
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
-.stat { background: var(--chip); border-radius: 10px; padding: 8px 10px; } .stat b { display: block; font-size: 16px; }
-.stat span { font-size: 12px; color: var(--muted); }
+.verdict b { display: block; font-size: var(--fs-3); }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2); margin-top: var(--sp-4); }
+.stat { background: var(--surface-2); border-radius: var(--r-1); padding: var(--sp-2) var(--sp-3); } .stat b { display: block; font-size: var(--fs-3); font-variant-numeric: tabular-nums; }
+.stat span { font-size: var(--fs-1); color: var(--ink-2); }
 svg.chart { width: 100%; height: 190px; display: block; direction: ltr; }
-table { width: 100%; border-collapse: collapse; } td { padding: 9px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
+table { width: 100%; border-collapse: collapse; } td { padding: var(--sp-2) 6px; border-top: 1px solid var(--line); vertical-align: middle; }
 td.n { text-align: end; white-space: nowrap; font-weight: 650; }
-ul.why { margin: 8px 0 0; padding-inline-start: 18px; }
-/* grids */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 12px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; text-decoration: none; display: flex; flex-direction: column; box-shadow: var(--shadow); }
-.card .pic { aspect-ratio: 1; background: #fff; display: grid; place-items: center; position: relative; }
-.card .pic img { width: 86%; height: 86%; object-fit: contain; }
-.card .badge { position: absolute; top: 8px; inset-inline-start: 8px; background: var(--accent); color: #fff; font-weight: 750; font-size: 13px; padding: 2px 7px; border-radius: 7px; }
-.card .b { padding: 9px 10px 11px; } .card .nm { font-size: 13.5px; height: 2.8em; overflow: hidden; }
-.card .p { font-weight: 750; margin-top: 4px; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; text-decoration: none; display: block; box-shadow: var(--shadow); }
-.tile .h { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; }
+ul.why { margin: var(--sp-2) 0 0; padding-inline-start: 18px; }
+/* grids: the same card language as the live page */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: var(--sp-3); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-2); overflow: hidden; text-decoration: none; display: flex; flex-direction: column; box-shadow: var(--elev-1); }
+.card .pic { aspect-ratio: 4 / 3; background: var(--pic); display: grid; place-items: center; position: relative; isolation: isolate; }
+.card .pic::before { content: ""; position: absolute; inset: 6px; border-radius: var(--r-1); background: var(--plate); z-index: -1; }
+.card .pic img { width: 80%; height: 80%; object-fit: contain; mix-blend-mode: multiply; }
+.card .badge { position: absolute; top: var(--sp-2); left: var(--sp-2); background: var(--deal); color: var(--deal-ink); font-weight: 750; font-size: var(--fs-2); padding: 3px 7px; border-radius: 6px; }
+[dir=rtl] .card .badge { left: auto; right: var(--sp-2); }
+.card .b { padding: var(--sp-2) 10px var(--sp-3); display: flex; flex-direction: column; gap: 4px; } .card .nm { font-size: var(--fs-2); line-height: 1.35; height: 2.7em; overflow: hidden; }
+.card .p { font-weight: 700; font-size: var(--fs-4); font-variant-numeric: tabular-nums; order: -1; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--sp-3); }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-2); padding: var(--sp-4); text-decoration: none; display: block; box-shadow: var(--elev-1); }
+.tile .h { display: flex; align-items: center; gap: var(--sp-2); font-weight: 700; font-size: var(--fs-3); }
 .tile .dot { width: 12px; height: 12px; border-radius: 50%; }
-.tile .k { font-size: 26px; font-weight: 800; margin-top: 8px; } .tile .s { color: var(--muted); font-size: 13px; }
-.coupon { display: flex; align-items: center; gap: 12px; }
-.code { font: 700 16px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .06em; border: 2px dashed var(--accent); color: var(--accent); padding: 8px 14px; border-radius: 10px; background: none; cursor: pointer; }
-.empty { padding: 40px; text-align: center; color: var(--muted); }
-footer { color: var(--faint); font-size: 12.5px; padding: 20px 0 40px; text-align: center; }
+.tile .k { font-size: var(--fs-6); font-weight: 800; margin-top: var(--sp-2); font-variant-numeric: tabular-nums; } .tile .s { color: var(--ink-2); font-size: var(--fs-2); }
+.coupon { display: flex; align-items: center; gap: var(--sp-3); }
+.code { font: 700 var(--fs-3) ui-monospace, Menlo, Consolas, monospace; letter-spacing: .06em; border: 2px dashed var(--accent-text); color: var(--accent-text); padding: var(--sp-2) 14px;
+  min-height: var(--tap); border-radius: var(--r-2); background: none; cursor: pointer; }
+.empty { padding: 40px; text-align: center; color: var(--ink-2); }
+footer { color: var(--ink-3); font-size: var(--fs-1); padding: var(--sp-5) 0 40px; text-align: center; line-height: 1.8; }
+footer a { display: inline-block; padding: 11px 8px; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 760px) { .prod { grid-template-columns: 1fr; } .prod .img { max-width: 230px; margin: 0 auto; width: 100%; }
-  .stats { grid-template-columns: repeat(2, 1fr); } .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; } }
+  .stats { grid-template-columns: repeat(2, 1fr); } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+  .wrap { padding: 0 var(--sp-3); } }
 """
+LOGO = ('<span class="mark" aria-hidden="true"><svg viewBox="0 0 512 512"><path d="M150 330 L250 230 L300 280 L390 180" stroke="#fff" '
+        'stroke-width="44" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="390" cy="180" r="34" fill="#fff"/></svg></span>')
+
+
+def chip_style(store) -> str:
+    """A store chip's colours: the store's own background and the text that passes AA on it (the live page's pairs)."""
+    return f"background:var(--{e(store)}-bg,#555);color:var(--{e(store)}-fg,#fff)"
+
 
 NAV = [("/", "Home"), ("/?deals=1&sort=newest&status=new", "Just dropped"), ("/cats", "Categories"),
        ("/stores", "Stores"), ("/coupons", "🎟️ Coupons"), ("/?recent=1", "Recently viewed")]
@@ -129,9 +141,9 @@ def layout(title: str, body: str, active: str = "", og: dict = None, title_ar: s
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{e(title_ar or title)}</title><meta name="description" content="{e(og.get('description') or title)}">{meta}
 <meta name="theme-color" content="#d6402b"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon.svg" type="image/svg+xml">
-<style>{CSS}{LANG_CSS}</style><script src="/i18n.js"></script></head>
-<body><header><div class="wrap"><div class="top"><a class="logo" href="/"><span class="pulse"></span><span>Live deals</span></a>
-<button class="iconbtn" id="langBtn" aria-label="Language">ع</button></div><nav class="nav">{nav}</nav></div></header>
+<link rel="stylesheet" href="/tokens.css"><style>{CSS}{LANG_CSS}</style><script src="/i18n.js"></script></head>
+<body><header><div class="wrap"><div class="top"><a class="logo" href="/">{LOGO}<span>Live deals</span></a>
+<button class="iconbtn" id="langBtn" aria-label="Language">ع</button></div><nav class="nav" aria-label="Pages">{nav}</nav></div></header>
 <main class="wrap">{body}</main>
 <footer class="wrap">{FOOTER}</footer>
 {LINK_JS}</body></html>""".encode()
@@ -210,7 +222,7 @@ def product_page(p: dict, d: dict, history: list[dict], matches: list[dict], rel
     badge = ""
     if pct:
         kind = "the store's own discount" if d.get("kind") == "platform" else "under its usual price"
-        badge = f'<span class="chip" dir="ltr" style="background:var(--accent)" title="{kind}">−{round(pct)}%</span> '
+        badge = f'<span class="chip" dir="ltr" style="background:var(--deal);color:var(--deal-ink)" title="{kind}">−{round(pct)}%</span> '
     prices = [h["price"] for h in history if h.get("price") is not None and h["at"] > now - 90 * 86400] or [price]
     stats = [("Lowest in 90 days", min(prices)), ("Highest in 90 days", max(prices)),
              ("Usual price", d.get("usual_price")), ("Price changes", len(history))]
@@ -224,7 +236,7 @@ def product_page(p: dict, d: dict, history: list[dict], matches: list[dict], rel
     cmp = ""
     if len(rows) > 1:
         cmp = '<h2>Same product in other stores</h2><div class="panel"><table>' + "".join(
-            f'<tr><td><span class="chip" style="background:var(--{e(x["store"])})">{e(LABELS.get(x["store"], x["store"]))}</span> '
+            f'<tr><td><span class="chip" style="{chip_style(x["store"])}">{e(LABELS.get(x["store"], x["store"]))}</span> '
             f'<span class="small muted" dir="auto">{e(x["name"][:70])}</span></td><td class="n">{money(x["price"])} EGP'
             f'{"<br><span class=small>cheapest</span>" if i == 0 else ""}</td>'
             f'<td class="n"><a class="btn" style="padding:6px 12px" {_link_attrs(x)}>Open ↗</a></td></tr>'
@@ -237,7 +249,7 @@ def product_page(p: dict, d: dict, history: list[dict], matches: list[dict], rel
     label = "Open in " + APP.get(store, "store") + " ↗"
     body = f"""
 <div class="prod"><div class="img">{img}</div><div>
-  <div class="small"><span class="chip" style="background:var(--{e(store)},#555)">{e(LABELS.get(store, store))}</span>
+  <div class="small"><span class="chip" style="{chip_style(store)}">{e(LABELS.get(store, store))}</span>
     <span class="muted"> {e(p.get("category") or "")}{hub}</span></div>
   <h1 dir="auto">{e(p["name"])}</h1>
   <div>{badge}<span class="big">{money(price)} EGP</span>{was}</div>
@@ -269,7 +281,7 @@ def stores_page(status_rows: list[dict], facets_all: dict, facets_deals: dict, b
         sid = s["store"]
         n_deals = facets_deals.get(sid, 0)
         state = ("paused" if s.get("paused_until") else "live") if s.get("live") else "not running"
-        tiles.append(f"""<a class="tile" href="/store/{e(sid)}"><div class="h"><span class="dot" style="background:var(--{e(sid)},#555)"></span>{e(s["label"])}</div>
+        tiles.append(f"""<a class="tile" href="/store/{e(sid)}"><div class="h"><span class="dot" style="background:var(--{e(sid)}-bg,#555)"></span>{e(s["label"])}</div>
 <div class="k">{n_deals:,}</div><div class="s">deals · {s["products"]:,} products</div>
 <div class="s">{f'up to {round(best[sid])}% off' if best.get(sid) else ''}</div><div class="s">{e(state)}</div></a>""")
     body = f'<h1 class="title">All stores</h1><div class="tiles">{"".join(tiles)}</div>'
@@ -289,7 +301,7 @@ def coupons_page(coupons: list[dict]) -> bytes:
     live = [c for c in coupons if not c.get("expires") or c["expires"] >= time.strftime("%Y-%m-%d")]
     rows = "".join(f"""<div class="panel coupon" style="margin-bottom:10px">
 <button class="code" data-copy="{e(c["code"])}"{f' data-go="{e(c["url"])}"' if c.get("url") else ""}>{e(c["code"])}</button>
-<div><div><span class="chip" style="background:var(--{e(c.get("store"))},#555)">{e(LABELS.get(c.get("store"), c.get("store") or ""))}</span>
+<div><div><span class="chip" style="{chip_style(c.get("store"))}">{e(LABELS.get(c.get("store"), c.get("store") or ""))}</span>
 <span{"" if c.get("auto") else ' dir="auto"'}> {e(c.get("title") or "")}</span></div>
 <div class="small muted">{f'until {e(c["expires"])}' if c.get("expires") else ""}</div></div></div>""" for c in live)
     body = (f'<h1 class="title">🎟️ Coupons</h1><p class="muted">Tap a code to copy it</p>'

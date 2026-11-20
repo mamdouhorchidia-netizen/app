@@ -1,11 +1,11 @@
 // Live deals: makes the site installable and shows price-drop notifications, even when it's closed.
 const VIBRATE = [90, 60, 90, 60, 260];  // the deals "da-da-daaa" buzz (Android); the sound is the phone's own
 
-// The page shell (and its translations) is kept as a last good copy, so the site still opens with no connection and
+// The page shell (its translations and its design tokens) is kept as a last good copy, so the site still opens with no connection and
 // says so, instead of the browser's error page. Network first, always: the server sends these with an ETag and
 // no-cache, so a deploy shows at once; the copy is used only when the network fails. Prices (/api/*) are never cached.
-const SHELL = "deals-shell-v2";
-const SHELL_URLS = ["/", "/i18n.js"];
+const SHELL = "deals-shell-v3";
+const SHELL_URLS = ["/", "/i18n.js", "/tokens.css"];
 const shellKey = url => url.pathname === "/live" ? "/" : url.pathname;  // "/?deals=1…" is the same page
 
 self.addEventListener("install", e => {
@@ -18,7 +18,7 @@ self.addEventListener("activate", e => e.waitUntil((async () => {
 self.addEventListener("fetch", e => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== self.location.origin) return;
-  if (!(url.pathname === "/" || url.pathname === "/live" || url.pathname === "/i18n.js")) return;  // everything else: the network, untouched
+  if (!(url.pathname === "/" || url.pathname === "/live" || SHELL_URLS.includes(url.pathname))) return;  // everything else: the network, untouched
   e.respondWith((async () => {
     try {
       const res = await fetch(req);

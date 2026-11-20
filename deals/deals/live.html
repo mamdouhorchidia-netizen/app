@@ -9,178 +9,240 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon.svg">
+<link rel="stylesheet" href="/tokens.css">
 <style>
-:root {
-  --bg: #f6f5f2; --panel: #ffffff; --ink: #1b1a17; --muted: #6d6a63; --faint: #6b6862; --line: #e4e1da;
-  --accent: #d6402b; --accent-ink: #ffffff; --accent-text: #b3321f; --good: #1f7a4d; --good-bg: #e3f3ea; --warn: #845b00; --warn-bg: #fbf0d4;
-  --chip: #efede8; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04); --drop: #1f7a4d; --focus: #d6402b;
-  /* store colours as text on the panel (both themes pass 4.5:1) */
-  --talabat: #c94700; --amazon_eg: #232f3e; --breadfast: #a80080; --jumia: #a65c12; --dream2000: #0b4ea2; --kenzz: #7b2cbf; --raya: #c8102e; --radius: 14px;
-  /* store chips (the same in both themes): background, and the text on it (white unless set) */
-  --talabat-bg: #c94700; --amazon_eg-bg: #232f3e; --breadfast-bg: #a80080; --jumia-bg: #f68b1e; --jumia-fg: #1b1a17;
-  --dream2000-bg: #0b4ea2; --kenzz-bg: #7b2cbf; --raya-bg: #c8102e;
-  /* picture tiles: product photos are mostly on white */
-  --pic: #ffffff; --plate: #ffffff; --ph: #d9d5cc;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #121211; --panel: #1c1b19; --ink: #f0eee9; --muted: #a29e95; --faint: #8f8b84; --line: #2f2d29;
-    --accent: #ff6b55; --accent-ink: #1b0b07; --accent-text: #ff6b55; --good: #5cc98f; --good-bg: #173326; --warn: #e6b84d; --warn-bg: #3a2f12;
-    --chip: #262421; --shadow: none; --drop: #5cc98f; --focus: #ff8a78;
-    --talabat: #ff5a00; --amazon_eg: #8aa0bb; --breadfast: #d06cbc; --jumia: #f68b1e; --dream2000: #6b96cf; --kenzz: #ad7ddb; --raya: #e06a7d;
-    --pic: #26251f; --plate: #c9c6bf; --ph: #77746d;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #121211; --panel: #1c1b19; --ink: #f0eee9; --muted: #a29e95; --faint: #8f8b84; --line: #2f2d29;
-  --accent: #ff6b55; --accent-ink: #1b0b07; --accent-text: #ff6b55; --good: #5cc98f; --good-bg: #173326; --warn: #e6b84d; --warn-bg: #3a2f12;
-  --chip: #262421; --shadow: none; --drop: #5cc98f; --focus: #ff8a78;
-  --talabat: #ff5a00; --amazon_eg: #8aa0bb; --breadfast: #d06cbc; --jumia: #f68b1e; --dream2000: #6b96cf; --kenzz: #ad7ddb; --raya: #e06a7d;
-  --pic: #26251f; --plate: #c9c6bf; --ph: #77746d;
-}
+/* the tokens (spacing, type, radius, colour roles, elevation, motion) are in /tokens.css, shared with the server pages */
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--ink);
-  font: 15px/1.4 system-ui, -apple-system, "Segoe UI", "Noto Sans Arabic", Tahoma, sans-serif; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: var(--fs-3)/1.45 var(--font); }
+[dir=rtl] body { font-family: var(--font-ar); }
 button, input, select { font: inherit; color: inherit; }
 a { color: inherit; }
-.wrap { max-width: 1400px; margin: 0 auto; padding: 0 16px; }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 0 var(--sp-4); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.slider, .badge, .score, .num { direction: ltr; unicode-bidi: isolate; }
+.unit { direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
+svg.chart { direction: ltr; }
+/* rows that scroll sideways by finger, wheel or arrow keys */
+.hscroll { display: flex; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.hscroll::-webkit-scrollbar { display: none; }
 
-/* header */
-header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
-.top { display: flex; align-items: center; gap: 12px; padding: 12px 0 8px; }
-h1 { font-size: 19px; margin: 0; letter-spacing: -.01em; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
-.pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; flex: none; }
-@keyframes pulse { 50% { opacity: .25; } }
+/* ---------- header: one compact bar, then one row of quick filters ---------- */
+header { position: sticky; top: 0; z-index: 8; background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.top { display: flex; align-items: center; gap: var(--sp-2); height: var(--bar-h); }
+.logo { display: flex; align-items: center; gap: var(--sp-2); margin: 0; font-size: var(--fs-4); font-weight: 750; letter-spacing: -.01em;
+  white-space: nowrap; text-decoration: none; min-height: var(--tap); min-width: var(--tap); justify-content: center; flex: none; }
+.logo .mark { width: 32px; height: 32px; border-radius: var(--r-1); background: var(--accent); display: grid; place-items: center; flex: none; }
+.logo .mark svg { width: 20px; height: 20px; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--good); animation: pulse 2s infinite; flex: none; }
+@keyframes pulse { 50% { opacity: .3; } }
 .search { flex: 1; min-width: 0; position: relative; }
-.search input { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  padding-block: 9px; padding-inline: 34px 12px; font-size: 15px; min-height: 44px; }
-.search svg { position: absolute; inset-inline-start: 11px; top: 50%; transform: translateY(-50%); color: var(--faint); }
-.iconbtn { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; height: 44px; min-width: 44px;
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; cursor: pointer; flex: none; }
-.iconbtn .n { background: var(--accent); color: var(--accent-ink); border-radius: 999px; font-size: 11px; padding: 0 6px; font-weight: 700; }
-/* one line that scrolls sideways (by finger, wheel or arrow keys) instead of being cut off; the fade says there is more */
-.status { color: var(--muted); font-size: 12.5px; padding: 0 0 6px; padding-inline-end: 24px; white-space: nowrap; overflow-x: auto; scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(to left, transparent, #000 24px); mask-image: linear-gradient(to left, transparent, #000 24px); }
-[dir=rtl] .status { -webkit-mask-image: linear-gradient(to right, transparent, #000 24px); mask-image: linear-gradient(to right, transparent, #000 24px); }
-.status::-webkit-scrollbar { display: none; }
+.search input { width: 100%; height: var(--tap); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-2);
+  padding-block: 0; padding-inline: 36px var(--sp-3); font-size: var(--fs-3); }
+.search > svg { position: absolute; inset-inline-start: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
+.search .mic { position: absolute; inset-inline-end: 0; top: 0; border: 0; background: none; font-size: var(--fs-3); cursor: pointer;
+  width: var(--tap); height: var(--tap); padding: 0; border-radius: var(--r-2); }
+.search .mic.on { background: color-mix(in srgb, var(--accent) 18%, transparent); animation: pulse 1s infinite; }
+.search:has(.mic:not([hidden])) input { padding-inline-end: 46px; }
+.iconbtn { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-2); height: var(--tap); min-width: var(--tap);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; cursor: pointer; flex: none; font-size: var(--fs-3); }
+.n { background: var(--accent); color: var(--accent-ink); border-radius: var(--r-pill); font-size: var(--fs-1); line-height: 18px; min-width: 18px;
+  padding: 0 5px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.n[hidden] { display: none; }
+/* the ⋯ menu: language, install, alerts, and (on phones) the other pages */
+.more { position: relative; flex: none; }
+.menu { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 20; min-width: 220px; padding: var(--sp-1);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-2); box-shadow: var(--elev-2);
+  transform-origin: top right; animation: pop var(--dur-2) var(--ease); }
+[dir=rtl] .menu { transform-origin: top left; }
+@keyframes pop { from { opacity: 0; transform: scale(.96); } }
+.menu[hidden] { display: none; }
+.mi { display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-height: var(--tap); padding: 0 var(--sp-3); border: 0; background: none;
+  border-radius: var(--r-1); text-decoration: none; font-size: var(--fs-2); cursor: pointer; text-align: start; color: var(--ink); }
+.mi:hover { background: var(--surface-2); }
+.mi[hidden] { display: none; }
+.mi .ic { width: 20px; text-align: center; flex: none; }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: var(--sp-1) 0; }
+.nav { display: none; gap: var(--sp-1); overflow-x: auto; scrollbar-width: none; font-size: var(--fs-2); }
+.nav a { color: var(--ink-2); text-decoration: none; padding: 0 var(--sp-3); border-radius: var(--r-pill); white-space: nowrap;
+  min-height: var(--tap); display: inline-flex; align-items: center; }
+.nav a:hover { color: var(--ink); }
+.nav a.on { color: var(--ink); font-weight: 650; box-shadow: inset 0 -2px 0 var(--accent); border-radius: 0; }
+/* quick filters: Filters, Deals/All, the stores, Real only, sort */
+.chiprow { gap: var(--sp-2); padding: 0 0 var(--sp-2); align-items: center; }
+.qc, .chiprow .seg button, .chiprow select { flex: none; height: 36px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: var(--r-pill); padding: 0 var(--sp-3); font-size: var(--fs-2); cursor: pointer; white-space: nowrap; display: inline-flex;
+  align-items: center; gap: 6px; position: relative; margin-block: 4px; }
+.qc::after, .chiprow .seg button::after { content: ""; position: absolute; inset: -5px 0; }  /* 44px to tap, the chip stays small */
+.qc[aria-pressed="true"], .chiprow .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 650; }
+.qc .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.chiprow .seg { display: flex; flex: none; gap: 0; background: none; padding: 0; }
+.chiprow .seg button { border-radius: 0; margin-inline-start: -1px; }
+.chiprow .seg button:first-child { border-start-start-radius: var(--r-pill); border-end-start-radius: var(--r-pill); margin-inline-start: 0; }
+.chiprow .seg button:last-child { border-start-end-radius: var(--r-pill); border-end-end-radius: var(--r-pill); }
+.chiprow select { appearance: none; -webkit-appearance: none; padding-inline-end: 28px; height: var(--tap); margin-block: 0; max-width: 220px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-size: 5px 5px; background-repeat: no-repeat; background-position: right 14px center, right 9px center; }
+[dir=rtl] .chiprow select { background-position: left 9px center, left 14px center; }
+.chiprow .sep { width: 1px; height: 24px; background: var(--line); flex: none; }
 /* when the server can't be reached: says so, says how old the prices on screen are, and offers a retry */
-.offline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 8px; padding: 6px; padding-inline: 12px 6px;
-  border-radius: 10px; background: var(--warn-bg); color: var(--warn); font-size: 13.5px; border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+.offline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 var(--sp-2); padding: 6px; padding-inline: var(--sp-3) 6px;
+  border-radius: var(--r-2); background: var(--danger-bg); color: var(--danger); font-size: var(--fs-2); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); }
 .offline[hidden] { display: none; }
 .offline > span { flex: 1; min-width: 12em; }
 .offline span span { color: var(--ink); }
-.offline .btn { min-height: 44px; padding-block: 0; }
-body.is-offline .pulse { animation: none; background: var(--faint); }
-.ticker { overflow: hidden; border-top: 1px solid var(--line); height: 30px; position: relative; font-size: 13px; }
-/* the strip moves toward the end of the reading direction: right to left in English, left to right in Arabic,
-   so each item's beginning comes into view first */
-.ticker-track { display: inline-flex; gap: 28px; white-space: nowrap; padding-inline-start: 100%; line-height: 30px;
-  animation: scroll linear infinite; }
-[dir=rtl] .ticker-track { animation-name: scroll-rtl; }
-.ticker:hover .ticker-track, .ticker:focus-within .ticker-track { animation-play-state: paused; }
-@keyframes scroll { to { transform: translateX(-100%); } }
-@keyframes scroll-rtl { to { transform: translateX(100%); } }
-.tick { cursor: pointer; color: var(--muted); unicode-bidi: isolate; }
-.slider { direction: ltr; }
-.badge, .score { direction: ltr; unicode-bidi: isolate; }
-.dlg-head { padding-inline-end: 40px; }
-.unit { direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
-svg.chart { direction: ltr; }
-[dir=rtl] body { font-family: system-ui, "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif; }
-.nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 8px 0 9px; margin-top: -8px; margin-bottom: -1px; font-size: 13.5px; }
-.nav a { color: var(--muted); text-decoration: none; padding: 5px 11px; border-radius: 999px; white-space: nowrap; border: 1px solid transparent; position: relative; }
-.nav a::after { content: ""; position: absolute; inset: -8px 0; }  /* 44px tall to tap, the pill stays small */
-.nav a:hover { color: var(--ink); border-color: var(--line); }
-.nav a.on { background: var(--chip); color: var(--ink); font-weight: 650; }
-.tick b { color: var(--ink); font-weight: 600; }
-.tick .down { color: var(--drop); font-weight: 600; } .tick .up { color: var(--accent); font-weight: 600; }
+body.is-offline .pulse { animation: none; background: var(--danger); }
 
-/* layout */
-.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 20px; padding-top: 16px; padding-bottom: 60px; }
-aside { position: sticky; top: 176px; align-self: start; max-height: calc(100vh - 186px); overflow: auto; padding-inline-end: 4px; }
-.fgroup { padding: 12px 0; border-bottom: 1px solid var(--line); }
+/* ---------- layout ---------- */
+.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: var(--sp-5); padding-top: var(--sp-4); padding-bottom: 60px; }
+main { min-width: 0; }
+aside { position: sticky; top: 168px; align-self: start; max-height: calc(100vh - 184px); overflow: auto; padding-inline-end: 4px; }
+.fgroup { padding: var(--sp-3) 0; border-bottom: 1px solid var(--line); }
 .fgroup:first-child { padding-top: 0; }
-.fgroup h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; font-weight: 650; }
-.seg { display: flex; background: var(--chip); border-radius: 9px; padding: 3px; gap: 2px; }
-.seg button { flex: 1; border: 0; background: none; padding: 6px 4px; border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--muted); white-space: nowrap;
+.fgroup h3 { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); margin: 0 0 var(--sp-2); font-weight: 650; }
+.seg { display: flex; background: var(--surface-2); border-radius: var(--r-1); padding: 3px; gap: 2px; }
+.seg button { flex: 1; border: 0; background: none; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-size: var(--fs-2); color: var(--ink-2); white-space: nowrap;
   position: relative; min-height: 32px; }
 .seg button::after { content: ""; position: absolute; inset: -6px 0; }
-.seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); font-weight: 600; }
-.opts { display: flex; flex-direction: column; gap: 0; }
-.opt { display: flex; align-items: center; gap: 10px; padding: 4px 6px; min-height: 44px; border-radius: 7px; cursor: pointer; font-size: 14px; }
-.opt:hover { background: var(--chip); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--elev-1); font-weight: 600; }
+.opts { display: flex; flex-direction: column; }
+.opt { display: flex; align-items: center; gap: 10px; padding: 4px 6px; min-height: var(--tap); border-radius: var(--r-1); cursor: pointer; font-size: var(--fs-2); }
+.opt:hover { background: var(--surface-2); }
 .opt input { accent-color: var(--accent); margin: 0; width: 18px; height: 18px; flex: none; }
-.opt .c { margin-inline-start: auto; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.opt .c { margin-inline-start: auto; color: var(--ink-3); font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
 .opt .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
-.range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.range label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
-.range input[type=number], select.full { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-height: 44px; }
-.slider { position: relative; height: 44px; margin: 0 4px; }
+.range { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.range label { font-size: var(--fs-1); color: var(--ink-2); display: flex; flex-direction: column; gap: 4px; }
+.range input[type=number], select.full { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-1); padding: 6px 8px; min-height: var(--tap); }
+.slider { position: relative; height: var(--tap); margin: 0 4px; }
 .slider input { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; -webkit-appearance: none; appearance: none; background: none; margin: 0; }
-.slider input::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: var(--panel); border: 2px solid var(--accent); cursor: pointer; }
-.slider input::-moz-range-thumb { pointer-events: auto; width: 20px; height: 20px; border-radius: 50%; background: var(--panel); border: 2px solid var(--accent); cursor: pointer; }
+.slider input::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); cursor: pointer; }
+.slider input::-moz-range-thumb { pointer-events: auto; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); cursor: pointer; }
 .slider input:focus-visible { outline: none; }
-.slider input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--focus); }
-.slider input:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--focus); }
+.slider input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus); }
+.slider input:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus); }
 .slider .rail { position: absolute; left: 0; right: 0; top: 21px; height: 3px; background: var(--line); border-radius: 2px; }
 .slider .fill { position: absolute; top: 21px; height: 3px; background: var(--accent); border-radius: 2px; }
-.pctlabel { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; text-transform: none; letter-spacing: 0; color: var(--ink); }
-.reset { width: 100%; margin-top: 12px; background: none; border: 1px dashed var(--line); border-radius: 9px; padding: 8px; min-height: 44px; cursor: pointer; color: var(--muted); }
+.pctlabel { font-size: var(--fs-1); font-weight: 600; font-variant-numeric: tabular-nums; text-transform: none; letter-spacing: 0; color: var(--ink); }
+.reset { width: 100%; margin-top: var(--sp-3); background: none; border: 1px dashed var(--line); border-radius: var(--r-1); padding: 8px; min-height: var(--tap); cursor: pointer; color: var(--ink-2); }
+.sheet-done { display: none; }
+.sheet-head { display: none; }
 
-.bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-.count { font-weight: 650; font-size: 15px; }
-.count small { color: var(--muted); font-weight: 400; }
+/* count, live pill, active filters */
+.bar { display: flex; align-items: center; gap: var(--sp-2) var(--sp-3); margin: 0 0 var(--sp-3); flex-wrap: wrap; }
+.count { font-weight: 700; font-size: var(--fs-3); font-variant-numeric: tabular-nums; }
+.count small { color: var(--ink-2); font-weight: 400; font-size: var(--fs-2); }
 .bar .spacer { flex: 1; }
-.bar select { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 7px 10px; max-width: 100%; min-height: 44px; }
-.chips { display: flex; gap: 8px 6px; flex-wrap: wrap; }
-.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 4px 10px; font-size: 12.5px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center;
+.chips { display: flex; gap: var(--sp-2) 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-pill); padding: 4px 10px; font-size: var(--fs-1); cursor: pointer; display: inline-flex; gap: 6px; align-items: center;
   min-height: 36px; position: relative; }
 .chip::after { content: ""; position: absolute; inset: -4px 0; }
-.chip:hover { border-color: var(--muted); }
-.chip .x { color: var(--faint); }
-.filterbtn { display: none; }
+.chip:hover { border-color: var(--ink-3); }
+.chip .x { color: var(--ink-3); }
+.chips:empty { display: none; }
+/* the freshness pill: "● Live · updated 8 s ago" (amber when stale, red when offline); opens each store's status */
+.fresh { display: inline-flex; align-items: center; gap: var(--sp-2); height: 32px; position: relative; padding: 0 var(--sp-3); border-radius: var(--r-pill);
+  border: 1px solid color-mix(in srgb, var(--good) 35%, var(--line)); background: var(--good-bg); color: var(--good); font-size: var(--fs-1); font-weight: 650;
+  cursor: pointer; font-variant-numeric: tabular-nums; white-space: nowrap; margin-inline-start: auto; }
+.fresh::after { content: ""; position: absolute; inset: -7px 0; }  /* 44px to tap */
+.fresh .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; animation: pulse 2s infinite; }
+.fresh.stale { background: var(--warn-bg); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, var(--line)); }
+.fresh.off { background: var(--danger-bg); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
+.fresh.stale .dot, .fresh.off .dot { animation: none; }
+/* the status sheet: what each store is doing */
+.srows { display: grid; gap: 0; margin-top: var(--sp-2); }
+.srow { display: grid; grid-template-columns: 12px auto 1fr; align-items: baseline; gap: var(--sp-2); padding: var(--sp-3) 0; border-top: 1px solid var(--line); font-size: var(--fs-2); }
+.srow .sd { width: 10px; height: 10px; border-radius: 50%; background: var(--good); align-self: center; }
+.srow.paused .sd { background: var(--warn); } .srow.idle .sd { background: var(--ink-3); }
+.srow b { font-weight: 650; } .srow span:last-child { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.srow.total { grid-template-columns: 1fr; color: var(--ink-2); }
 
-/* cards */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex;
-  flex-direction: column; box-shadow: var(--shadow); cursor: pointer; transition: transform .12s, border-color .12s; position: relative; min-width: 0; }
-.card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--muted) 40%, var(--line)); }
-.card.fresh { animation: fresh 2.5s ease-out; }
-@keyframes fresh { from { box-shadow: 0 0 0 3px var(--accent); } }
+/* ---------- today in 30 seconds: one row of tiles you swipe ---------- */
+.brief { margin: 0 0 var(--sp-3); }
+.brief-row { gap: var(--sp-2); scroll-snap-type: x mandatory; scroll-padding-inline: var(--sp-4); margin-inline: calc(-1 * var(--sp-4)); padding-inline: var(--sp-4); }
+.bt { flex: none; height: 96px; scroll-snap-align: start; border-radius: var(--r-2); padding: var(--sp-3); text-align: start; font: inherit; }
+.bt.head { width: 176px; color: #fff; background-color: #3f1c15; background-image: linear-gradient(135deg, #2a1a17 0%, #5b1f14 60%, #b3321f 140%); display: flex; flex-direction: column; justify-content: space-between; }
+.bt.head h2 { margin: 0; font-size: var(--fs-3); line-height: 1.25; }
+.bt.head .sub { font-size: var(--fs-1); opacity: .88; line-height: 1.3; }
+.st { width: 136px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); cursor: pointer; display: flex; flex-direction: column; justify-content: space-between;
+  box-shadow: var(--elev-1); transition: transform var(--dur-1) var(--ease); }
+.st:hover { transform: translateY(-1px); }
+.st b { display: block; font-size: var(--fs-5); font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.st span { font-size: var(--fs-1); color: var(--ink-2); line-height: 1.3; }
+.st.fake b { color: var(--danger); } .st.lowest b, .st.new b { color: var(--good); }
+.st.best { width: 232px; display: block; font-size: var(--fs-1); color: var(--ink-2); line-height: 1.35; overflow: hidden; }
+.st.best b { font-size: var(--fs-2); color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 2px 0; font-weight: 650; }
+
+/* ---------- just dropped: a still strip, scrolled by hand ---------- */
+.drops { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-3); }
+.drops[hidden] { display: none; }
+.drops h2 { margin: 0; font-size: var(--fs-1); font-weight: 700; color: var(--accent-text); flex: none; width: 56px; line-height: 1.25; }
+.drops-track { gap: var(--sp-2); min-width: 0; flex: 1; }
+.tick { flex: none; width: 208px; min-height: var(--tap); padding: 6px 10px; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-1);
+  text-align: start; cursor: pointer; font-size: var(--fs-1); color: var(--ink-2); line-height: 1.35; display: grid; }
+.tick b { color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.tick .ln { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.tick .down { color: var(--good); font-weight: 650; } .tick .up { color: var(--accent-text); font-weight: 650; }
+
+.hubbar { display: flex; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: none; padding: 0 0 var(--sp-3); }
+.hubbar[hidden] { display: none; }
+.hubbar .lbl { font-size: var(--fs-1); color: var(--ink-2); white-space: nowrap; font-weight: 650; }
+.hubbar button { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-pill); padding: 0 var(--sp-3); white-space: nowrap;
+  cursor: pointer; font-size: var(--fs-2); color: var(--ink); min-height: var(--tap); }
+.hubbar button.on { background: var(--talabat-bg); border-color: var(--talabat-bg); color: #fff; font-weight: 650; }
+.hubbar button .c { opacity: .75; font-size: var(--fs-1); margin-inline-start: 4px; }
+
+/* ---------- cards: picture, price, one verdict, name, store, open ---------- */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(188px, 1fr)); gap: var(--sp-3); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-2); overflow: hidden; display: flex;
+  flex-direction: column; box-shadow: var(--elev-1); cursor: pointer; transition: transform var(--dur-1) var(--ease); position: relative; min-width: 0; }
+.card:hover { transform: translateY(-2px); }
+/* a card that just arrived: a ring that fades out (opacity only) */
+.card.fresh::before { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--accent); pointer-events: none;
+  z-index: 3; animation: fade 2.5s var(--ease) forwards; }
+@keyframes fade { 0%, 40% { opacity: 1; } to { opacity: 0; } }
 /* a card whose price just changed: its background is tinted (green down, red up) and fades back; colour only */
 .card.moved { animation: moved 8s ease-out; }
 .card.moved.up { animation-name: moved-up; }
-@keyframes moved { 0%, 30% { background-color: color-mix(in srgb, var(--drop) 15%, var(--panel)); } }
-@keyframes moved-up { 0%, 30% { background-color: color-mix(in srgb, var(--accent) 13%, var(--panel)); } }
-.marks, .sk { display: contents; }
-.card.out { opacity: .62; }
-.pic { position: relative; aspect-ratio: 1 / 1; background: var(--pic); display: grid; place-items: center; overflow: hidden; isolation: isolate; }
+@keyframes moved { 0%, 30% { background-color: color-mix(in srgb, var(--good) 15%, var(--surface)); } }
+@keyframes moved-up { 0%, 30% { background-color: color-mix(in srgb, var(--accent) 13%, var(--surface)); } }
+.marks { display: contents; }
+.card.out .pic, .card.out .pr { opacity: .6; }
+.pic { position: relative; aspect-ratio: 4 / 3; background: var(--pic); display: grid; place-items: center; overflow: hidden; isolation: isolate; }
 /* in dark mode the photo sits on a dimmed plate inset in a dark tile; multiply melts the photo's own white
    background into the plate, so there is no bright square around the product */
-.pic::before { content: ""; position: absolute; inset: 7px; border-radius: 10px; background: var(--plate); z-index: -1; }
-/* every picture fills the same square, whatever size the store sent: small ones grow, big ones shrink */
-.pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 14% 12% 18%; box-sizing: border-box; mix-blend-mode: multiply; }
-.pic .ph { font-size: 34px; font-weight: 700; color: var(--ph); }
-.badge { position: absolute; top: 8px; inset-inline-start: 8px; color: #fff; font-weight: 750; font-size: 13px; padding: 3px 8px; border-radius: 7px; background: #d6402b; letter-spacing: .01em; }
-.badge.drop { background: #1f7a4d; }
-.score { position: absolute; top: 6px; inset-inline-end: 6px; width: 38px; height: 38px; }
-.score text { font-size: 12px; font-weight: 750; fill: #1b1a17; }
-.why .score { position: static; flex: none; width: 52px; height: 52px; }
-.store { position: absolute; bottom: 8px; inset-inline-start: 8px; color: #fff; font-size: 11px; font-weight: 650; padding: 2px 7px; border-radius: 5px;
-  display: flex; flex-direction: column; align-items: flex-start; line-height: 1.3; max-width: calc(100% - 54px); }
-.store > span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* when the store last checked this price ("checked 40 s ago"): a second line on the store's chip, inside the
-   picture, so the card stays the same size */
-.store .chk { font-weight: 500; font-size: 10.5px; opacity: .92; font-variant-numeric: tabular-nums; }
-.store .chk:empty { display: none; }
-.watch { position: absolute; bottom: 6px; inset-inline-end: 6px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(255,255,255,.92);
-  display: grid; place-items: center; cursor: pointer; color: #76736d; box-shadow: 0 1px 3px rgba(0,0,0,.15); font-size: 16px; z-index: 2; }
-.watch::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; }  /* 44px to tap */
+.pic::before { content: ""; position: absolute; inset: 6px; border-radius: var(--r-1); background: var(--plate); z-index: -1; }
+/* every picture fills the same box, whatever size the store sent: small ones grow, big ones shrink */
+.pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 10% 14%; box-sizing: border-box; mix-blend-mode: multiply; }
+.pic .ph { font-size: var(--fs-6); font-weight: 700; color: var(--ph); }
+/* the badge reads left to right (−48%) in both languages, so its corner is set by the page's direction, not its own */
+.badge { position: absolute; top: var(--sp-2); left: var(--sp-2); color: var(--deal-ink); font-weight: 750; font-size: var(--fs-2); line-height: 1;
+  padding: 5px 7px; border-radius: 6px; background: var(--deal); font-variant-numeric: tabular-nums; }
+[dir=rtl] .badge { left: auto; right: var(--sp-2); }
+.badge.drop { background: #1f7a4d; color: #fff; }
+.watch { position: absolute; top: 4px; inset-inline-end: 4px; width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(255,255,255,.94);
+  display: grid; place-items: center; cursor: pointer; color: #6b6862; box-shadow: 0 1px 3px rgba(0,0,0,.18); font-size: var(--fs-3); z-index: 2; }
+.watch::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; }  /* 44px to tap */
 .watch[aria-pressed="true"] { color: #a87a00; }
-.body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
-.name { font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.8em; }
+.body { padding: var(--sp-2) 10px 10px; display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
+.pr { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; min-width: 0; white-space: nowrap; }
+.now { font-size: var(--fs-4); font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.now small { font-size: var(--fs-1); font-weight: 600; color: var(--ink-2); }
+.was { color: var(--ink-2); text-decoration: line-through; font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
+.sig { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; min-height: 22px; }
+.vchip { font-size: var(--fs-1); font-weight: 700; line-height: 1; padding: 5px 7px; border-radius: 6px; background: var(--surface-2); color: var(--ink-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; flex: none; }
+.vchip.good { background: var(--good-bg); color: var(--good); }
+.vchip.warn { background: var(--warn-bg); color: var(--warn); }
+.vchip.bad { background: var(--danger-bg); color: var(--danger); }
+.vchip.hot { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); color: var(--accent-text); }
+.vd:empty { display: none; }
+.vd { display: contents; }
+.chk { font-size: var(--fs-1); color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chk::before { content: "✓ "; color: var(--good); font-weight: 700; }
+.chk:empty { display: none; }
+.name { font-size: var(--fs-2); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.7em; }
 /* the name is the card's link to its details; its ::after covers the whole card, so a tap anywhere opens them,
    while the ★ and the store link sit above it */
 .name a { color: inherit; text-decoration: none; }
@@ -189,187 +251,234 @@ aside { position: sticky; top: 176px; align-self: start; max-height: calc(100vh 
   .name a:focus-visible { outline: none; }
   .card:has(.name a:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
 }
-.priceline { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: auto; }
-.now { font-size: 19px; font-weight: 750; letter-spacing: -.01em; white-space: nowrap; }
-.now small { font-size: 12px; font-weight: 600; color: var(--muted); }
-.was { color: var(--muted); text-decoration: line-through; font-size: 13px; margin-inline-start: 4px; }
-.spark { width: 72px; height: 26px; flex: none; }
-.meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
-.tags { display: flex; gap: 4px; flex-wrap: wrap; }
-.tag { font-size: 11px; padding: 2px 6px; border-radius: 5px; background: var(--chip); color: var(--muted); white-space: nowrap; }
+.foot { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: auto; }
+.store { flex: 0 1 auto; min-width: 0; font-size: var(--fs-1); font-weight: 650; line-height: 1; padding: 4px 6px; border-radius: 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.store .hb::before { content: " · "; }
+.meta { font-size: var(--fs-1); color: var(--ink-2); display: flex; gap: 6px; min-width: 0; flex: 1 1 0; white-space: nowrap; overflow: hidden; }
+.meta > span { overflow: hidden; text-overflow: ellipsis; }
+.cta { display: flex; }
+.cta a { flex: 1; text-align: center; text-decoration: none; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: var(--r-1);
+  font-size: var(--fs-1); font-weight: 650; line-height: 30px; height: 32px; position: relative; z-index: 2; padding: 0 6px; min-width: 0; }
+.cta a span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cta a:hover { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.cta a::after { content: ""; position: absolute; inset: -7px 0; }  /* 44px to tap without a taller card */
+.empty { text-align: center; color: var(--ink-2); padding: 60px 16px; grid-column: 1 / -1; }
+.skel { background: var(--surface-2); border-radius: var(--r-2); height: 300px; animation: breathe 1.4s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .55; } }
+#more { height: 1px; }
+
+/* ---------- dialogs ---------- */
+dialog { border: 1px solid var(--line); border-radius: var(--r-3); background: var(--surface); color: var(--ink);
+  width: min(720px, calc(100vw - 24px)); max-height: calc(100vh - 32px); padding: 0; }
+dialog::backdrop { background: rgba(0,0,0,.5); }
+.dlg { padding: var(--sp-5); }
+.dlg h2 { font-size: var(--fs-4); margin: 0 0 6px; line-height: 1.3; padding-inline-end: 40px; }
+.dlg-head { display: grid; grid-template-columns: 120px 1fr; gap: var(--sp-4); align-items: start; padding-inline-end: 40px; }
+.dlg-head h2 { padding-inline-end: 0; }
+.dlg-head .img { width: 120px; height: 120px; background: var(--plate); border-radius: var(--r-2); display: grid; place-items: center; border: 1px solid var(--line); isolation: isolate; }
+.dlg-head img { max-width: 90%; max-height: 90%; mix-blend-mode: multiply; }
+.dlg .meta { flex-wrap: wrap; white-space: normal; }
+.dlg .tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.tag { font-size: var(--fs-1); padding: 2px 6px; border-radius: 5px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
 .tag.good { background: var(--good-bg); color: var(--good); font-weight: 600; }
 .tag.warn { background: var(--warn-bg); color: var(--warn); }
 .tag.hot { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-text); font-weight: 600; }
-.cta { margin-top: 4px; display: flex; gap: 6px; }
-.cta a { flex: 1; text-align: center; text-decoration: none; background: var(--ink); color: var(--bg); border-radius: 9px; padding: 7px 8px; font-size: 13px; font-weight: 600;
-  position: relative; z-index: 2; }
-.cta a::after { content: ""; position: absolute; inset: -6px 0; }  /* 44px to tap without a taller card */
-.empty { text-align: center; color: var(--muted); padding: 60px 16px; grid-column: 1 / -1; }
-.skel { background: linear-gradient(90deg, var(--chip), var(--panel), var(--chip)); background-size: 200% 100%; animation: sk 1.2s infinite; border-radius: var(--radius); height: 330px; }
-@keyframes sk { to { background-position: -200% 0; } }
-#more { height: 1px; }
-
-/* dialog */
-dialog { border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--ink);
-  width: min(720px, calc(100vw - 24px)); max-height: calc(100vh - 32px); padding: 0; }
-dialog::backdrop { background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
-.dlg { padding: 20px; }
-.dlg-head { display: grid; grid-template-columns: 110px 1fr; gap: 16px; align-items: start; }
-.dlg-head .img { width: 110px; height: 110px; background: var(--plate); border-radius: 12px; display: grid; place-items: center; border: 1px solid var(--line); isolation: isolate; }
-.dlg-head img { max-width: 90%; max-height: 90%; mix-blend-mode: multiply; }
-.dlg h2 { font-size: 17px; margin: 0 30px 6px 0; line-height: 1.3; }
-.x { position: absolute; top: 8px; inset-inline-end: 8px; background: var(--chip); border: 0; border-radius: 50%; width: 44px; height: 44px; cursor: pointer; font-size: 20px; color: var(--muted); }
-.bigprice { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
-.why { margin: 14px 0; padding: 12px 14px; background: var(--chip); border-radius: 12px; display: flex; gap: 14px; align-items: center; }
-.why ul { margin: 0; padding-inline-start: 18px; font-size: 14px; }
+.tag.vd-good { background: var(--good-bg); color: var(--good); font-weight: 700; }
+.tag.vd-warn { background: var(--warn-bg); color: var(--warn); font-weight: 700; }
+.tag.vd-muted { font-weight: 600; }
+.x { position: absolute; top: var(--sp-2); inset-inline-end: var(--sp-2); background: var(--surface-2); border: 0; border-radius: 50%; width: var(--tap); height: var(--tap); cursor: pointer; font-size: var(--fs-4); color: var(--ink-2); }
+.bigprice { font-size: var(--fs-6); font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.why { margin: var(--sp-4) 0; padding: var(--sp-3) var(--sp-4); background: var(--surface-2); border-radius: var(--r-2); display: flex; gap: var(--sp-4); align-items: center; }
+.why ul { margin: 0; padding-inline-start: 18px; font-size: var(--fs-2); }
+.score { flex: none; width: 52px; height: 52px; }
+.score text { font-size: 12px; font-weight: 750; fill: #1b1a17; }
+.dspark { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-1); color: var(--ink-2); margin-top: var(--sp-2); }
+.spark { width: 96px; height: 28px; flex: none; }
 .chart { width: 100%; height: 200px; display: block; touch-action: pan-y; }
 .chart .ln { fill: none; stroke: var(--accent); stroke-width: 2.2; vector-effect: non-scaling-stroke; }
 .chart .ar { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
 .chart .ax { stroke: var(--line); }
-.chart text { fill: var(--muted); font-size: 11px; }
-.chart .hover line { stroke: var(--muted); stroke-dasharray: 3 3; }
+.chart text { fill: var(--ink-2); font-size: 11px; }
+.chart .hover line { stroke: var(--ink-2); stroke-dasharray: 3 3; }
 .chart .hover circle { fill: var(--accent); }
-.tip { font-size: 13px; color: var(--muted); min-height: 18px; }
-table.cmp { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 6px; }
+.tip { font-size: var(--fs-1); color: var(--ink-2); min-height: 18px; }
+table.cmp { width: 100%; border-collapse: collapse; font-size: var(--fs-2); margin-top: 6px; }
 table.cmp td { padding: 8px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
 table.cmp td:last-child { text-align: end; }
 table.cmp .best { color: var(--good); font-weight: 700; }
-.row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 9px 14px; cursor: pointer; text-decoration: none; font-size: 14px; display: inline-flex; gap: 6px; align-items: center;
-  min-height: 44px; justify-content: center; }
+.row { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-4); }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-2); padding: 0 var(--sp-4); cursor: pointer; text-decoration: none; font-size: var(--fs-2); display: inline-flex; gap: 6px; align-items: center;
+  min-height: var(--tap); justify-content: center; }
 .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 650; }
-.alert { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; font-size: 14px; }
-.alert input { width: 110px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; min-height: 44px; }
-h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-
-.toasts { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; gap: 8px; width: min(420px, calc(100vw - 32px)); }
-.toast { background: var(--ink); color: var(--bg); padding: 11px 14px; border-radius: 12px; font-size: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.25); cursor: pointer; animation: up .25s ease-out; }
-@keyframes up { from { transform: translateY(10px); opacity: 0; } }
-/* "5 new deals ↑": shown instead of reshuffling the cards above someone who has scrolled down */
-.newpill { position: fixed; left: 50%; transform: translateX(-50%); top: 180px; z-index: 6; border: 0; border-radius: 999px; min-height: 44px;
-  padding: 0 18px; background: var(--ink); color: var(--bg); font-weight: 650; font-size: 14px; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,.25);
-  white-space: nowrap; animation: up .25s ease-out; }
-.newpill[hidden] { display: none; }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-
-.search .mic { position: absolute; inset-inline-end: 0; top: 50%; transform: translateY(-50%); border: 0; background: none; font-size: 17px; cursor: pointer;
-  width: 44px; height: 44px; padding: 0; border-radius: 10px; }
-.search .mic.on { background: color-mix(in srgb, var(--accent) 18%, transparent); animation: pulse 1s infinite; }
-.search:has(.mic:not([hidden])) input { padding-inline-end: 46px; }
-.interp { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 0 6px; font-size: 12.5px; color: var(--muted); align-items: center; }
-.interp b { color: var(--ink); font-weight: 600; background: var(--chip); padding: 2px 8px; border-radius: 999px; }
-.tag.vd-good { background: var(--good-bg); color: var(--good); font-weight: 700; }
-.tag.vd-warn { background: var(--warn-bg); color: var(--warn); font-weight: 700; }
-.tag.vd-muted { font-weight: 600; }
-.foot { color: var(--faint); font-size: 12.5px; text-align: center; padding: 30px 0 10px; line-height: 1.8; }
-.foot > div:first-child { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; }
-.foot a { display: inline-block; padding: 11px 8px; }
-.hubbar { display: flex; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: none; padding: 12px 0 2px; }
-.hubbar .lbl { font-size: 13px; color: var(--muted); white-space: nowrap; font-weight: 650; }
-.hubbar button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 12px; white-space: nowrap;
-  cursor: pointer; font-size: 13.5px; color: var(--ink); min-height: 44px; }
-.hubbar button.on { background: var(--talabat-bg); border-color: var(--talabat-bg); color: #fff; font-weight: 650; }
-.hubbar button .c { opacity: .7; font-size: 12px; margin-inline-start: 4px; }
-.brief { margin: 14px 0 4px; padding: 16px; border-radius: var(--radius); color: #fff;
-  background: linear-gradient(135deg, #2a1a17 0%, #5b1f14 55%, var(--accent) 140%); box-shadow: var(--shadow); }
-.brief h2 { margin: 0 0 2px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
-.brief .sub { opacity: .75; font-size: 13px; margin-bottom: 12px; }
-.brief .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
-.brief .st { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 10px 12px;
-  text-align: start; color: #fff; cursor: pointer; font: inherit; }
-.brief .st:hover { background: rgba(255,255,255,.18); }
-.brief .st b { display: block; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.brief .st span { font-size: 12.5px; opacity: .85; }
-.brief .best { margin-top: 10px; font-size: 13.5px; opacity: .92; cursor: pointer; }
-.brief .best b { color: #ffd2c8; }
-.rhythm { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line); font-size: 14px; }
-.verdict { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 12px; margin: 14px 0 0; }
-.verdict.good { background: var(--good-bg); color: var(--good); } .verdict.warn { background: var(--warn-bg); color: var(--warn); } .verdict.muted { background: var(--chip); }
-.verdict b { font-size: 18px; } .verdict span { color: var(--ink); font-size: 14px; }
+.alert { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; margin-top: var(--sp-3); font-size: var(--fs-2); }
+.alert input { width: 110px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-1); padding: 7px 9px; min-height: var(--tap); }
+h4 { margin: var(--sp-5) 0 4px; font-size: var(--fs-1); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
+.rhythm { margin: var(--sp-3) 0 0; padding: 10px var(--sp-3); border-radius: var(--r-2); border: 1px dashed var(--line); font-size: var(--fs-2); }
+.verdict { display: flex; gap: var(--sp-3); align-items: center; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-2); margin: var(--sp-4) 0 0; }
+.verdict.good { background: var(--good-bg); color: var(--good); } .verdict.warn { background: var(--warn-bg); color: var(--warn); } .verdict.muted { background: var(--surface-2); }
+.verdict b { font-size: var(--fs-4); } .verdict span { color: var(--ink); font-size: var(--fs-2); }
 .set { display: grid; gap: 10px; margin-top: 10px; }
-.set label { display: flex; gap: 8px; align-items: center; font-size: 14px; min-height: 44px; flex-wrap: wrap; }
-.set input[type=number], .set input[type=text] { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; width: 90px; min-height: 44px; }
+.set label { display: flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-2); min-height: var(--tap); flex-wrap: wrap; }
+.set input[type=number], .set input[type=text] { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-1); padding: 6px 8px; width: 90px; min-height: var(--tap); }
 .set input[type=text] { width: 100%; }
 .pick { display: flex; gap: 6px; flex-wrap: wrap; }
-.pick label { background: var(--chip); padding: 4px 12px; border-radius: 999px; font-size: 13px; cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; }
+.pick label { background: var(--surface-2); padding: 4px 12px; border-radius: var(--r-pill); font-size: var(--fs-1); cursor: pointer; min-height: var(--tap); display: inline-flex; align-items: center; gap: 6px; }
 .bk td:nth-child(2), .bk td:nth-child(3) { white-space: nowrap; }
-.qty { display: inline-flex; gap: 8px; align-items: center; } .qty button { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; position: relative; }
+.qty { display: inline-flex; gap: var(--sp-2); align-items: center; } .qty button { width: 36px; height: 36px; border-radius: var(--r-1); border: 1px solid var(--line); background: var(--surface); cursor: pointer; position: relative; }
 .qty button::after { content: ""; position: absolute; inset: -4px; }
-@media (max-width: 900px) {
-  .layout { grid-template-columns: minmax(0, 1fr); }
-  aside { position: fixed; inset: auto 0 0 0; top: auto; max-height: 82vh; background: var(--panel); z-index: 15; border-radius: 18px 18px 0 0;
-    padding: 6px 16px 24px; transform: translateY(105%); transition: transform .25s ease; box-shadow: 0 -10px 40px rgba(0,0,0,.25); }
-  aside.open { transform: none; }
-  aside::before { content: ""; display: block; width: 40px; height: 4px; background: var(--line); border-radius: 2px; margin: 4px auto 10px; }
-  .sheet-done { display: flex !important; width: 100%; justify-content: center; margin-top: 14px; }
-  .filterbtn { display: inline-flex; }
-  h1 .t { display: none; }
-  /* phones: title and buttons on the first row, the search on its own full-width row */
-  .top { flex-wrap: wrap; row-gap: 8px; gap: 8px; }
-  .top h1 { margin-inline-end: auto; }
-  .top .search { order: 10; flex: 1 0 100%; }
-  .iconbtn { height: 44px; min-width: 44px; padding: 0 9px; }
-  .hide-sm { display: none; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 10px; }
-  .now { font-size: 17px; } .spark { width: 52px; }
-  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 14; }
-  .dlg-head { grid-template-columns: 80px 1fr; } .dlg-head .img { width: 80px; height: 80px; }
-  .dlg { padding: 16px; }
+.interp { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 0 var(--sp-2); font-size: var(--fs-1); color: var(--ink-2); align-items: center; }
+.interp[hidden] { display: none; }
+.interp b { color: var(--ink); font-weight: 600; background: var(--surface-2); padding: 2px 8px; border-radius: var(--r-pill); }
+.foot-note { color: var(--ink-3); font-size: var(--fs-1); text-align: center; padding: var(--sp-6) 0 10px; line-height: 1.8; }
+.foot-note > div:first-child { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; }
+.foot-note a { display: inline-block; padding: 12px 8px; }
+
+.toasts { position: fixed; bottom: var(--sp-4); left: 50%; transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; gap: var(--sp-2); width: min(420px, calc(100vw - 32px)); }
+.toast { background: var(--ink); color: var(--bg); padding: 11px 14px; border-radius: var(--r-2); font-size: var(--fs-2); box-shadow: var(--elev-2); cursor: pointer; animation: up var(--dur-2) var(--ease); }
+@keyframes up { from { transform: translateY(10px); opacity: 0; } }
+/* "5 new deals ↑": shown instead of reshuffling the cards above someone who has scrolled down */
+.newpill { position: fixed; left: 50%; transform: translateX(-50%); top: 180px; z-index: 6; border: 0; border-radius: var(--r-pill); min-height: var(--tap);
+  padding: 0 18px; background: var(--ink); color: var(--bg); font-weight: 650; font-size: var(--fs-2); cursor: pointer; box-shadow: var(--elev-2);
+  white-space: nowrap; animation: up var(--dur-2) var(--ease); }
+.newpill[hidden] { display: none; }
+
+/* ---------- the phone tab bar ---------- */
+.tabbar { display: none; }
+
+/* ---------- ≥1024: the filter rail, up to 5 columns ---------- */
+@media (min-width: 600px) {
+  .nav { display: flex; margin-top: -4px; }
+  .menu .pages { display: none; }
+  .bt.head { width: 200px; }
+  .st { width: auto; min-width: 128px; flex: 1 0 128px; }
+  .st.best { flex: 1.6 0 232px; }
 }
-.sheet-done { display: none; }
+@media (max-width: 1023px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  /* the filters: a side drawer (tablets) or a bottom sheet (phones) */
+  aside { position: fixed; top: 0; bottom: 0; inset-inline-start: 0; width: min(340px, 88vw); max-height: none; background: var(--surface); z-index: 15;
+    padding: var(--sp-4); box-shadow: var(--elev-2); transform: translateX(-105%); transition: transform var(--dur-3) var(--ease); visibility: hidden; }
+  [dir=rtl] aside { transform: translateX(105%); }
+  aside { transition: transform var(--dur-3) var(--ease), visibility 0s linear var(--dur-3); }
+  aside.open { transform: none; visibility: visible; transition-delay: 0s; }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 var(--sp-2); }
+  .sheet-head h2 { margin: 0; font-size: var(--fs-4); }
+  .sheet-head .x { position: static; }
+  .sheet-done { display: flex !important; width: 100%; margin-top: var(--sp-4); }
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 14; animation: fadein var(--dur-2) var(--ease); }
+  @keyframes fadein { from { opacity: 0; } }
+}
+@media (min-width: 1024px) {
+  #filterBtn { display: none; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+}
+
+/* ---------- phones: a 56px top bar, one chip row, a bottom tab bar, two columns ---------- */
+@media (max-width: 599px) {
+  .wrap { padding: 0 var(--sp-3); }
+  .top { gap: var(--sp-2); }
+  .logo .t, .top .desk { display: none; }
+  .brief-row { margin-inline: calc(-1 * var(--sp-3)); padding-inline: var(--sp-3); scroll-padding-inline: var(--sp-3); }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+  .layout { padding-top: var(--sp-3); gap: 0; }
+  aside { top: auto; inset-inline: 0; width: auto; max-height: 82vh; border-radius: var(--r-3) var(--r-3) 0 0; transform: translateY(105%) !important;
+    box-shadow: var(--elev-3); padding-bottom: calc(var(--sp-5) + env(safe-area-inset-bottom)); }
+  aside.open { transform: none !important; }
+  aside::before { content: ""; display: block; width: 40px; height: 4px; background: var(--line); border-radius: 2px; margin: 0 auto var(--sp-2); }
+  .dlg { padding: var(--sp-4); }
+  .dlg-head { grid-template-columns: 84px 1fr; } .dlg-head .img { width: 84px; height: 84px; }
+  body { padding-bottom: calc(var(--bar-h) + env(safe-area-inset-bottom)); }
+  .tabbar { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; inset-inline: 0; bottom: 0; z-index: 9;
+    height: calc(var(--bar-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+    background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-top: 1px solid var(--line); }
+  .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 0; background: none; cursor: pointer;
+    color: var(--ink-2); font-size: var(--fs-1); text-decoration: none; position: relative; min-width: 0; padding: 0 2px; }
+  .tab .ic { font-size: var(--fs-4); line-height: 1; }
+  .tab .lb { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .tab[aria-current="page"], .tab[aria-pressed="true"] { color: var(--accent-text); font-weight: 700; }
+  .tab .n { position: absolute; top: 4px; inset-inline-start: calc(50% + 6px); }
+  .toasts { bottom: calc(var(--bar-h) + var(--sp-3) + env(safe-area-inset-bottom)); }
+}
 /* keyboard focus: always visible, never on mouse clicks */
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .search input:focus-visible, .range input:focus-visible, select:focus-visible { outline-offset: 0; }
-.status:focus-visible { outline-offset: -2px; border-radius: 6px; }
-/* reduced motion: nothing moves by itself. The ticker becomes a still row that scrolls sideways by hand. */
+.hscroll:focus-visible { outline-offset: -3px; }
+/* reduced motion: nothing moves by itself */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
     transition-duration: .01ms !important; scroll-behavior: auto !important; }
-  .pulse, .mic.on, .card.fresh, .skel, .toast, .ticker-track, .newpill { animation: none !important; }
+  .pulse, .fresh .dot, .mic.on, .card.fresh::before, .skel, .toast, .newpill, .menu { animation: none !important; }
+  .card.fresh::before { opacity: 0; }
   /* a changed price keeps a still tint while it is marked, instead of a fade */
-  .card.moved { animation: none !important; background-color: color-mix(in srgb, var(--drop) 12%, var(--panel)); }
-  .card.moved.up { background-color: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
-  .card:hover { transform: none; }
-  .ticker { overflow-x: auto; scrollbar-width: none; }
-  .ticker::-webkit-scrollbar { display: none; }
-  .ticker-track { padding-inline: 16px; transform: none !important; }
+  .card.moved { animation: none !important; background-color: color-mix(in srgb, var(--good) 12%, var(--surface)); }
+  .card.moved.up { background-color: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+  .card:hover, .st:hover { transform: none; }
 }
 </style>
 <script src="/i18n.js"></script>
 </head>
 <body>
 <header>
+  <h1 class="sr">Live deals</h1>
   <div class="wrap">
     <div class="top">
-      <h1><span class="pulse"></span><span class="t">Live deals</span></h1>
+      <a class="logo" href="/" aria-label="Live deals"><span class="mark" aria-hidden="true"><svg viewBox="0 0 512 512"><path d="M150 330 L250 230 L300 280 L390 180" stroke="#fff" stroke-width="44" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="390" cy="180" r="34" fill="#fff"/></svg></span><span class="t">Live deals</span></a>
       <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input type="search" id="q" placeholder="Try: milk under 50 at talabat · حفاضات أرخص للكيلو" aria-label="Search" autocomplete="off">
+        <input type="search" id="q" placeholder="Try: milk under 50 at talabat · حفاضات أرخص للكيلو" aria-label="Search" autocomplete="off" enterkeyhint="search">
         <button type="button" class="mic" id="mic" title="Search by voice" aria-label="Search by voice" hidden>🎤</button></label>
-      <button class="iconbtn" id="langBtn" title="العربية" aria-label="Language">ع</button>
-      <button class="iconbtn" id="watchBtn" title="Watchlist" aria-label="Watchlist">★ <span class="n" id="watchN" hidden>0</span></button>
-      <button class="iconbtn" id="basketBtn" title="Basket" aria-label="Basket">🧺 <span class="n" id="basketN" hidden>0</span></button>
-      <button class="iconbtn" id="alertsBtn" title="Price-drop alerts" aria-label="Price-drop alerts">🔔</button>
-      <button class="iconbtn" id="installBtn" title="Install the app" aria-label="Install the app" hidden>⬇︎ <span class="hide-sm">Install</span></button>
-      <button class="iconbtn filterbtn" id="filterBtn" aria-label="Filters">Filters <span class="n" id="filterN" hidden>0</span></button>
+      <button class="iconbtn desk" id="watchBtn" title="Watchlist" aria-label="Watchlist" aria-pressed="false">★ <span class="n" id="watchN" hidden>0</span></button>
+      <button class="iconbtn desk" id="basketBtn" title="Basket" aria-label="Basket">🧺 <span class="n" id="basketN" hidden>0</span></button>
+      <button class="iconbtn desk" id="alertsBtn" title="Price-drop alerts" aria-label="Price-drop alerts">🔔</button>
+      <div class="more"><button class="iconbtn" id="moreBtn" aria-label="More" title="More" aria-expanded="false" aria-controls="moreMenu">⋯</button>
+        <div class="menu" id="moreMenu" hidden>
+          <button type="button" class="mi" id="langBtn" data-long data-noi18n><span class="ic" aria-hidden="true">ع</span><span class="lt">العربية</span></button>
+          <button type="button" class="mi" id="installBtn" hidden><span class="ic" aria-hidden="true">⬇︎</span>Install the app</button>
+          <button type="button" class="mi" id="alertsMi"><span class="ic" aria-hidden="true">🔔</span>Price-drop alerts</button>
+          <div class="pages"><hr>
+            <a class="mi" href="/?deals=1&amp;sort=newest&amp;status=new"><span class="ic" aria-hidden="true">⚡</span>Just dropped</a>
+            <a class="mi" href="/cats"><span class="ic" aria-hidden="true">▦</span>Categories</a>
+            <a class="mi" href="/stores"><span class="ic" aria-hidden="true">🏬</span>Stores</a>
+            <a class="mi" href="/coupons"><span class="ic" aria-hidden="true">🎟️</span>Coupons</a>
+            <a class="mi" href="/?recent=1"><span class="ic" aria-hidden="true">↺</span>Recently viewed</a></div>
+        </div></div>
     </div>
-    <nav class="nav" id="nav"><a href="/">Home</a><a href="/?deals=1&amp;sort=newest&amp;status=new">Just dropped</a><a href="/cats">Categories</a><a href="/stores">Stores</a><a href="/coupons">🎟️ Coupons</a><a href="/?recent=1">Recently viewed</a></nav>
+    <nav class="nav" id="nav" aria-label="Pages"><a href="/">Home</a><a href="/?deals=1&amp;sort=newest&amp;status=new">Just dropped</a><a href="/cats">Categories</a><a href="/stores">Stores</a><a href="/coupons">🎟️ Coupons</a><a href="/?recent=1">Recently viewed</a></nav>
+    <div class="chiprow hscroll" id="chipRow" role="group" aria-label="Quick filters">
+      <button type="button" class="qc" id="filterBtn" aria-label="Filters"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filters <span class="n" id="filterN" hidden>0</span></button>
+      <div class="seg" data-key="deals"><button data-v="1">Deals</button><button data-v="0">All products</button></div>
+      <button type="button" class="qc" id="qReal" aria-pressed="false" title="Hides discounts whose price never moves">Real only</button>
+      <select id="sort" aria-label="Sort by">
+        <option value="score">Best deals first</option>
+        <option value="discount">Biggest discount %</option>
+        <option value="saving">Biggest saving (EGP)</option>
+        <option value="newest">Just changed</option>
+        <option value="drop">Biggest drop vs usual</option>
+        <option value="price">Price: low to high</option>
+        <option value="price_desc">Price: high to low</option>
+        <option value="unit">Price per kg / L / piece</option>
+        <option value="popular">Best sellers</option>
+        <option value="name">Name</option>
+      </select>
+      <span class="sep" aria-hidden="true"></span>
+      <span id="qStores" style="display:contents"></span>
+    </div>
     <div class="interp" id="interp" hidden></div>
-    <div class="status" id="status" tabindex="0" data-noi18n>connecting…</div>
     <div class="offline" id="offline" role="alert" hidden><span><b>Can't reach the server.</b> <span id="offlineWhen"></span></span>
       <button type="button" class="btn" id="retry">Retry</button></div>
   </div>
-  <div class="ticker" id="ticker" hidden><div class="ticker-track" id="tickerTrack"></div></div>
 </header>
 
 <div class="wrap layout">
   <aside id="filters" aria-label="Filters">
+    <div class="sheet-head"><h2>Filters</h2><button type="button" class="x" id="sheetX" aria-label="Close">×</button></div>
     <div class="fgroup"><h3>Show</h3>
       <div class="seg" data-key="deals"><button data-v="1">Deals</button><button data-v="0">All products</button></div></div>
     <div class="fgroup"><h3>Platform</h3><div class="opts" id="fStores"></div></div>
     <div class="fgroup" id="hubGroup" hidden><h3>talabat hub</h3><div class="opts" id="fHubs"></div></div>
     <div class="fgroup"><h3>Discount type</h3>
       <div class="seg" data-key="kind"><button data-v="">Any</button><button data-v="platform">Platform</button><button data-v="drop">Price drop</button></div>
-      <div class="meta" style="margin-top:6px" id="kindCounts"></div></div>
+      <div class="meta" style="margin-top:6px;white-space:normal" id="kindCounts"></div></div>
     <div class="fgroup"><h3>Discount <span class="pctlabel" id="pctLabel"></span></h3>
       <div class="slider"><div class="rail"></div><div class="fill" id="pctFill"></div>
         <input type="range" id="pmin" min="0" max="90" step="5" aria-label="Minimum discount">
@@ -398,34 +507,33 @@ h4 { margin: 18px 0 4px; font-size: 13px; text-transform: uppercase; letter-spac
   </aside>
 
   <main>
-    <section class="brief" id="brief" hidden></section>
+    <section class="brief" id="brief" hidden aria-labelledby="briefH"></section>
+    <section class="drops" id="ticker" hidden aria-labelledby="dropsH"><h2 id="dropsH">Just dropped</h2><div class="drops-track hscroll" id="tickerTrack"></div></section>
     <div class="hubbar" id="hubBar" hidden></div>
     <div class="bar">
       <span class="count" id="count">…</span>
       <div class="chips" id="activeChips"></div>
-      <span class="spacer"></span>
-      <select id="sort" aria-label="Sort by">
-        <option value="score">Best deals first</option>
-        <option value="discount">Biggest discount %</option>
-        <option value="saving">Biggest saving (EGP)</option>
-        <option value="newest">Just changed</option>
-        <option value="drop">Biggest drop vs usual</option>
-        <option value="price">Price: low to high</option>
-        <option value="price_desc">Price: high to low</option>
-        <option value="unit">Price per kg / L / piece</option>
-        <option value="popular">Best sellers</option>
-        <option value="name">Name</option>
-      </select>
+      <button type="button" class="fresh" id="fresh" aria-haspopup="dialog" data-noi18n><span class="dot" aria-hidden="true"></span><span id="freshT"></span></button>
     </div>
     <div class="grid" id="grid"></div>
     <div id="more"></div>
-    <footer class="foot"><div><a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/contact">Contact</a></div>
+    <footer class="foot-note"><div><a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/contact">Contact</a></div>
       <div>Some links earn us a small commission from the store, at no extra cost to you. As an Amazon Associate we earn from qualifying purchases.</div></footer>
   </main>
 </div>
 
+<nav class="tabbar" id="tabbar" aria-label="Main">
+  <a class="tab" href="/" id="tabHome"><span class="ic" aria-hidden="true">⌂</span><span class="lb">Home</span></a>
+  <button type="button" class="tab" id="tabSearch"><span class="ic" aria-hidden="true">⌕</span><span class="lb">Search</span></button>
+  <button type="button" class="tab" id="tabWatch" aria-pressed="false"><span class="ic" aria-hidden="true">★</span><span class="lb">Watchlist</span><span class="n" id="tabWatchN" hidden>0</span></button>
+  <button type="button" class="tab" id="tabBasket"><span class="ic" aria-hidden="true">🧺</span><span class="lb">Basket</span><span class="n" id="tabBasketN" hidden>0</span></button>
+  <button type="button" class="tab" id="tabAlerts"><span class="ic" aria-hidden="true">🔔</span><span class="lb">Alerts</span></button>
+</nav>
+
 <dialog id="dlg" aria-labelledby="dname"><div class="dlg" id="dbody"></div></dialog>
 <dialog id="panel"><div class="dlg" id="pbody"></div></dialog>
+<dialog id="statusDlg" aria-labelledby="statusH"><div class="dlg"><button class="x" aria-label="Close" onclick="this.closest('dialog').close()">×</button>
+  <h2 id="statusH">Store status</h2><p class="tip" id="statusSub" data-noi18n></p><div class="srows" id="status" data-noi18n>connecting…</div></div></dialog>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <button type="button" class="newpill" id="newPill" hidden data-noi18n></button>
 <div class="sr" id="announce" aria-live="polite" data-noi18n></div>
@@ -459,8 +567,8 @@ const appLabel = { talabat: "talabat", amazon_eg: "Amazon", breadfast: "Breadfas
 const LABELS = { talabat: "talabat mart", amazon_eg: "Amazon.eg", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz", raya: "Raya Shop" };
 
 // ---------- state, mirrored in the address so any view can be shared ----------
-document.querySelectorAll("#nav a").forEach(a => { const u = new URL(a.href);
-  if (u.pathname === location.pathname && u.search === location.search) a.classList.add("on"); });
+document.querySelectorAll("#nav a, #moreMenu a.mi, #tabHome").forEach(a => { const u = new URL(a.href);
+  if (u.pathname === location.pathname && u.search === location.search) { a.classList.add("on"); a.setAttribute("aria-current", "page"); } });
 const DEFAULTS = { deals: "1", stores: [], hubs: [], kind: "", min: 0, max: 90, stock: "in", status: [], best: false, watch: false, recent: false,
                    category: "", q: "", pmin: "", pmax: "", sort: "score" };
 let F = { ...DEFAULTS };
@@ -486,7 +594,8 @@ function writeURL() {
 
 // ---------- watchlist and price alerts (kept in this browser) ----------
 let watch = store.get("watch", {});  // id -> {target, last, name, store}
-function saveWatch() { store.set("watch", watch); if (typeof syncAlerts === "function") syncAlerts(); const n = Object.keys(watch).length; $("watchN").hidden = !n; $("watchN").textContent = n; }
+function saveWatch() { store.set("watch", watch); if (typeof syncAlerts === "function") syncAlerts(); const n = Object.keys(watch).length;
+  for (const id of ["watchN", "tabWatchN"]) { $(id).hidden = !n; $(id).textContent = n; } }
 function askNotify() { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); }
 function toggleWatch(d, btn) {
   if (watch[d.id]) { delete watch[d.id]; toast("Removed from your watchlist."); }
@@ -533,6 +642,9 @@ function syncControls() {
   $("fStatus").querySelectorAll("input[value]").forEach(i => i.checked = F.status.includes(i.value));
   $("fBest").checked = F.best; $("fWatch").checked = F.watch;
   $("prmin").value = F.pmin; $("prmax").value = F.pmax; $("sort").value = F.sort; $("q").value = F.q;
+  $("qReal").setAttribute("aria-pressed", String(F.status.includes("real")));
+  for (const id of ["watchBtn", "tabWatch"]) $(id).setAttribute("aria-pressed", String(F.watch));
+  $("qStores").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(F.stores.includes(b.value))));
 }
 function paintSlider() {
   const a = +$("pmin").value, b = +$("pmax").value;
@@ -545,6 +657,11 @@ function renderFacets(r) {
     <span class="dot" style="background:var(--${esc(s)},#888)"></span>${esc(r.labels?.[s] || LABELS[s] || s)}<span class="c">${fs[s] ?? 0}</span></label>`).join("");
   $("fStores").querySelectorAll("input").forEach(i => i.onchange = () => {
     F.stores = [...$("fStores").querySelectorAll("input:checked")].map(x => x.value); apply(); });
+  // the same stores as quick chips in the header row (those that have something to show, and any chosen)
+  $("qStores").innerHTML = all.filter(s => fs[s] || F.stores.includes(s)).map(s => `<button type="button" class="qc" value="${esc(s)}" aria-pressed="${F.stores.includes(s)}">
+    <span class="dot" style="background:var(--${esc(s)}-bg,#888)"></span>${esc(r.labels?.[s] || LABELS[s] || s)}</button>`).join("");
+  $("qStores").querySelectorAll("button").forEach(b => b.onclick = () => {
+    F.stores = F.stores.includes(b.value) ? F.stores.filter(x => x !== b.value) : [...F.stores, b.value]; syncControls(); apply(); });
   // one entry per hub: products saved before the hub had a name carry its number instead
   const hubMap = {};
   for (const [k, n] of Object.entries(r.facets.hub || {})) { const [id, name] = k.split("|");
@@ -607,7 +724,7 @@ function sparkSVG(pts, w = 72, h = 26) {
 }
 function scoreSVG(s) {
   const r = 15, c = 2 * Math.PI * r, col = s >= 70 ? "#1f9d5c" : s >= 40 ? "#a87a00" : "#8f8b84";
-  return `<svg class="score" viewBox="0 0 38 38" role="img" aria-label="Deal score ${s} of 100"><title>Deal score ${s}/100</title>
+  return `<svg class="score" viewBox="0 0 38 38" role="img" aria-label="${L(`Deal score ${s} of 100`, `تقييم العرض ${s} من 100`)}"><title>${L(`Deal score ${s}/100`, `تقييم العرض ${s} من 100`)}</title>
     <circle cx="19" cy="19" r="17.5" fill="rgba(255,255,255,.96)"/>
     <circle cx="19" cy="19" r="${r}" fill="none" stroke="#ece9e2" stroke-width="3"/>
     <circle cx="19" cy="19" r="${r}" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${(c * s / 100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 19 19)"/>
@@ -635,17 +752,36 @@ function tagsFor(d) {
   return t.join("");
 }
 const initial = n => esc((n || "?").trim()[0] || "?");
-// a card is made of parts; when new data arrives each part is compared on its own and only what changed is touched
+// the one verdict a card shows, by priority: a fake or suspicious discount, then "buy now", the lowest price in
+// 90 days, cheaper in another store; then the rest of what the data says. The reason is in the product view.
+function verdictChip(d) {
+  const f = d.flags || [], v = d.verdict || {}, ms = d.matches || [];
+  const chip = (cls, text, why) => `<span class="vchip ${cls}"${why ? ` title="${esc(why)}"` : ""}>${esc(text)}</span>`;
+  if (f.includes("steady")) return chip("bad", "discount never moves", v.why);
+  if (f.includes("inflated")) return chip("bad", "Check the price", v.why);
+  if (!d.in_stock) return chip("", "out of stock");
+  if (v.label === "Buy now") return chip("good", "Buy now", v.why);
+  if (f.includes("lowest")) return chip("good", "lowest in 90 days");
+  if (v.label === "Cheaper elsewhere") return chip("warn", "Cheaper elsewhere", v.why);
+  if (d.cheapest && ms.length) return chip("good", "cheapest of all stores");
+  if (v.label === "Wait" || v.label === "Good price") return chip(v.tone === "good" ? "good" : "warn", v.label, v.why);
+  if (d.promo_code) return chip("hot", `🎟️ ${d.promo_code}: ${fmt(d.promo_price)}`);
+  if (d.deal_label) return chip("hot", d.deal_label);
+  if (f.includes("back")) return chip("good", "back in stock");
+  return "";
+}
+// a card is made of parts; when new data arrives each part is compared on its own and only what changed is touched.
+// parts: marks (the discount badge), vd (the verdict chip), price, store (its chip), meta (saving or unit price),
+// name, href (the store link), img. The ★ and the store link are never re-created, only their attributes change.
 function partsOf(d) {
   const badge = d.discount_pct > 0 ? `<span class="badge ${d.kind === "drop" ? "drop" : ""}" title="${d.kind === "drop" ? "under its usual price" : "the store's own discount"}">−${Math.round(d.discount_pct)}%</span>` : "";
-  const tags = tagsFor(d), sp = d.spark || [];
+  const vd = verdictChip(d);
   return {
-    marks: badge + (d.discount_pct > 0 ? scoreSVG(d.score) : ""),
-    tags, tagsKey: tags.replace(/ title="[^"]*"/g, ""),  // the verdict's explanation follows the clock: not a change
+    marks: badge, vd, vdKey: vd.replace(/ title="[^"]*"/g, ""),  // the verdict's explanation follows the clock: not a change
     price: `<span class="now">${fmt(d.price)} <small>EGP</small></span>${d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : ""}`,
-    spark: sparkSVG(sp), sparkKey: JSON.stringify([sp.slice(0, -1), sp.length ? sp[sp.length - 1][1] : null]),  // its last point is "now"
-    meta: (d.hub_name ? `<span title="talabat hub">📍 ${esc(d.hub_name)}</span>` : "") + (d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : "")
-      + (d.saving > 0 ? `<span>save ${fmt(d.saving)}</span>` : "") + (d.unit_text ? `<span class="unit">${esc(d.unit_text)}</span>` : ""),
+    store: `<span class="sn">${esc(LABELS[d.store] || d.store)}</span>` + (d.hub_name ? `<bdi class="hb" dir="auto">${esc(d.hub_name)}</bdi>` : ""),
+    meta: d.saving > 0 ? `<span>save ${fmt(d.saving >= 100 ? Math.round(d.saving) : d.saving)}</span>` : d.unit_text ? `<span class="unit">${esc(d.unit_text)}</span>`
+      : d.kind === "drop" ? `<span>usually ${fmt(d.usual_price)}</span>` : "",
     name: d.name || "", href: appHref(d), img: d.image || "",
   };
 }
@@ -653,13 +789,12 @@ function card(d, fresh, p = partsOf(d)) {
   return `<article class="card${fresh ? " fresh" : ""}${d.in_stock ? "" : " out"}" data-id="${d.id}">
     <div class="pic">${p.img ? `<img loading="lazy" src="${esc(p.img)}" alt="" data-i="${initial(d.name)}">` : `<span class="ph">${initial(d.name)}</span>`}
       <span class="marks">${p.marks}</span>
-      <span class="store" style="background:var(--${esc(d.store)}-bg,#555);color:var(--${esc(d.store)}-fg,#fff)"><span class="sn">${esc(LABELS[d.store] || d.store)}</span><span class="chk" data-noi18n></span></span>
       <button class="watch" aria-label="Watch this price" aria-pressed="${!!watch[d.id]}" data-watch>★</button></div>
-    <div class="body"><div class="name" dir="auto"><a href="/p/${d.id}" data-detail>${esc(p.name)}</a></div>
-      <div class="tags">${p.tags}</div>
-      <div class="priceline"><div class="pr">${p.price}</div><span class="sk">${p.spark}</span></div>
-      <div class="meta">${p.meta}</div>
-      <div class="cta"><a href="${esc(p.href)}" target="_blank" rel="noopener" data-open>Open in ${esc(appLabel[d.store] || "store")} ↗</a></div>
+    <div class="body"><div class="pr">${p.price}</div>
+      <div class="sig"><span class="vd">${p.vd}</span><span class="chk" data-noi18n title="${L("When the store last checked this price", "آخر مرة اتشيّك فيها على السعر في المتجر")}"></span></div>
+      <div class="name" dir="auto"><a href="/p/${d.id}" data-detail>${esc(p.name)}</a></div>
+      <div class="foot"><span class="store" style="background:var(--${esc(d.store)}-bg,#555);color:var(--${esc(d.store)}-fg,#fff)">${p.store}</span><span class="meta">${p.meta}</span></div>
+      <div class="cta"><a href="${esc(p.href)}" target="_blank" rel="noopener" data-open><span>Open in ${esc(appLabel[d.store] || "store")} ↗</span></a></div>
     </div></article>`;
 }
 // a picture that fails to load becomes the product's first letter
@@ -707,9 +842,9 @@ function cue(n, dir) {  // the brief tint on a card whose price changed
 function patchCard(n, d) {  // returns true when the price moved
   const o = n._p, od = n._d, p = partsOf(d), q = s => n.querySelector(s);
   if (o.marks !== p.marks) q(".marks").innerHTML = p.marks;
-  if (o.tagsKey !== p.tagsKey) { q(".tags").innerHTML = p.tags; tickAgo(q(".tags")); }
+  if (o.vdKey !== p.vdKey) q(".vd").innerHTML = p.vd;
   if (o.price !== p.price) q(".pr").innerHTML = p.price;
-  if (o.sparkKey !== p.sparkKey) q(".sk").innerHTML = p.spark;
+  if (o.store !== p.store) q(".store").innerHTML = p.store;
   if (o.meta !== p.meta) q(".meta").innerHTML = p.meta;
   if (o.name !== p.name) q("[data-detail]").textContent = p.name;
   if (o.href !== p.href) q("[data-open]").href = p.href;
@@ -802,13 +937,14 @@ function announce(changed, added, held) {  // one short summary for screen reade
   if (held) parts.push(L(`${held} ${noun(held)} above: the button at the top shows them`, `${held} ${noun(held)} فوق: الزرار اللي فوق بيعرضهم`));
   if (parts.length) $("announce").textContent = parts.join(" · ");
 }
-// "checked 40 s ago": when the store last checked this price (seconds in steps of 10), under the store's name
+// "✓ 40 s ago": when the store last checked this price (seconds in steps of 10), next to the verdict
 function checkedText(t) {
   if (!t) return "";
   const s = Math.max(0, nowS() - t);
-  if (s < 10) return L("checked just now", "اتشيّك دلوقتي");
+  // short, to sit next to the verdict on a phone-width card: the ✓ before it (CSS) says "checked"
+  if (s < 10) return L("just now", "دلوقتي");
   const [n, u] = s < 60 ? [Math.floor(s / 10) * 10, "s"] : span(s);
-  return AR() ? `اتشيّك من ${n} ${UNIT_AR[u]}` : `checked ${n} ${u} ago`;
+  return AR() ? `من ${n} ${UNIT_AR[u]}` : `${n} ${u} ago`;
 }
 function tickAgo(root = document) {  // times that count up by themselves; only text that changed is written
   for (const n of root.querySelectorAll("[data-ago]")) { const t = agoL(+n.dataset.ago); if (n.textContent !== t) n.textContent = t; }
@@ -859,7 +995,7 @@ function facets(r, force) {
   if (!force && k === facetsKey) return;
   facetsKey = k;
   // a refresh that redraws the filters puts keyboard focus back on the same box
-  const a = document.activeElement, box = a && a.closest && a.closest("#fStores, #fHubs, #hubBar");
+  const a = document.activeElement, box = a && a.closest && a.closest("#fStores, #fHubs, #hubBar, #qStores");
   const which = box && (a.value || a.dataset.h);
   renderFacets(r);
   if (box) [...$(box.id).querySelectorAll("input, button")].find(x => (x.value || x.dataset.h) === which)?.focus({ preventScroll: true });
@@ -997,28 +1133,47 @@ document.addEventListener("visibilitychange", () => {
 addEventListener("online", () => { failN = 0; poll(); });
 
 let statusKey = "";
-function renderStatus() {  // the status line: built once, then only its changed text is rewritten
-  const el = $("status"), sep = "  ·  ";
-  const segs = lastStatus.length ? lastStatus.map((s, i) => {
+function renderStatus() {  // the status sheet (one row per store) and the freshness pill: built once, then only changed text is rewritten
+  const el = $("status");
+  const rows = lastStatus.length ? lastStatus.map(s => {
     let t = ` ${s.products.toLocaleString()}`;
     if (s.paused_until) t += ` · paused, back in ${mins(s.paused_until - nowS())}`;
     else {
       if (s.live) t += s.last_change ? ` · changed ${ago(s.last_change)}` : " · watching";
       t += s.cycle_secs ? ` · full sweep ${mins(s.cycle_secs)}` : s.live ? " · first sweep" : ` · ${ago(s.updated)}`;
     }
-    return [tr(s.label), tr(t) + sep];
-  }).concat([[null, tr(`${lastChanges.toLocaleString()} price changes in the last hour`)]])
-    : [[null, tr(!lastOK ? (offline ? "can't reach the server, retrying…" : "connecting…") : "starting: the first prices arrive within a minute")]];
-  const key = segs.map(s => s[0] == null ? "t" : "b").join("");
+    return [s.paused_until ? "paused" : s.live ? "live" : "idle", tr(s.label), tr(t.trim())];
+  }).concat([["total", null, tr(`${lastChanges.toLocaleString()} price changes in the last hour`)]])
+    : [["total", null, tr(!lastOK ? (offline ? "can't reach the server, retrying…" : "connecting…") : "starting: the first prices arrive within a minute")]];
+  const key = rows.map(r => r[0]).join();
   if (key !== statusKey) {
     statusKey = key;
-    el.replaceChildren(...segs.map(([b]) => { const sp = document.createElement("span");
-      if (b != null) sp.append(document.createElement("b")); sp.append(document.createTextNode("")); return sp; }));
+    el.replaceChildren(...rows.map(([k, b]) => { const r = document.createElement("div"); r.className = "srow " + k;
+      if (b != null) { const d = document.createElement("span"); d.className = "sd"; r.append(d, document.createElement("b")); }
+      r.append(document.createElement("span")); return r; }));
   }
-  segs.forEach(([b, t], i) => { const sp = el.children[i];
-    if (b != null && sp.firstChild.textContent !== b) sp.firstChild.textContent = b;
-    if (sp.lastChild.nodeValue !== t) sp.lastChild.nodeValue = t; });
+  rows.forEach(([k, b, t], i) => { const r = el.children[i];
+    if (b != null && r.children[1].textContent !== b) r.children[1].textContent = b;
+    if (r.lastChild.textContent !== t) r.lastChild.textContent = t; });
+  renderFresh();
 }
+// "● Live · updated 8 s ago": how long since this page last heard from the server (it asks every ~10 s);
+// amber once that is over a minute (or every store is paused), red while the server can't be reached
+function renderFresh() {
+  const age = lastOK ? Math.max(0, Date.now() / 1000 - lastOK) : null;
+  const paused = lastStatus.length && lastStatus.every(s => s.paused_until || !s.live);
+  const state = offline ? "off" : age == null || age > 60 || paused ? "stale" : "live";
+  const when = age == null ? "" : age < 5 ? L("just now", "دلوقتي") : agoL(lastOK + skew);
+  const t = state === "off" ? L("Offline", "مفيش اتصال") + (lastOK ? L(` · updated ${when}`, ` · اتحدّث ${when}`) : "")
+    : age == null ? L("Connecting…", "بيتصل…")
+    : (state === "live" ? L("Live", "مباشر") : paused ? L("Paused", "متوقف") : L("Not live", "مش محدّث")) + L(` · updated ${when}`, ` · اتحدّث ${when}`);
+  if ($("freshT").textContent !== t) $("freshT").textContent = t;
+  const cls = "fresh" + (state === "live" ? "" : " " + state);
+  if ($("fresh").className !== cls) $("fresh").className = cls;
+  const sub = L("Prices come from each store's own pages; this page asks for news every 10 seconds.", "الأسعار من صفحات المتاجر نفسها، والصفحة دي بتسأل على الجديد كل 10 ثواني.");
+  if ($("statusSub").textContent !== sub) $("statusSub").textContent = sub;
+}
+$("fresh").onclick = () => { renderStatus(); $("statusDlg").showModal(); };
 let secs = 0;
 setInterval(() => { if (document.hidden) return; renderStatus(); if (++secs % 5 === 0) tickAgo(); }, 1000);
 
@@ -1034,12 +1189,16 @@ async function loadTicker() {
   ticks = (reset ? got : got.concat(ticks.filter(c => !ids.has(c.rowid)))).slice(0, 24);
   $("ticker").hidden = !ticks.length;
   if (!ticks.length) return;
-  const rtl = document.documentElement.dir === "rtl";
-  $("tickerTrack").innerHTML = ticks.map(c => { const down = c.price < c.before;
-    return `<span class="tick" data-id="${c.id}"><b dir="auto">${esc(c.name.slice(0, 42))}</b> ${fmt(c.before)} ${rtl ? "←" : "→"} <span class="${down ? "down" : "up"}">${fmt(c.price)} ${down ? "▼" : "▲"}</span> · ${esc(c.label)} · <span data-ago="${+c.at || 0}" data-noi18n>${agoL(c.at)}</span></span>`;
-  }).join("");
-  $("tickerTrack").style.animationDuration = Math.max(30, ticks.length * 6) + "s";
-  $("tickerTrack").querySelectorAll(".tick").forEach(t => t.onclick = () => showProduct(+t.dataset.id));
+  // a still strip, newest first; moves already shown keep their buttons (and focus), new ones are added in front
+  const rtl = document.documentElement.dir === "rtl", track = $("tickerTrack"), have = new Map();
+  for (const n of track.children) have.set(+n.dataset.row, n);
+  const nodes = ticks.map(c => { let n = have.get(c.rowid); if (n) return n;
+    const down = c.price < c.before, t = document.createElement("template");
+    t.innerHTML = `<button type="button" class="tick" data-id="${c.id}" data-row="${c.rowid}"><b dir="auto">${esc(c.name.slice(0, 60))}</b><span class="ln">${fmt(c.before)} ${rtl ? "←" : "→"} <span class="${down ? "down" : "up"}">${fmt(c.price)} ${down ? "▼" : "▲"}</span> · ${esc(c.label)} · <span data-ago="${+c.at || 0}" data-noi18n>${agoL(c.at)}</span></span></button>`;
+    n = t.content.firstElementChild; n.onclick = () => showProduct(+n.dataset.id); return n; });
+  const keep = new Set(nodes);
+  for (const n of [...track.children]) if (!keep.has(n)) n.remove();
+  nodes.forEach((n, i) => { if (track.children[i] !== n) track.insertBefore(n, track.children[i] || null); });
 }
 
 // ---------- product detail ----------
@@ -1056,10 +1215,11 @@ async function showProduct(id) {
   $("dbody").innerHTML = `<button class="x" aria-label="Close" onclick="this.closest('dialog').close()">×</button>
     <div class="dlg-head"><div class="img">${p.image ? `<img src="${esc(p.image)}" alt="" onerror="this.remove()">` : ""}</div>
       <div><h2 id="dname" dir="auto">${esc(p.name)}</h2>
-        <div class="meta"><span style="color:var(--${esc(p.store)});font-weight:650">${esc(LABELS[p.store] || p.store)}</span><span>${esc(p.category || "")}</span><span>tracked ${ago(p.first_seen).replace(" ago", "")}</span></div>
+        <div class="meta"><span style="color:var(--${esc(p.store)});font-weight:650">${esc(LABELS[p.store] || p.store)}</span><span dir="auto">${esc(p.category || "")}</span><span>tracked ${ago(p.first_seen).replace(" ago", "")}</span></div>
         <div style="margin-top:8px"><span class="bigprice">${fmt(p.price)} EGP</span>
           ${d && d.kind === "platform" ? `<span class="was">${fmt(d.original_price)}</span>` : ""}
           ${d && d.unit_text ? `<span class="meta unit" style="display:inline;margin-inline-start:8px">${esc(d.unit_text)}</span>` : ""}</div>
+        ${d && d.spark && d.spark.length > 1 ? `<div class="dspark">${sparkSVG(d.spark, 96, 28)}</div>` : ""}
         <div class="tags" style="margin-top:6px">${d ? tagsFor(d) : ""}</div></div></div>
     ${d && d.verdict ? `<div class="verdict ${d.verdict.tone}"><b>${esc(d.verdict.label)}</b><span>${esc(d.verdict.why)}</span></div>` : ""}
     ${d && d.rhythm ? `<div class="rhythm">⏳ <b>Sale rhythm</b><br>${esc(d.rhythm.text)}</div>` : ""}
@@ -1159,12 +1319,30 @@ let typing;
 $("q").oninput = () => { clearTimeout(typing); typing = setTimeout(() => { F.q = $("q").value; showUnderstood(); apply(); }, 300); };
 $("reset").onclick = () => { F = { ...DEFAULTS, stores: [], hubs: [], status: [] }; store.set("myHubs", []); syncControls(); apply(); };
 function setHubs(ids) { F.hubs = ids; store.set("myHubs", ids); apply(); }
-$("watchBtn").onclick = () => { F.watch = !F.watch; syncControls(); apply(); };
-const sheet = open => { $("filters").classList.toggle("open", open);
+$("watchBtn").onclick = $("tabWatch").onclick = () => { F.watch = !F.watch; syncControls(); apply(); };
+$("qReal").onclick = () => { F.status = F.status.includes("real") ? F.status.filter(x => x !== "real") : [...F.status, "real"]; syncControls(); apply(); };
+// the filters: a bottom sheet on phones, a side drawer on tablets (the rail on wide screens needs neither)
+let sheetFrom = null;
+const sheet = open => { const was = $("filters").classList.contains("open");
+  $("filters").classList.toggle("open", open);
   document.querySelector(".scrim")?.remove();
-  if (open) { const s = document.createElement("div"); s.className = "scrim"; s.onclick = () => sheet(false); document.body.append(s); } };
+  if (open) { const s = document.createElement("div"); s.className = "scrim"; s.onclick = () => sheet(false); document.body.append(s);
+    sheetFrom = document.activeElement; setTimeout(() => $("sheetX").focus({ preventScroll: true }), 50); }
+  else if (was && sheetFrom && sheetFrom.isConnected) { sheetFrom.focus({ preventScroll: true }); sheetFrom = null; } };
 $("filterBtn").onclick = () => sheet(true);
-$("sheetDone").onclick = () => sheet(false);
+$("sheetDone").onclick = $("sheetX").onclick = () => sheet(false);
+// the ⋯ menu
+const menu = open => { $("moreMenu").hidden = !open; $("moreBtn").setAttribute("aria-expanded", String(open));
+  if (open) $("moreMenu").querySelector(".mi:not([hidden])")?.focus({ preventScroll: true }); };
+$("moreBtn").onclick = e => { e.stopPropagation(); menu($("moreMenu").hidden); };
+document.addEventListener("click", e => { if (!$("moreMenu").hidden && !e.target.closest(".more")) menu(false); });
+$("moreMenu").addEventListener("keydown", e => {
+  const its = [...$("moreMenu").querySelectorAll(".mi")].filter(x => !x.hidden && x.offsetParent), i = its.indexOf(document.activeElement);
+  if (e.key === "Escape") { menu(false); $("moreBtn").focus(); }
+  else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); its[(i + (e.key === "ArrowDown" ? 1 : its.length - 1)) % its.length]?.focus(); }
+});
+// the phone tab bar: the same features as the header buttons
+$("tabSearch").onclick = () => { scrollTo({ top: 0 }); $("q").focus(); };
 $("grid").addEventListener("click", e => {
   const c = e.target.closest(".card"); if (!c) return;
   const d = items.find(x => x.id === +c.dataset.id); if (!d) return;
@@ -1183,6 +1361,7 @@ new IntersectionObserver(es => { if (es[0].isIntersecting && items.length && ite
 document.addEventListener("keydown", e => {
   if (e.key === "/" && !["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) { e.preventDefault(); $("q").focus(); }
   if (e.key === "Escape" && $("filters").classList.contains("open")) sheet(false);
+  if (e.key === "Escape" && !$("moreMenu").hidden) { menu(false); $("moreBtn").focus(); }
 });
 
 
@@ -1260,6 +1439,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvent = e; $("installBtn").hidden = false; });
 if (!standalone && isIOS) $("installBtn").hidden = false;
 $("installBtn").onclick = async () => {
+  menu(false);
   if (installEvent) { installEvent.prompt(); const r = await installEvent.userChoice; if (r.outcome === "accepted") $("installBtn").hidden = true; installEvent = null; return; }
   panel(`<h2>Install Live deals</h2>${isIOS ? `<ol><li>Tap the <b>Share</b> button (the square with an arrow) at the bottom of Safari.</li>
     <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li><li>Open it from the new icon. Alerts work only from the installed app on iPhone (iOS 16.4 or later).</li></ol>`
@@ -1352,7 +1532,8 @@ navigator.serviceWorker && navigator.serviceWorker.addEventListener("message", e
 
 // ---------- basket: where each item is cheapest ----------
 let basket = store.get("basket", {});
-function saveBasket() { store.set("basket", basket); const n = Object.values(basket).reduce((a, b) => a + b, 0); $("basketN").hidden = !n; $("basketN").textContent = n; }
+function saveBasket() { store.set("basket", basket); const n = Object.values(basket).reduce((a, b) => a + b, 0);
+  for (const id of ["basketN", "tabBasketN"]) { $(id).hidden = !n; $(id).textContent = n; } }
 async function showBasket() {
   const ids = Object.keys(basket);
   if (!ids.length) { panel(`<h2>🧺 Basket</h2><p class="tip">Open any product and tap <b>Add to basket</b>. The basket shows the cheapest store for each item, using the same products found in other stores.</p>`); return; }
@@ -1376,26 +1557,31 @@ async function showBasket() {
     basket[id] = (basket[id] || 0) + +b.dataset.d; if (basket[id] <= 0) delete basket[id]; saveBasket(); showBasket(); });
   $("bClear").onclick = () => { basket = {}; saveBasket(); $("panel").close(); };
 }
-$("basketBtn").onclick = showBasket;
+$("basketBtn").onclick = $("tabBasket").onclick = showBasket;
+$("alertsMi").onclick = () => { menu(false); $("alertsBtn").onclick(); };
+$("tabAlerts").onclick = () => $("alertsBtn").onclick();
 
 // ---------- today in 30 seconds (the home page, before any filter) ----------
 const isHome = () => { const p = new URLSearchParams(location.search); p.delete("hubs"); return !p.toString(); };
-let briefOn = false;
+let briefOn = false, briefHTML = "";
 async function refreshBrief() {  // asked with its ETag: on the home page, when the catalog was rebuilt
   if (!isHome()) { $("brief").hidden = true; return; }
   const b = await getJSON("/api/brief");
   if (!b) { $("brief").hidden = !briefOn; return; }  // 304: the brief already drawn is still right
   briefOn = !!b.deals;
   if (!b.deals) { $("brief").hidden = true; return; }
-  const st = (n, label, act) => `<button class="st" data-act="${act}"><b>${n.toLocaleString()}</b><span>${label}</span></button>`;
+  const st = (n, label, act) => `<button type="button" class="bt st ${act}" data-act="${act}"><b>${n.toLocaleString()}</b><span>${label}</span></button>`;
   const best = b.biggest_saving;
-  $("brief").innerHTML = `<h2>⚡ Today in 30 seconds</h2><div class="sub">What the stores changed while you weren't looking</div>
-    <div class="stats">${st(b.dropped_24h, "price drops in 24 h", "new")}${b.record_lows ? st(b.record_lows, "lowest price in 90 days", "lowest") : ""}
-      ${b.fake ? st(b.fake, "fake discounts caught", "fake") : ""}${b.soon ? st(b.soon, "sales due within 3 days", "soon") : ""}
-      ${b.promo ? st(b.promo, "extra off with a code", "promo") : ""}${st(b.deals, "real deals right now", "real")}</div>
-    ${best ? `<div class="best" data-id="${best.id}">💰 Biggest saving now: <b dir="auto">${esc(best.name.slice(0, 60))}</b> · save ${fmt(best.saving)} EGP</div>` : ""}`;
+  // one row of tiles that scrolls sideways; redrawn only when what it says changed (so focus stays put)
+  const html = `<div class="brief-row hscroll"><div class="bt head"><h2 id="briefH">⚡ Today in 30 seconds</h2><div class="sub">What the stores changed while you weren't looking</div></div>
+    ${st(b.dropped_24h, "price drops in 24 h", "new")}${b.record_lows ? st(b.record_lows, "lowest price in 90 days", "lowest") : ""}
+    ${b.fake ? st(b.fake, "fake discounts caught", "fake") : ""}${b.soon ? st(b.soon, "sales due within 3 days", "soon") : ""}
+    ${b.promo ? st(b.promo, "extra off with a code", "promo") : ""}${st(b.deals, "real deals right now", "real")}
+    ${best ? `<button type="button" class="bt st best" data-id="${best.id}">💰 Biggest saving now: <b dir="auto">${esc(best.name.slice(0, 60))}</b> · save ${fmt(best.saving)} EGP</button>` : ""}</div>`;
   $("brief").hidden = false;
-  $("brief").querySelectorAll(".st").forEach(x => x.onclick = () => {
+  if (html === briefHTML) return;
+  briefHTML = html; $("brief").innerHTML = html;
+  $("brief").querySelectorAll(".st[data-act]").forEach(x => x.onclick = () => {
     F.status = [x.dataset.act]; if (x.dataset.act === "soon") F.deals = "0";
     F.sort = x.dataset.act === "new" ? "newest" : "score"; syncControls(); apply(); $("brief").hidden = true; });
   const bs = $("brief").querySelector(".best"); if (bs) bs.onclick = () => showProduct(+bs.dataset.id);

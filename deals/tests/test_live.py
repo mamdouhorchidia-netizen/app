@@ -481,6 +481,10 @@ class Http(unittest.TestCase):
         r, _ = self.get("/sw.js", **{"If-None-Match": etag})
         self.assertEqual(r.status, 200)  # another file, another ETag
         self.assertEqual(r.getheader("Service-Worker-Allowed"), "/")
+        r, body = self.get("/tokens.css")  # the design tokens the page and the server-written pages share
+        self.assertEqual((r.status, r.getheader("Content-Type"), r.getheader("Cache-Control")), (200, "text/css; charset=utf-8", "no-cache"))
+        self.assertIn(b"--surface:", body)
+        self.assertIn(b'href="/tokens.css"', web.PAGE.read_bytes())
         r, body = self.get("/icon-192.png", **{"Accept-Encoding": "gzip"})
         self.assertIsNone(r.getheader("Content-Encoding"))  # pictures are compressed already
         self.assertEqual(body[:4], b"\x89PNG")
