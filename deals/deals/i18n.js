@@ -1,6 +1,12 @@
-// Arabic (Egyptian, right to left) for the deals pages, with English one tap away.
-// The pages are written in English; this turns what they show into Arabic as it appears (a MutationObserver),
-// so the rendering code stays one piece. Product names are never touched: they sit in [dir=auto] elements.
+// Arabic (Egyptian, right to left) for the deals pages, with English one tap away. Product names are never touched:
+// they sit in [dir=auto] elements.
+// - The server-written pages (/p/ID, /stores, …) are written in English; this turns what they show into Arabic as it
+//   appears (a MutationObserver on the whole page).
+// - The live page (<html data-i18n-render>) writes its strings in the page's language itself, as it draws them
+//   (I18N.tr through static/t.js). Here it only gets the language and direction at once (this script is in its head,
+//   before anything is drawn), its own markup translated in one pass when the parser has finished (before the
+//   modules run and before first paint: I18N.shell), and I18N.observe(el) as a narrow fallback for an element whose
+//   text arrives from elsewhere.
 (function () {
   const KEY = "lang";
   let lang = "ar";
@@ -10,7 +16,7 @@
   const APP = { talabat: "طلبات", Amazon: "أمازون", Jumia: "جوميا", Breadfast: "بريدفاست", "Dream 2000": "دريم 2000", Kenzz: "كنز", Raya: "راية", store: "المتجر" };
   const EXACT = {
     // header and filters
-    "Live deals": "عروض لحظة بلحظة", "connecting…": "بيتصل…", "Filters": "فلاتر", "Install": "تثبيت",
+    "Live deals": "عروض لحظة بلحظة", "connecting…": "بيتصل…", "Connecting…": "بيتصل…", "Filters": "فلاتر", "Install": "تثبيت",
     "More": "المزيد", "Search": "دوّر", "Search by voice": "دوّر بالصوت", "Basket": "السلة", "Alerts": "التنبيهات", "Language": "اللغة",
     "Install the app": "ثبّت التطبيق", "Price-drop alerts": "تنبيهات نزول الأسعار", "Watch this price": "تابع السعر ده",
     "Skip to deals": "روح للعروض", "tracked since": "متابَع من", "Quick filters": "فلاتر سريعة", "Real only": "حقيقي بس", "Sort by": "رتّب حسب", "Main": "الرئيسية", "Pages": "الصفحات", "Close": "اقفل",
@@ -229,14 +235,49 @@
   function both(root) {
     if (lang === "ar") root.querySelectorAll("[data-ar]").forEach(n => { if (n.textContent !== n.dataset.ar) n.textContent = n.dataset.ar; });
   }
+  const OBSERVE = { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS };
+  function wireLang() {
+    const b = document.getElementById("langBtn");
+    if (b) b.onclick = () => { try { localStorage.setItem(KEY, lang === "ar" ? "en" : "ar"); } catch {} location.reload(); };
+  }
   function start() {
     setDir();
     both(document);
     walk(document.body);
-    mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
-    const b = document.getElementById("langBtn");
-    if (b) b.onclick = () => { try { localStorage.setItem(KEY, lang === "ar" ? "en" : "ar"); } catch {} location.reload(); };
+    mo.observe(document.body, OBSERVE);
+    wireLang();
   }
-  window.I18N = { get lang() { return lang; }, tr };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+  // the live page: its own markup, translated as the parser adds it (a mutation observer's records are handled
+  // before anything is painted), and the observer let go as soon as the parser is done. The strings the page
+  // draws later are written in the page's language. shell() finishes the job (and walks the page if this script
+  // came too late to see it parsed).
+  let shellDone = false, seenParsed = false, dirSet = false;
+  function parsed(list) {
+    for (const m of list) { if (m.type === "characterData") textNode(m.target); else m.addedNodes.forEach(walk); }
+    if (!dirSet && document.getElementById("langBtn") && document.getElementById("q")) { dirSet = true; setDir(); }
+  }
+  const parsing = new MutationObserver(parsed);
+  function shell() {
+    if (shellDone || !document.body) return;
+    shellDone = true;
+    parsing.disconnect();
+    setDir();
+    both(document);
+    if (!seenParsed) walk(document.body);
+    wireLang();
+  }
+  // the fallback: text written into `el` from elsewhere is translated as it appears
+  function observe(el) { if (el && lang === "ar") mo.observe(el, OBSERVE); }
+  window.I18N = { get lang() { return lang; }, tr, shell, observe };
+  if (document.documentElement.hasAttribute("data-i18n-render")) {
+    setDir();  // lang, dir and the title before anything is drawn
+    if (document.readyState === "loading" && lang === "ar") { seenParsed = true; parsing.observe(document.documentElement, { childList: true, subtree: true, characterData: true }); }
+    // "interactive": the parser is done (before the module scripts run)
+    if (document.readyState === "loading") document.addEventListener("readystatechange", () => {
+      if (document.readyState === "loading") return;
+      parsed(parsing.takeRecords());
+      shell();
+    });
+    else shell();
+  } else if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();

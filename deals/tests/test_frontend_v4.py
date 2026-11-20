@@ -6,7 +6,8 @@ from pathlib import Path
 
 from deals import pages, web
 
-LIVE = Path(web.__file__).with_name("live.html").read_text(encoding="utf-8")
+# the live page: its markup, then its modules (static/*.js)
+LIVE = "\n".join(f.read_text(encoding="utf-8") for f in [web.PAGE, *sorted(web.STATIC_DIR.glob("*.js"))])
 I18N = Path(web.__file__).with_name("i18n.js").read_text(encoding="utf-8")
 
 

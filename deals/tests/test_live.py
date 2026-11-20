@@ -473,7 +473,7 @@ class Http(unittest.TestCase):
     def test_static_files_revalidate(self):
         r, body = self.get("/", **{"Accept-Encoding": "gzip"})
         self.assertEqual(r.status, 200)
-        self.assertEqual(body, web.PAGE.read_bytes())
+        self.assertEqual(body, web.live_page()[0])  # live.html with the current build's asset addresses
         self.assertEqual((r.getheader("Cache-Control"), r.getheader("Content-Encoding")), ("no-cache", "gzip"))
         etag = r.getheader("ETag")
         r, body = self.get("/", **{"If-None-Match": etag})
@@ -484,7 +484,7 @@ class Http(unittest.TestCase):
         r, body = self.get("/tokens.css")  # the design tokens the page and the server-written pages share
         self.assertEqual((r.status, r.getheader("Content-Type"), r.getheader("Cache-Control")), (200, "text/css; charset=utf-8", "no-cache"))
         self.assertIn(b"--surface:", body)
-        self.assertIn(b'href="/tokens.css"', web.PAGE.read_bytes())
+        self.assertIn(b'href="/static/{{BUILD}}/tokens.css"', web.PAGE.read_bytes())  # the same file, at its build's address
         r, body = self.get("/icon-192.png", **{"Accept-Encoding": "gzip"})
         self.assertIsNone(r.getheader("Content-Encoding"))  # pictures are compressed already
         self.assertEqual(body[:4], b"\x89PNG")

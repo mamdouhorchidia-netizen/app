@@ -12,6 +12,8 @@
   /api/status            each store: products, last check, last change, cycle time, errors
   /manifest.webmanifest, /icon.svg   so the page installs as an app
   /tokens.css            the design tokens the live page and the server-written pages share
+  /static/BUILD/NAME     the live page's stylesheets and modules (static/*.css, *.js, plus tokens.css and i18n.js),
+                         addressed by a hash of all of them: live.html is sent with the current one filled in
   /healthz               200 when the database answers (Coolify's health check)
   /admin                 the owner's page: talabat hubs to follow, and adding Breadfast
   /api/talabat/hubs      every known talabat mart hub (name, number, areas) and the ones followed
@@ -158,17 +160,66 @@ def etag_matches(header: str, etag: str) -> bool:
 _static: dict = {}  # path -> (mtime_ns, size, body, gzipped, etag)
 
 
+def _entry(body: bytes) -> tuple[bytes, bytes, str]:
+    return body, gzip.compress(body, 9, mtime=0), f'W/"{hashlib.blake2b(body, digest_size=12).hexdigest()}"'
+
+
 def static_file(path: Path) -> tuple[bytes, bytes, str]:
     """(body, gzipped body, ETag), read once and again only when the file changes (a deploy)."""
     st = path.stat()
     hit = _static.get(path)
     if hit and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
         return hit[2:]
-    body = path.read_bytes()
-    entry = (st.st_mtime_ns, st.st_size, body, gzip.compress(body, 9, mtime=0),
-             f'W/"{hashlib.blake2b(body, digest_size=12).hexdigest()}"')
+    entry = (st.st_mtime_ns, st.st_size, *_entry(path.read_bytes()))
     _static[path] = entry
     return entry[2:]
+
+
+# The live page's styles and modules: plain files in static/ (no build step), plus the two it shares with the
+# server-written pages. They are served at /static/<build>/<name>, where the build is a hash of all of them, and
+# live.html is sent with its {{BUILD}} filled in: a page only ever loads the modules it was written with (an
+# address from another build answers 404, and the page reloads once), and the service worker keeps each build's
+# files under their own addresses. Every one is still kept in memory, gzipped, with an ETag and no-cache.
+STATIC_DIR = Path(__file__).with_name("static")
+SHARED_ASSETS = {"tokens.css": Path(__file__).with_name("tokens.css"), "i18n.js": Path(__file__).with_name("i18n.js")}
+ASSET_TYPES = {".js": "text/javascript", ".css": "text/css; charset=utf-8"}
+_build: dict = {}  # "key": the files' (name, mtime, size), "id": their hash; "page": key -> (body, gzipped, etag)
+
+
+def assets() -> dict[str, Path]:
+    """name -> file, for everything the live page loads from /static/<build>/."""
+    files = {p.name: p for p in sorted(STATIC_DIR.iterdir()) if p.suffix in ASSET_TYPES and p.is_file()}
+    return {**files, **SHARED_ASSETS}
+
+
+def build_id() -> str:
+    """A short hash of every asset's content, worked out again only when one of them changes (a deploy)."""
+    files = assets()
+    key = tuple((name, st.st_mtime_ns, st.st_size) for name, p in sorted(files.items()) for st in [p.stat()])
+    if _build.get("key") != key:
+        h = hashlib.blake2b(digest_size=6)
+        for name, p in sorted(files.items()):
+            h.update(name.encode() + b"\0" + static_file(p)[0] + b"\0")
+        _build.update(key=key, id=h.hexdigest(), page={})
+    return _build["id"]
+
+
+def live_page() -> tuple[bytes, bytes, str]:
+    """live.html with the current build's asset addresses, kept in memory (and gzipped) per build."""
+    build, st = build_id(), PAGE.stat()
+    key = (st.st_mtime_ns, st.st_size, build)
+    hit = _build["page"].get(key)
+    if not hit:
+        hit = _build["page"][key] = _entry(PAGE.read_bytes().replace(b"{{BUILD}}", build.encode()))
+    return hit
+
+
+def asset(build: str, name: str):
+    """(file, content type) for /static/<build>/<name>, or None: not one of the assets, or not this build's."""
+    p = assets().get(name)
+    if p is None or build != build_id():
+        return None
+    return p, ASSET_TYPES[p.suffix]
 
 
 def changes_last_hour(con) -> int:
@@ -390,7 +441,7 @@ def make_handler(db_path: str, requests_file: str = None, keeper: livedata.Catal
                 self.send_header("Vary", "Accept-Encoding")
             if encoded:
                 self.send_header("Content-Encoding", "gzip")
-            if ctype == "text/javascript":
+            if ctype == "text/javascript" and self.path == "/sw.js":
                 self.send_header("Service-Worker-Allowed", "/")
             self.send_header("X-Content-Type-Options", "nosniff")
             if self.command == "POST":  # a POST's body may not have been read: don't read past it as a request
@@ -424,7 +475,15 @@ def make_handler(db_path: str, requests_file: str = None, keeper: livedata.Catal
                 con = sqlite3.connect(db_path, timeout=10)
                 con.row_factory = sqlite3.Row
                 if u.path in ("/", "/live"):
-                    self.static(PAGE, "text/html; charset=utf-8")
+                    body, gz, etag = live_page()
+                    self.send(200, body, "text/html; charset=utf-8", cache="no-cache", etag=etag, gzipped=gz)
+                elif u.path.startswith("/static/"):
+                    m = re.fullmatch(r"/static/([0-9a-f]{1,32})/([\w-]+\.(?:js|css))", u.path)
+                    found = m and asset(m.group(1), m.group(2))
+                    if found:
+                        self.static(*found)
+                    else:  # another build's (or no such file): the page that asked reloads once
+                        self.send(404, b"not in this build", "text/plain; charset=utf-8")
                 elif u.path in ("/admin", "/admin/"):
                     self.static(ADMIN_PAGE, "text/html; charset=utf-8")
                 elif u.path == "/healthz":

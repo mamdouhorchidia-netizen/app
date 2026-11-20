@@ -17,15 +17,16 @@ from deals import db, livedata, web
 from deals.models import Offer
 from test_live import seed
 
-LIVE = Path(web.__file__).with_name("live.html").read_text(encoding="utf-8")
+# the live page: its markup and its modules (static/*.js)
+LIVE = "\n".join(f.read_text(encoding="utf-8") for f in [web.PAGE, *sorted(web.STATIC_DIR.glob("*.js"))])
 URL = "/api/deals?deals=0&stock=all&limit=60"
 
 
 def js_function(name: str) -> str:
-    """The source of a top-level `function name(…) {…}` or `async function` in live.html (to its closing brace)."""
-    m = re.search(r"^(?:async )?function " + name + r"\(.*?^}", LIVE, re.S | re.M)
+    """The source of a top-level `[export] [async] function name(…) {…}` in the page's modules (to its closing brace)."""
+    m = re.search(r"^(?:export )?(?:async )?function " + name + r"\(.*?^}", LIVE, re.S | re.M)
     if not m:
-        raise AssertionError(f"{name} not found in live.html")
+        raise AssertionError(f"{name} not found in the live page's modules")
     return m.group(0)
 
 
