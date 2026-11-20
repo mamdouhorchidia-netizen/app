@@ -21,6 +21,7 @@ category, kind, hub and flag, one bit per product, so a filter is an AND and a f
 sort order is kept presorted, and updated in place for the products that changed.
 """
 
+import gc
 import hashlib
 import heapq
 import json
@@ -294,7 +295,12 @@ class Index:
         live = slots_of(self.all)
         for mode in modes or ORDERS:
             k = self.key(mode, by_id)
-            self.orders[mode] = SortedSlots.build(sorted(live, key=k), k)
+            # in short sorted runs merged in Python: one C sort of the whole list would hold the interpreter lock
+            # for a few hundred ms, and every request would wait for it
+            keys = [k(s) for s in live]
+            runs = [sorted(keys[i:i + 4000]) for i in range(0, len(keys), 4000)]
+            del keys
+            self.orders[mode] = SortedSlots.build([t[1] for t in heapq.merge(*runs)], k)
 
     def updated(self, old_by: dict, new_by: dict, changed: set) -> "Index":
         """A new version for the products in `changed` (ids changed, added or gone); None when a new product's id is
@@ -724,7 +730,17 @@ class Catalog:
         with self._lock:
             t0 = time.perf_counter()
             if full or self._st is None:
-                info = self._full(now)
+                # The cyclic collector would otherwise walk every new object again and again during the build,
+                # holding the lock every thread needs (seconds-long pauses for requests). Items hold no cycles;
+                # afterwards the long-lived snapshot is frozen out of later collections (refcounts still free it).
+                enabled = gc.isenabled()
+                gc.disable()
+                try:
+                    info = self._full(now)
+                finally:
+                    gc.freeze()
+                    if enabled:
+                        gc.enable()
             else:
                 info = self._incremental(now)
             info["secs"] = round(time.perf_counter() - t0, 4)
@@ -776,6 +792,7 @@ class Catalog:
         st.by_id = by_id
         st.index = Index.build(items, hidden)
         old = self._snap
+        _release_later(self._st, old)
         same = old is not None and old.by_id.keys() == by_id.keys() and all(
             _same(old.by_id[k], d) for k, d in by_id.items())
         info = {"full": True, "products": len(items), "seen": len(items), "changed": len(items)}
@@ -929,6 +946,30 @@ class Catalog:
         self._meta = meta
         self._snap = snap
         return info
+
+
+def _release_later(st, snap, grace: float = 30):
+    """Free a replaced catalogue a little at a time. Dropped at once, its millions of objects would be freed in one
+    go while holding the interpreter lock (a pause of a few hundred ms for every request). After `grace` seconds no
+    request is still reading it; its dicts are emptied in small steps, letting other threads run in between."""
+    if st is None and snap is None:
+        return
+    containers = [c for c in (st and st.by_id, snap and snap._items, snap and snap.answers) if c]
+
+    def run():
+        time.sleep(grace)
+        for c in containers:
+            if isinstance(c, list):
+                while c:
+                    del c[-2000:]
+                    time.sleep(0.002)
+            else:
+                keys = list(c)
+                for i in range(0, len(keys), 2000):
+                    for k in keys[i:i + 2000]:
+                        c.pop(k, None)
+                    time.sleep(0.002)
+    threading.Thread(target=run, name="catalog-release", daemon=True).start()
 
 
 class _Rebuild(Exception):

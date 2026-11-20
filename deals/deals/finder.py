@@ -1,6 +1,6 @@
 """Every product, judged from its price history, and the filters and sorts the page uses.
 
-catalog() builds one enriched list of all products (the web server keeps it for a few seconds);
+catalog() builds one enriched list of all products (catalog.py keeps it up to date for the whole process);
 query() filters, sorts and counts it.
 
 A product is a deal when it is at least `min` % cheaper than either
