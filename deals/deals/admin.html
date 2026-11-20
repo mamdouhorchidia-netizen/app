@@ -6,72 +6,129 @@
 <meta name="robots" content="noindex">
 <title>Deals Settings</title>
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f0f11" media="(prefers-color-scheme: dark)">
 <style>
-:root { --bg: #f6f5f2; --panel: #fff; --ink: #1b1a17; --muted: #6d6a63; --line: #e4e1da; --accent: #a80080; --good: #1f7a4d; --bad: #c0362c; --chip: #efede8; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #121211; --panel: #1c1b19; --ink: #f0eee9; --muted: #a29e95; --line: #2f2d29; --accent: #e070c8; --good: #5cc98f; --bad: #ff7b6b; --chip: #262421; } }
-:root[data-theme="dark"] { --bg: #121211; --panel: #1c1b19; --ink: #f0eee9; --muted: #a29e95; --line: #2f2d29; --accent: #e070c8; --good: #5cc98f; --bad: #ff7b6b; --chip: #262421; }
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans Arabic", sans-serif; }
-main { max-width: 680px; margin: 0 auto; padding: 24px 16px 60px; }
-h1 { font-size: 22px; margin: 0 0 4px; }
-h2 { font-size: 16px; margin: 24px 0 8px; }
-p, li { color: var(--muted); }
-a { color: inherit; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 16px; }
-label { display: block; font-weight: 600; margin: 12px 0 6px; }
-input[type=password], input[type=file] { width: 100%; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
-.seg { display: flex; gap: 6px; flex-wrap: wrap; }
-.seg label { font-weight: 400; margin: 0; display: flex; gap: 6px; align-items: center; background: var(--chip); padding: 6px 10px; border-radius: 8px; cursor: pointer; }
-button { margin-top: 16px; width: 100%; font: inherit; font-weight: 650; background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 12px; cursor: pointer; }
-button:disabled { opacity: .5; cursor: wait; }
-progress { width: 100%; margin-top: 12px; height: 8px; }
-.ok { color: var(--good); font-weight: 650; } .err { color: var(--bad); font-weight: 650; }
-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
-td { padding: 6px 4px; border-top: 1px solid var(--line); } td:last-child { text-align: right; white-space: nowrap; }
-details { margin-top: 8px; } summary { cursor: pointer; font-weight: 600; }
-ol { padding-left: 20px; }
+:root { --bg:#f7f6f3; --panel:#fff; --ink:#17161a; --muted:#6b6871; --faint:#a3a0a8; --line:#e7e4de; --accent:#e0452c; --accent-ink:#fff;
+  --good:#16794a; --good-bg:#e2f4ea; --warn:#9a6500; --warn-bg:#fbf0d2; --bad:#b4321f; --bad-bg:#fbe5e1; --chip:#f0eee9;
+  --talabat:#ff5a00; --breadfast:#a80080; --r-s:8px; --r-m:12px; --r-l:18px; color-scheme:light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) { --bg:#0f0f11; --panel:#19191d; --ink:#f2f0ea; --muted:#a09ca6;
+  --faint:#6a6770; --line:#2a2930; --accent:#ff6a52; --accent-ink:#1a0906; --good:#5fd09a; --good-bg:#14301f; --warn:#e8bb52;
+  --warn-bg:#38300f; --bad:#ff8a78; --bad-bg:#3a1712; --chip:#232228; color-scheme:dark; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans Arabic", sans-serif; -webkit-text-size-adjust:100%; }
+a { color:inherit; }
+button, input, textarea { font:inherit; color:inherit; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+code { font:13px ui-monospace, Menlo, Consolas, monospace; background:var(--chip); padding:1px 5px; border-radius:5px; }
+header { position:sticky; top:0; z-index:5; background:color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter:blur(12px); border-bottom:1px solid var(--line); }
+.bar { max-width:760px; margin:0 auto; padding:8px 16px; display:flex; align-items:center; gap:12px; }
+.logo { display:flex; align-items:center; gap:8px; font-weight:750; font-size:17px; text-decoration:none; min-height:44px; white-space:nowrap; }
+.pulse { width:9px; height:9px; border-radius:50%; background:var(--accent); }
+.jump { display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; margin-inline-start:auto; font-size:13.5px; }
+.jump a { flex:none; display:flex; align-items:center; min-height:44px; padding:0 10px; color:var(--muted); text-decoration:none; border-radius:999px; }
+.jump a:hover { color:var(--ink); }
+main { max-width:760px; margin:0 auto; padding:16px 16px 64px; }
+h1 { font-size:21px; margin:8px 0 4px; } h2 { font-size:17px; margin:0; display:flex; align-items:center; gap:8px; }
+h3 { font-size:15px; margin:16px 0 8px; }
+p, li { color:var(--muted); } .small { font-size:13.5px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:var(--r-l); padding:16px; margin-top:16px; scroll-margin-top:72px; }
+.card > p:first-of-type { margin-top:4px; }
+.n { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--chip); font-size:12px; font-weight:750; flex:none; }
+label.f { display:block; font-weight:650; margin:16px 0 8px; }
+input[type=password], input[type=text], input[type=search], input[type=url], input[type=file], textarea {
+  width:100%; min-height:44px; background:var(--bg); border:1px solid var(--line); border-radius:var(--r-m); padding:10px 12px; }
+input.bad { border-color:var(--bad); box-shadow:0 0 0 3px var(--bad-bg); }
+textarea { font:13px/1.5 ui-monospace, Menlo, Consolas, monospace; resize:vertical; }
+.tokrow { display:flex; gap:8px; }
+.tokrow input { flex:1; min-width:0; }
+.btn { min-height:44px; padding:0 16px; border-radius:var(--r-m); border:1px solid var(--line); background:var(--panel); font-weight:650; cursor:pointer; }
+.go { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; min-height:48px; margin-top:16px; border:0;
+  border-radius:var(--r-m); background:var(--accent); color:var(--accent-ink); font-weight:700; cursor:pointer; transition:opacity .16s ease-out; }
+.go:disabled { opacity:.6; cursor:wait; }
+.go:disabled::before { content:""; width:14px; height:14px; border-radius:50%; border:2px solid currentColor; border-right-color:transparent; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.seg { display:flex; gap:8px; flex-wrap:wrap; }
+.seg label { display:flex; align-items:center; gap:8px; min-height:44px; padding:0 12px; background:var(--chip); border-radius:var(--r-m); cursor:pointer; }
+.chips { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 12px; }
+.chips button { min-height:36px; padding:0 12px; border:1px solid var(--line); border-radius:999px; background:var(--panel); font-size:13.5px; font-weight:600; cursor:pointer; }
+.chips button.on { background:var(--talabat); border-color:var(--talabat); color:#fff; }
+.chips button .c { opacity:.7; font-weight:500; margin-inline-start:4px; }
+#hublist { max-height:360px; overflow:auto; margin-top:8px; border:1px solid var(--line); border-radius:var(--r-m); }
+.dh { position:sticky; top:0; background:var(--panel); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding:8px 12px; border-bottom:1px solid var(--line); }
+.hub { display:flex; gap:12px; align-items:flex-start; padding:10px 12px; border-bottom:1px solid var(--line); cursor:pointer; }
+.hub:hover { background:var(--bg); }
+.hub input { margin-top:4px; width:18px; height:18px; accent-color:var(--talabat); flex:none; }
+.hub small { color:var(--muted); font-size:12px; }
+.picked { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:12px; font-size:13.5px; }
+.picked button { display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:0 10px; border:0; border-radius:999px;
+  background:color-mix(in srgb, var(--talabat) 14%, transparent); color:var(--ink); cursor:pointer; font-size:13.5px; }
+.picked button::after { content:"×"; color:var(--muted); font-size:15px; }
+details { margin-top:12px; } summary { cursor:pointer; font-weight:650; min-height:44px; display:flex; align-items:center; }
+ol { padding-inline-start:20px; } ol li { margin-bottom:8px; }
+.msg { margin-top:12px; padding:10px 12px; border-radius:var(--r-m); font-size:14px; }
+.msg p { margin:4px 0; color:inherit; }
+.msg.ok { background:var(--good-bg); color:var(--good); } .msg.err { background:var(--bad-bg); color:var(--bad); }
+.msg.info { background:var(--chip); color:var(--ink); }
+.msg b { font-weight:700; }
+.msg table { width:100%; border-collapse:collapse; margin-top:8px; font-size:13.5px; color:var(--ink); }
+.msg td { padding:6px 4px; border-top:1px solid color-mix(in srgb, currentColor 15%, transparent); }
+.msg td:last-child { text-align:right; white-space:nowrap; }
+.hint { font-size:13px; margin-top:8px; }
+.hint.warn { color:var(--warn); }
+progress { width:100%; height:8px; margin-top:12px; accent-color:var(--accent); }
+@media (max-width: 520px) { .jump { display:none; } input, textarea { font-size:16px !important; } }
+@media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
 </style>
 </head>
 <body>
+<header><div class="bar"><a class="logo" href="/"><span class="pulse"></span>Live deals · Settings</a>
+  <nav class="jump" aria-label="Sections"><a href="#hubs">Hubs</a><a href="#cf">Coupons</a><a href="#bf">Breadfast</a></nav></div></header>
 <main>
-  <h1>Settings</h1>
-  <label for="token">Admin token</label>
-  <input type="password" id="token" autocomplete="current-password" placeholder="DEALS_ADMIN_TOKEN from Coolify">
+  <section class="card" id="tok">
+    <h2><span class="n">🔑</span>Admin token</h2>
+    <p class="small">Every save below needs it. It's <code>DEALS_ADMIN_TOKEN</code> from Coolify, kept in this tab only after a save works.</p>
+    <div class="tokrow"><input type="password" id="token" autocomplete="current-password" placeholder="DEALS_ADMIN_TOKEN from Coolify" aria-label="Admin token">
+      <button class="btn" type="button" id="showtok" aria-pressed="false">Show</button></div>
+    <div id="tokstate" class="hint" aria-live="polite"></div>
+  </section>
 
   <section class="card" id="hubs">
-    <h2 style="margin-top:0">talabat mart hubs</h2>
-    <p>Each hub stocks different products, and prices can differ. Tick the hubs to follow (each one adds about
-      15 minutes to a talabat sweep). Search by hub, area or city: for example <i>Obour</i>, <i>Maadi</i>, <i>Zayed</i>.</p>
-    <div class="seg" id="hubdist" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px"></div>
-    <input type="search" id="hubq" placeholder="Search hubs, areas, cities… (English or Arabic)" style="width:100%;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px">
-    <div id="hublist" style="max-height:340px;overflow:auto;margin-top:8px"></div>
-    <p id="hubsel" style="font-size:13px"></p>
+    <h2><span class="n">1</span>talabat mart hubs</h2>
+    <p class="small">Each hub stocks different products, and prices can differ. Tick the hubs to follow (each one adds about
+      15 minutes to a talabat sweep; up to 10). Search by hub, area or city: for example <i>Obour</i>, <i>Maadi</i>, <i>Zayed</i>.</p>
+    <div class="chips" id="hubdist"></div>
+    <input type="search" id="hubq" placeholder="Search hubs, areas, cities… (English or Arabic)" aria-label="Search hubs">
+    <div id="hublist"><p class="small" style="padding:12px">Loading hubs…</p></div>
+    <div class="picked" id="hubsel"></div>
     <details><summary>My hub isn't listed</summary>
-      <p style="font-size:13px">On talabat.com, set your delivery address, open talabat mart, and copy the address from
+      <p class="small">On talabat.com, set your delivery address, open talabat mart, and copy the address from
         the browser. It looks like <code>talabat.com/egypt/grocery/776372/…</code>.</p>
-      <input type="url" id="hublink" placeholder="https://www.talabat.com/egypt/grocery/…" style="width:100%;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px">
+      <input type="url" id="hublink" placeholder="https://www.talabat.com/egypt/grocery/…" aria-label="talabat mart link">
     </details>
-    <button id="savehubs" type="button">Save hubs</button>
+    <button class="go" id="savehubs" type="button">Save hubs</button>
     <div id="hubout" aria-live="polite"></div>
   </section>
 
   <form class="card" id="cf">
-    <h2 style="margin-top:0">🎟️ Coupons</h2>
-    <p>Shown on <a href="/coupons">/coupons</a>; a visitor taps a code to copy it. One per line:
+    <h2><span class="n">2</span>🎟️ Coupons</h2>
+    <p class="small">Shown on <a href="/coupons">/coupons</a>; a visitor taps a code to copy it. One per line:
       <code>store | CODE | what it gives | until (YYYY-MM-DD) | link</code>. The last two are optional; past dates hide
       themselves. Lines starting with # are skipped.</p>
-    <textarea id="ctext" rows="7" style="width:100%;font:13px ui-monospace,monospace" dir="ltr"
+    <textarea id="ctext" rows="7" dir="ltr" spellcheck="false" aria-label="Coupons, one per line"
       placeholder="talabat | MART50 | 50 EGP off talabat mart over 400 | 2026-12-31&#10;jumia | JUMIA10 | 10% off fashion"></textarea>
-    <button id="cgo">Save coupons</button>
+    <div id="cprev" class="hint" aria-live="polite"></div>
+    <button class="go" id="cgo">Save coupons</button>
     <div id="cout" aria-live="polite"></div>
   </form>
 
-  <h1 style="margin-top:28px">Add Breadfast</h1>
+  <section id="bf" style="scroll-margin-top:72px">
+  <h1 style="margin-top:32px">Add Breadfast</h1>
   <p>Breadfast's prices exist only inside its app. Record the app once on your phone, upload the recording here,
     and the site keeps Breadfast's prices fresh by itself until the app signs you out.</p>
 
   <div class="card">
-    <h2 style="margin-top:0">1. Record the app</h2>
+    <h2><span class="n">3</span>Record the app</h2>
     <details open><summary>Android (with a computer, about 30–45 minutes the first time)</summary><ol>
       <li>A normal Android phone hides apps' encrypted traffic, so this runs Breadfast in an Android emulator on your
         computer. Install <b>Android Studio</b> (free). Open <b>Device Manager › Create device</b>, pick a phone
@@ -85,84 +142,131 @@ ol { padding-left: 20px; }
         you in Cairo), and open a few categories, scrolling a little in each.</li>
       <li>In HTTP Toolkit, filter by <code>breadfast</code>. Either export everything as <b>HAR</b> and upload it below,
         or (works on the free plan) click one request that loads a category's products, choose
-        <b>Export › cURL</b>, and paste it in the second box below. Add a few categories that way.</li>
+        <b>Export › cURL</b>, and paste it in the last box below. Add a few categories that way.</li>
     </ol></details>
     <details><summary>iPhone</summary><ol>
       <li>Install <b>Proxyman</b> from the App Store and follow its setup: it installs a VPN profile and a certificate.
         Then trust that certificate in Settings › General › About › Certificate Trust Settings.</li>
       <li>Start recording in Proxyman, and turn on decryption (SSL proxying) for Breadfast's addresses when it offers.</li>
       <li>Open <b>Breadfast</b> and go through the categories you care about, scrolling a little in each.</li>
-      <li>Back in Proxyman, export the Breadfast requests as <b>HAR</b> (or copy one as cURL for the second box).</li>
+      <li>Back in Proxyman, export the Breadfast requests as <b>HAR</b> (or copy one as cURL for the last box).</li>
     </ol></details>
-    <p>If the recorder shows Breadfast's requests as failed or "certificate rejected", the app blocks recording, and this
+    <p class="small">If the recorder shows Breadfast's requests as failed or "certificate rejected", the app blocks recording, and this
       route won't work.</p>
   </div>
 
   <form class="card" id="f">
-    <h2 style="margin-top:0">2. Upload it</h2>
-    <label for="file">Recording (.har)</label>
+    <h2><span class="n">4</span>Upload it</h2>
+    <label class="f" for="file">Recording (.har)</label>
     <input type="file" id="file" accept=".har,.json,application/json" required>
-    <label>Prices in the app's data are in</label>
-    <div class="seg">
+    <label class="f" id="divl">Prices in the app's data are in</label>
+    <div class="seg" role="radiogroup" aria-labelledby="divl">
       <label><input type="radio" name="div" value="1" checked> pounds (EGP)</label>
       <label><input type="radio" name="div" value="100"> piasters (100 = 1 EGP)</label>
     </div>
-    <p style="font-size:13px">Not sure? Leave pounds, check the prices shown after the upload, and upload again with piasters if they're 100× too big.</p>
-    <button id="go">Upload and add Breadfast</button>
+    <p class="hint">Not sure? Leave pounds, check the prices shown after the upload, and upload again with piasters if they're 100× too big.</p>
+    <button class="go" id="go">Upload and add Breadfast</button>
     <progress id="bar" max="1" value="0" hidden></progress>
     <div id="out" aria-live="polite"></div>
   </form>
   <form class="card" id="f2">
-    <h2 style="margin-top:0">…or paste one request</h2>
-    <p style="font-size:13px">A request that loads a category's products, copied as cURL. The site sends it once to
+    <h2><span class="n">5</span>…or paste one request</h2>
+    <p class="small">A request that loads a category's products, copied as cURL. The site sends it once to
       read the products, then keeps refreshing it. Add as many categories as you like, one at a time. Uses the token
       and price unit above.</p>
-    <label for="curl">Request (starts with <code>curl</code>)</label>
-    <textarea id="curl" rows="6" required spellcheck="false" style="width:100%;font:13px ui-monospace,monospace;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px" placeholder="curl 'https://…breadfast…/products?page=1' -H 'authorization: Bearer …'"></textarea>
-    <button id="go2">Add this request</button>
+    <label class="f" for="curl">Request (starts with <code>curl</code>)</label>
+    <textarea id="curl" rows="6" required spellcheck="false" placeholder="curl 'https://…breadfast…/products?page=1' -H 'authorization: Bearer …'"></textarea>
+    <button class="go" id="go2">Add this request</button>
     <div id="out2" aria-live="polite"></div>
   </form>
   <p style="margin-top:16px"><a href="/?stores=breadfast&amp;deals=0">See Breadfast on the site →</a></p>
-  <p style="font-size:13px">The recording holds your Breadfast session. The site reads it, keeps only what it needs to
+  <p class="small">The recording holds your Breadfast session. The site reads it, keeps only what it needs to
     refresh prices (on its private storage), and deletes the file straight away. It only ever repeats product-list
     requests, never anything touching your cart, orders, payment, address or account.</p>
+  </section>
 </main>
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 try { $("token").value = sessionStorage.getItem("dealsAdmin") || ""; } catch {}
+const tok = () => $("token").value.trim();
+function tokState() {
+  $("token").classList.remove("bad");
+  $("tokstate").className = "hint";
+  $("tokstate").textContent = tok() ? "" : "Enter the token before saving anything.";
+}
+tokState(); $("token").oninput = tokState;
+$("showtok").onclick = () => { const on = $("token").type === "password"; $("token").type = on ? "text" : "password";
+  $("showtok").textContent = on ? "Hide" : "Show"; $("showtok").setAttribute("aria-pressed", on); };
+function remember() { try { sessionStorage.setItem("dealsAdmin", tok()); } catch {}
+  $("tokstate").className = "hint"; $("tokstate").textContent = "✓ Token accepted (kept in this tab)."; }
+// one message box per form: ok / err / info
+function say(el, kind, html) { el.innerHTML = `<div class="msg ${kind}">${html}</div>`; }
+// what a failed answer means, in words; a wrong token also marks the token field
+function failure(el, status, r) {
+  if (status === 401 || status === 403) { $("token").classList.add("bad"); $("tokstate").className = "hint warn";
+    $("tokstate").textContent = status === 401 ? "That token was refused: check it and try again." : (r.error || "Saving is off on this server."); }
+  say(el, "err", `<p><b>Not saved.</b> ${esc(r.error || "The server answered " + status + ".")}</p>`);
+}
+function needToken(el) {
+  if (tok()) return false;
+  $("token").classList.add("bad"); $("token").focus(); $("tok").scrollIntoView({ behavior: "smooth", block: "start" });
+  say(el, "err", "<p><b>Not saved.</b> Enter the admin token first (top of the page).</p>"); return true;
+}
+async function post(url, body) {
+  const res = await fetch(url, { method: "POST", body: JSON.stringify(body),
+    headers: { "Authorization": "Bearer " + tok(), "Content-Type": "application/json" } });
+  return [res, await res.json().catch(() => ({}))];
+}
+function busy(btn, on, text) { btn.disabled = on; if (on) { btn.dataset.t = btn.textContent; btn.textContent = text; } else if (btn.dataset.t) btn.textContent = btn.dataset.t; }
+const samples = r => `<table>${(r.samples || []).map(s => `<tr><td dir="auto">${esc(s.name)}</td><td>${esc(s.price)} EGP${s.original_price ? ` <s>${esc(s.original_price)}</s>` : ""}</td></tr>`).join("")}</table>`;
+
+// ---- Breadfast upload ----
 $("f").onsubmit = e => {
   e.preventDefault();
-  const file = $("file").files[0]; if (!file) return;
+  const file = $("file").files[0]; if (!file || needToken($("out"))) return;
   const div = document.querySelector("input[name=div]:checked").value;
   const xhr = new XMLHttpRequest();
   xhr.open("POST", "/admin/breadfast?divisor=" + div);
-  xhr.setRequestHeader("Authorization", "Bearer " + $("token").value.trim());
+  xhr.setRequestHeader("Authorization", "Bearer " + tok());
   xhr.setRequestHeader("Content-Type", "application/json");
-  $("go").disabled = true; $("bar").hidden = false; $("bar").removeAttribute("value"); $("out").innerHTML = "";
-  xhr.upload.onprogress = ev => { if (ev.lengthComputable) $("bar").value = ev.loaded / ev.total; };
+  busy($("go"), true, "Uploading…"); $("bar").hidden = false; $("bar").removeAttribute("value"); $("out").innerHTML = "";
+  xhr.upload.onprogress = ev => { if (ev.lengthComputable) $("bar").value = ev.loaded / ev.total;
+    if (ev.loaded === ev.total) $("go").textContent = "Reading the recording…"; };
   xhr.onload = () => {
-    $("go").disabled = false; $("bar").hidden = true;
+    busy($("go"), false); $("bar").hidden = true;
     let r = {}; try { r = JSON.parse(xhr.responseText); } catch {}
-    if (xhr.status !== 200) { $("out").innerHTML = `<p class="err">${esc(r.error || "Upload failed (" + xhr.status + ").")}</p>`; return; }
-    try { sessionStorage.setItem("dealsAdmin", $("token").value.trim()); } catch {}
-    $("out").innerHTML = `<p class="ok">Added ${r.products.toLocaleString()} Breadfast products.</p>
+    if (xhr.status !== 200) return failure($("out"), xhr.status, r);
+    remember();
+    say($("out"), "ok", `<p><b>Added ${r.products.toLocaleString()} Breadfast products.</b></p>
       <p>${r.requests ? `${r.requests === 1 ? "1 product list" : r.requests + " product lists"} will be refreshed automatically, starting within a minute.`
          : "None of the product responses can be refreshed (they came from cart or account screens), so these prices won't update. Record again while browsing categories."}</p>
-      <p>Do these prices look right?</p>
-      <table>${r.samples.map(s => `<tr><td dir="auto">${esc(s.name)}</td><td>${s.price} EGP${s.original_price ? ` <s>${s.original_price}</s>` : ""}</td></tr>`).join("")}</table>`;
+      <p>Do these prices look right?</p>${samples(r)}`);
   };
-  xhr.onerror = () => { $("go").disabled = false; $("bar").hidden = true; $("out").innerHTML = '<p class="err">Network error: try again.</p>'; };
+  xhr.onerror = () => { busy($("go"), false); $("bar").hidden = true; say($("out"), "err", "<p><b>Network error:</b> nothing was saved. Try again.</p>"); };
   xhr.send(file);
 };
+$("f2").onsubmit = async e => {
+  e.preventDefault(); if (needToken($("out2"))) return;
+  busy($("go2"), true, "Asking Breadfast…"); say($("out2"), "info", "<p>Asking Breadfast…</p>");
+  try {
+    const [res, r] = await post("/admin/breadfast-request", { curl: $("curl").value, divisor: document.querySelector("input[name=div]:checked").value });
+    if (!res.ok) failure($("out2"), res.status, r);
+    else { remember(); $("curl").value = "";
+      say($("out2"), "ok", `<p><b>Added ${r.products.toLocaleString()} Breadfast products.</b></p>
+        <p>${r.requests === 1 ? "1 product list" : r.requests + " product lists"} will be refreshed automatically, starting within a minute.</p>
+        <p>Do these prices look right?</p>${samples(r)}`); }
+  } catch { say($("out2"), "err", "<p><b>Network error:</b> nothing was saved. Try again.</p>"); }
+  busy($("go2"), false);
+};
+
 // ---- hubs ----
-let hubs = [], selected = new Set();
+let hubs = [], selected = new Set(), districts = [], dist = "";
 const norm = t => (t || "").toLowerCase();
-let districts = [], dist = "";
 function drawDistricts() {
   const have = new Set(hubs.map(h => h.district));
-  $("hubdist").innerHTML = ["All", ...districts.filter(d => have.has(d))].map(d =>
-    `<button type="button" data-d="${esc(d === "All" ? "" : d)}" style="width:auto;margin:0;padding:6px 10px;font-size:13px;font-weight:600;border-radius:999px;background:${(d === "All" ? "" : d) === dist ? "var(--accent)" : "var(--chip)"};color:${(d === "All" ? "" : d) === dist ? "#fff" : "var(--ink)"}">${esc(d)} ${d === "All" ? hubs.length : hubs.filter(h => h.district === d).length}</button>`).join("");
+  $("hubdist").innerHTML = ["", ...districts.filter(d => have.has(d))].map(d =>
+    `<button type="button" data-d="${esc(d)}" class="${d === dist ? "on" : ""}" aria-pressed="${d === dist}">${esc(d || "All")}<span class="c">${d ? hubs.filter(h => h.district === d).length : hubs.length}</span></button>`).join("");
   $("hubdist").querySelectorAll("button").forEach(b => b.onclick = () => { dist = b.dataset.d; drawDistricts(); drawHubs(); });
 }
 function drawHubs() {
@@ -170,72 +274,70 @@ function drawHubs() {
   const rows = hubs.filter(h => (!dist || h.district === dist) &&
     (!q || norm(h.name + " " + h.areas.join(" ") + " " + h.cities.join(" ") + " " + h.id + " " + h.district + " " + h.words).includes(q)));
   let last = null;
-  $("hublist").innerHTML = rows.slice(0, 300).map(h => (h.district !== last ? `<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:12px 4px 4px">${esc(last = h.district)}</div>` : "") + `<label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;margin:0;padding:8px 4px;border-top:1px solid var(--line);cursor:pointer">
-      <input type="checkbox" value="${h.id}" ${selected.has(h.id) ? "checked" : ""} style="margin-top:4px">
-      <span><b>${esc(h.name)}</b> <span style="color:var(--muted);font-size:12px">#${h.id} · ${esc(h.cities.join(", "))}</span><br>
-      <span style="color:var(--muted);font-size:12px" dir="auto">${esc(h.areas.slice(0, 8).join(" · "))}${h.areas.length > 8 ? " …" : ""}</span></span></label>`).join("")
-    || '<p>No hub matches. Paste its talabat link below.</p>';
+  $("hublist").innerHTML = rows.slice(0, 300).map(h => (h.district !== last ? `<div class="dh">${esc(last = h.district)}</div>` : "") +
+    `<label class="hub"><input type="checkbox" value="${h.id}" ${selected.has(h.id) ? "checked" : ""}>
+      <span><b>${esc(h.name)}</b> <small>#${h.id} · ${esc(h.cities.join(", "))}</small><br>
+      <small dir="auto">${esc(h.areas.slice(0, 8).join(" · "))}${h.areas.length > 8 ? " …" : ""}</small></span></label>`).join("")
+    || '<p class="small" style="padding:12px">No hub matches. Paste its talabat link under "My hub isn\'t listed".</p>';
   $("hublist").querySelectorAll("input").forEach(i => i.onchange = () => {
     i.checked ? selected.add(+i.value) : selected.delete(+i.value); hubCount(); });
   hubCount();
 }
 function hubCount() {
-  const names = hubs.filter(h => selected.has(h.id)).map(h => h.name);
-  $("hubsel").textContent = `${selected.size} hub${selected.size === 1 ? "" : "s"} chosen: ${names.join(", ") || "none"}`;
+  const picked = [...selected].map(id => hubs.find(h => h.id === id) || { id, name: "#" + id });
+  $("hubsel").innerHTML = `<span class="small" style="color:var(--muted)">${selected.size} of 10 chosen${selected.size ? ":" : " — tick at least one"}</span>` +
+    picked.map(h => `<button type="button" data-id="${h.id}" title="Remove">${esc(h.name)}</button>`).join("");
+  $("hubsel").querySelectorAll("button").forEach(b => b.onclick = () => { selected.delete(+b.dataset.id); drawHubs(); });
 }
-fetch("/api/talabat/hubs").then(r => r.json()).then(r => { hubs = r.hubs; districts = r.districts || []; selected = new Set(r.selected); drawDistricts(); drawHubs(); });
+function loadHubs() {
+  return fetch("/api/talabat/hubs").then(r => r.json()).then(r => { hubs = r.hubs; districts = r.districts || []; selected = new Set(r.selected); drawDistricts(); drawHubs(); })
+    .catch(() => { $("hublist").innerHTML = '<p class="small" style="padding:12px">Couldn\'t load the hub list. Reload the page to try again.</p>'; });
+}
+loadHubs();
 $("hubq").oninput = drawHubs;
 $("savehubs").onclick = async () => {
+  if (needToken($("hubout"))) return;
   const body = { talabat_hubs: [...selected] };
   if ($("hublink").value.trim()) body.hub_link = $("hublink").value.trim();
-  $("savehubs").disabled = true;
+  busy($("savehubs"), true, "Saving…");
   try {
-    const res = await fetch("/admin/settings", { method: "POST", body: JSON.stringify(body),
-      headers: { "Authorization": "Bearer " + $("token").value.trim(), "Content-Type": "application/json" } });
-    const r = await res.json().catch(() => ({}));
-    if (!res.ok) $("hubout").innerHTML = `<p class="err">${esc(r.error || "Failed (" + res.status + ").")}</p>`;
+    const [res, r] = await post("/admin/settings", body);
+    if (!res.ok) failure($("hubout"), res.status, r);
     else {
-      try { sessionStorage.setItem("dealsAdmin", $("token").value.trim()); } catch {}
-      selected = new Set(r.selected); $("hublink").value = "";
-      fetch("/api/talabat/hubs").then(x => x.json()).then(x => { hubs = x.hubs; drawDistricts(); drawHubs(); });
-      $("hubout").innerHTML = `<p class="ok">Saved. Following ${r.hubs.map(h => esc(h.name)).join(", ")}. The site starts on them within a minute; a full sweep takes about ${15 * r.hubs.length} minutes.</p>`;
+      remember(); selected = new Set(r.selected); $("hublink").value = "";
+      loadHubs();
+      say($("hubout"), "ok", `<p><b>Saved.</b> Following ${r.hubs.map(h => esc(h.name)).join(", ")}. The site starts on them within a minute; a full sweep takes about ${15 * r.hubs.length} minutes.</p>`);
     }
-  } catch { $("hubout").innerHTML = '<p class="err">Network error: try again.</p>'; }
-  $("savehubs").disabled = false;
+  } catch { say($("hubout"), "err", "<p><b>Network error:</b> nothing was saved. Try again.</p>"); }
+  busy($("savehubs"), false);
 };
 
-function showResult(el, r) {
-  el.innerHTML = `<p class="ok">Added ${r.products.toLocaleString()} Breadfast products.</p>
-    <p>${r.requests === 1 ? "1 product list" : r.requests + " product lists"} will be refreshed automatically, starting within a minute.</p>
-    <p>Do these prices look right?</p>
-    <table>${r.samples.map(s => `<tr><td dir="auto">${esc(s.name)}</td><td>${s.price} EGP${s.original_price ? ` <s>${s.original_price}</s>` : ""}</td></tr>`).join("")}</table>`;
+// ---- coupons ----
+function preview() {
+  const today = new Date().toISOString().slice(0, 10);
+  let n = 0, past = 0, bad = 0;
+  for (const line of $("ctext").value.split("\n")) {
+    if (!line.trim() || line.trim().startsWith("#")) continue;
+    const p = line.split("|").map(x => x.trim());
+    if (p.length < 2 || !p[1]) { bad++; continue; }
+    n++; if (p[3] && p[3] < today) past++;
+  }
+  $("cprev").className = "hint" + (bad || past ? " warn" : "");
+  $("cprev").textContent = `${n} coupon${n === 1 ? "" : "s"}` + (past ? ` · ${past} already expired (hidden on the site)` : "") +
+    (bad ? ` · ${bad} line${bad === 1 ? "" : "s"} without a code will be skipped` : "");
 }
-$("f2").onsubmit = async e => {
-  e.preventDefault();
-  $("go2").disabled = true; $("out2").innerHTML = "<p>Asking Breadfast…</p>";
-  try {
-    const res = await fetch("/admin/breadfast-request", { method: "POST",
-      headers: { "Authorization": "Bearer " + $("token").value.trim(), "Content-Type": "application/json" },
-      body: JSON.stringify({ curl: $("curl").value, divisor: document.querySelector("input[name=div]:checked").value }) });
-    const r = await res.json().catch(() => ({}));
-    if (!res.ok) $("out2").innerHTML = `<p class="err">${esc(r.error || "Failed (" + res.status + ").")}</p>`;
-    else { try { sessionStorage.setItem("dealsAdmin", $("token").value.trim()); } catch {} showResult($("out2"), r); $("curl").value = ""; }
-  } catch { $("out2").innerHTML = '<p class="err">Network error: try again.</p>'; }
-  $("go2").disabled = false;
-};
+$("ctext").oninput = preview;
 fetch("/api/coupons").then(r => r.json()).then(r => { $("ctext").value = (r.coupons || []).map(c =>
-  [c.store, c.code, c.title || "", c.expires || "", c.url || ""].join(" | ").replace(/( \| )+$/, "")).join("\n"); }).catch(() => {});
+  [c.store, c.code, c.title || "", c.expires || "", c.url || ""].join(" | ").replace(/( \| )+$/, "")).join("\n"); preview(); }).catch(() => {});
 $("cf").onsubmit = async e => {
-  e.preventDefault(); $("cgo").disabled = true;
+  e.preventDefault(); if (needToken($("cout"))) return;
+  busy($("cgo"), true, "Saving…");
   try {
-    const res = await fetch("/admin/coupons", { method: "POST",
-      headers: { "Authorization": "Bearer " + $("token").value.trim(), "Content-Type": "application/json" },
-      body: JSON.stringify({ text: $("ctext").value }) });
-    const r = await res.json().catch(() => ({}));
-    $("cout").innerHTML = res.ok ? `<p class="ok">Saved ${r.coupons.length} coupon(s).</p>` : `<p class="err">${esc(r.error || "Failed (" + res.status + ").")}</p>`;
-    if (res.ok) try { sessionStorage.setItem("dealsAdmin", $("token").value.trim()); } catch {}
-  } catch { $("cout").innerHTML = '<p class="err">Network error: try again.</p>'; }
-  $("cgo").disabled = false;
+    const [res, r] = await post("/admin/coupons", { text: $("ctext").value });
+    if (res.ok) { remember(); say($("cout"), "ok", `<p><b>Saved ${r.coupons.length} coupon(s).</b> <a href="/coupons" target="_blank">See them on /coupons ↗</a></p>`); }
+    else failure($("cout"), res.status, r);
+  } catch { say($("cout"), "err", "<p><b>Network error:</b> nothing was saved. Try again.</p>"); }
+  busy($("cgo"), false);
 };
 </script>
 </body>
