@@ -8,7 +8,7 @@
 //   visit can paint cards before the network answers (the page reads it itself, then asks the network anyway).
 // - never: /admin, anything that isn't a GET (POSTs), /api/push/*, any other /api/ call, other sites.
 // Bump VERSION on every deploy that changes the shell: the new worker takes over at once and deletes the old caches.
-const VERSION = "2026-11-20.1";
+const VERSION = "2026-11-20.2";
 const SHELL = "deals-shell-" + VERSION;
 const DATA = "deals-data-v1";           // the page reads this one too (DATA_CACHE in live.html)
 const PRECACHE = ["/", "/i18n.js", "/icon-192.png", "/icon.svg", "/manifest.webmanifest"];
@@ -61,10 +61,11 @@ async function homeView(req) {
 async function staleWhileRevalidate(e, key) {
   const c = await caches.open(SHELL);
   const hit = await c.match(key);
+  const old = hit && key === "/" ? hit.clone() : null;   // before the page takes the body
   const net = fetch(key === "/" ? "/" : e.request, { cache: "no-cache" }).then(async r => {
     if (!r.ok || r.status !== 200) return r;
-    if (key === "/" && hit) {   // a new deploy: tell open pages so nobody stays on an old shell
-      const [a, b] = await Promise.all([hit.clone().text(), r.clone().text()]);
+    if (old) {   // a new deploy: tell open pages so nobody stays on an old shell
+      const [a, b] = await Promise.all([old.text(), r.clone().text()]);
       if (a !== b) {  // wait until the page that asked is up and listening
         await new Promise(res => setTimeout(res, 2500));
         for (const w of await self.clients.matchAll({ type: "window", includeUncontrolled: true })) w.postMessage({ type: "shell-updated" });

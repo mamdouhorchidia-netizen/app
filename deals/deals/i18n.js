@@ -113,7 +113,7 @@
     "A 'discount' whose price never moves: probably the normal price": "\"خصم\" سعره عمره ما بيتحرك: غالبًا ده سعره العادي",
     "the store's own discount": "خصم المتجر نفسه", "under its usual price": "أقل من سعره المعتاد", "Watch this price": "تابع السعر ده",
     "Close": "اقفل", "Sections": "الأقسام", "About this site": "عن الموقع", "One less": "واحد أقل", "One more": "واحد زيادة",
-    "no limit": "مفيش حد",
+    "no limit": "مفيش حد", "milk, nescafe, حفاضات": "لبن، نسكافيه، حفاضات",
     "Prices are checked around the clock from each store's public pages. A price can change at the store before it changes here.":
       "الأسعار بتتحدّث طول اليوم من صفحات المتاجر نفسها. ممكن السعر يتغير في المتجر قبل ما يتغير هنا.", "Telegram channel": "قناة التليجرام", "No coupons yet.": "مفيش كوبونات لسه.",
   };
@@ -249,15 +249,22 @@
     }
     stats.nodes += list.length; stats.ms += performance.now() - t0;
   });
+  const OBS = { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS };
+  let observing = false;
   function start() {
     setDir();
     const t0 = performance.now();
-    walk(document.body);
+    walk(document.body);   // anything the parser added before we were watching
     stats.ms += performance.now() - t0;
-    mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+    if (!observing) { mo.observe(document.body, OBS); observing = true; }
     const b = document.getElementById("langBtn");
     if (b) b.onclick = () => { try { localStorage.setItem(KEY, lang === "ar" ? "en" : "ar"); } catch {} location.reload(); };
   }
   window.I18N = { get lang() { return lang; }, tr, stats };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+  if (document.readyState === "loading") {
+    // translate the page while the parser builds it, so the first paint is already Arabic (no flash of English)
+    setDir();
+    if (lang === "ar") { mo.observe(document.documentElement, OBS); observing = true; }
+    document.addEventListener("DOMContentLoaded", start);
+  } else start();
 })();

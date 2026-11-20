@@ -14,7 +14,121 @@
 // language and direction before the first paint (i18n.js does the words)
 (function () { var l = "ar"; try { l = localStorage.getItem("lang") || "ar"; } catch (e) {}
   var h = document.documentElement; h.lang = l; h.dir = l === "ar" ? "rtl" : "ltr";
-  try { if (JSON.parse(localStorage.getItem("hubBarShown"))) h.classList.add("has-hubs"); } catch (e) {} })();
+  var hubs = true; try { hubs = JSON.parse(localStorage.getItem("hubBarShown")) !== false; } catch (e) {}
+  if (hubs) h.classList.add("has-hubs");   // reserve the talabat hub bar unless this browser saw there's none
+  var q = new URLSearchParams(location.search); q.delete("hubs"); q.delete("p"); if (!q.toString()) h.classList.add("home"); })();
+</script>
+<script>
+// ---------- state and data (here so the first request leaves before anything else loads) ----------
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = n => n == null ? "" : Number(n).toLocaleString("en-EG", { maximumFractionDigits: 2 });
+const int = n => Number(n || 0).toLocaleString("en-EG");
+const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+                set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const LABELS = { talabat: "talabat mart", amazon_eg: "Amazon.eg", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz", raya: "Raya Shop" };
+const DATA_CACHE = "deals-data-v1";   // the service worker keeps the last home-view answer here
+const PAGE = 48;
+const DEFAULTS = { deals: "1", stores: [], hubs: [], kind: "", min: 0, max: 90, stock: "in", status: [], best: false, watch: false, recent: false,
+                   category: "", q: "", pmin: "", pmax: "", sort: "score" };
+let F = { ...DEFAULTS };
+let watch = store.get("watch", {});  // id -> {target, last, name, store}
+
+function readURL() {
+  const p = new URLSearchParams(location.search);
+  F = { ...DEFAULTS, stores: [], hubs: [], status: [] };
+  for (const k of ["deals", "kind", "stock", "category", "q", "pmin", "pmax", "sort"]) if (p.has(k)) F[k] = p.get(k);
+  for (const k of ["min", "max"]) if (p.has(k)) F[k] = +p.get(k);
+  for (const k of ["stores", "status", "hubs"]) if (p.get(k)) F[k] = p.get(k).split(",");
+  if (!p.get("hubs")) F.hubs = store.get("myHubs", []).map(String);  // the hubs this browser chose last time
+  F.best = p.get("best") === "1"; F.watch = p.get("watch") === "1"; F.recent = p.get("recent") === "1";
+}
+function writeURL() {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(F)) {
+    if (Array.isArray(v) ? v.length : v !== DEFAULTS[k] && v !== "" && v !== false)
+      p.set(k, Array.isArray(v) ? v.join(",") : v === true ? "1" : v);
+  }
+  const prod = new URLSearchParams(location.search).get("p");
+  if (prod) p.set("p", prod);
+  history.replaceState(null, "", p.toString() ? "?" + p : location.pathname);
+}
+const isHome = () => { const p = new URLSearchParams(location.search); p.delete("hubs"); p.delete("p"); return !p.toString(); };
+
+// ---------- plain-language searches (English and Arabic) ----------
+const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+function understand(text) {
+  let t = " " + (text || "").replace(/[٠-٩]/g, c => AR_DIGITS.indexOf(c)) + " ";
+  const set = {}, said = [];
+  const take = (re, fn) => { t = t.replace(re, (...m) => { fn(m); return " "; }); };
+  take(/\b(?:at least|over|above|min(?:imum)?)\s*(\d{1,2})\s*%(?:\s*off)?|(\d{1,2})\s*%\s*(?:off|\+|or more)|(?:خصم|تخفيض)\s*(\d{1,2})\s*%?/gi,
+       m => { const v = m[1] || m[2] || m[3]; set.min = v; said.push(`${v}%+ off`); });
+  take(/\b(?:under|below|less than|cheaper than|max(?:imum)?|up to)\s*(\d+(?:\.\d+)?)\s*(?:egp|le|pounds?|جنيه)?|(?:أقل من|اقل من|تحت|بحد أقصى)\s*(\d+(?:\.\d+)?)\s*(?:جنيه)?|<\s*(\d+)/gi,
+       m => { const v = m[1] || m[2] || m[3]; set.pmax = v; said.push(`under ${v} EGP`); });
+  take(/\b(?:over|above|more than)\s*(\d+(?:\.\d+)?)\s*(?:egp|le|pounds?)\b|(?:أكثر من|اكثر من|فوق)\s*(\d+(?:\.\d+)?)\s*(?:جنيه)?/gi,
+       m => { const v = m[1] || m[2]; set.pmin = v; said.push(`over ${v} EGP`); });
+  const stores = [];
+  take(/(?:^|\s)(?:at |on |from |in |من |في )?(talabat|tmart|طلبات)(?=[\s,.]|$)/gi, () => stores.push("talabat"));
+  take(/(?:^|\s)(?:at |on |from |in |من |في )?(amazon|أمازون|امازون)(?=[\s,.]|$)/gi, () => stores.push("amazon_eg"));
+  take(/(?:^|\s)(?:at |on |from |in |من |في )?(breadfast|بريدفاست)(?=[\s,.]|$)/gi, () => stores.push("breadfast"));
+  if (stores.length) { set.stores = [...new Set(stores)].join(","); said.push([...new Set(stores)].map(x => LABELS[x]).join(" or ")); }
+  take(/\b(?:per|a|each|by the)\s*(?:kg|kilo|liter|litre|l|piece)\b|(?:للكيلو|للتر|بالكيلو|للقطعة)/gi, () => { set.sort = "unit"; said.push("cheapest per kg / L"); });
+  take(/\b(cheapest|lowest price|cheap)\b|(?:أرخص|ارخص)/gi, () => { if (!set.sort) { set.sort = "price"; said.push("cheapest first"); } });
+  take(/\b(biggest (?:discount|deal)s?|best deals?)\b|(?:أكبر خصم|اكبر خصم|أفضل عرض)/gi, () => { set.sort = "discount"; said.push("biggest discount"); });
+  take(/\b(lowest ever|all[- ]time low|record low)\b|(?:أقل سعر)/gi, () => { set.status = "lowest"; said.push("lowest in 90 days"); });
+  take(/\b(new deals|new today|just dropped|today)\b|(?:جديد النهارده|النهارده|اليوم)/gi, () => { set.status = (set.status ? set.status + "," : "") + "new"; said.push("changed in 24 h"); });
+  take(/\b(in stock|available)\b|(?:متاح|متوفر)/gi, () => { set.stock = "in"; said.push("in stock"); });
+  take(/\b(deals?|offers?|discounts?|sale)\b|(?:عروض|عرض|خصومات|تخفيضات)/gi, () => { set.deals = "1"; });
+  const q = t.replace(/\b(?:show me|find|i want|search for|the|for)\b|(?:عايز|عاوز|ابحث عن|هات)/gi, " ").replace(/\s+/g, " ").trim();
+  if (Object.keys(set).length && !("deals" in set)) set.deals = "0";  // "milk under 50" means every milk, not only deals
+  return { q, set, said };
+}
+function params(offset, limit) {
+  const p = new URLSearchParams({ deals: F.deals, stock: F.stock, sort: F.sort, limit, offset, fields: "card" });
+  if (F.stores.length) p.set("stores", F.stores.join(","));
+  if (F.hubs.length) p.set("hubs", F.hubs.join(","));
+  if (F.kind) p.set("kind", F.kind);
+  if (F.min) p.set("min", F.min);
+  if (F.max < 90) p.set("max", F.max);
+  if (F.status.length) p.set("status", F.status.join(","));
+  if (F.best) p.set("best", "1");
+  if (F.category) p.set("category", F.category);
+  const nl = understand(F.q);
+  if (nl.q) p.set("q", nl.q);
+  for (const [k, v] of Object.entries(nl.set)) p.set(k, v);
+  if (F.pmin !== "") p.set("pmin", F.pmin);
+  if (F.pmax !== "") p.set("pmax", F.pmax);
+  if (F.watch) { p.set("ids", Object.keys(watch).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); }
+  else if (F.recent) { p.set("ids", store.get("recent", []).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); p.set("sort", "newest"); }
+  return p;
+}
+
+// one answer per view, kept with its ETag: asking again sends If-None-Match and a 304 costs nothing
+const VIEWS = new Map();
+async function getView(qs, signal, home) {
+  const key = qs.toString(), hit = VIEWS.get(key), headers = {};
+  if (hit && hit.etag) headers["If-None-Match"] = hit.etag;
+  if (home) headers["X-Home-View"] = "1";   // tells the service worker to keep this answer for the next visit
+  const r = await fetch("/api/deals?" + key, { headers, signal, cache: hit && hit.etag ? "no-store" : "default" });
+  if (r.status === 304 && hit) { VIEWS.delete(key); VIEWS.set(key, hit); return { data: hit.data, same: true }; }
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const data = await r.json();
+  VIEWS.delete(key); VIEWS.set(key, { etag: r.headers.get("ETag"), data });
+  while (VIEWS.size > 8) VIEWS.delete(VIEWS.keys().next().value);
+  return { data, same: false };
+}
+function savedHome(key) {
+  if (!("caches" in window)) return Promise.resolve(null);
+  return caches.open(DATA_CACHE).then(c => c.match("/api/deals?" + key, { ignoreVary: true })).then(r => r ? r.json() : null).catch(() => null);
+}
+readURL();
+const BOOT = (() => {
+  const qs = params(0, PAGE), ctrl = new AbortController(), home = isHome();
+  const b = { key: qs.toString(), ctrl, net: getView(qs, ctrl.signal, home), saved: home ? savedHome(qs.toString()) : Promise.resolve(null) };
+  b.brief = home ? fetch("/api/brief").then(r => r.ok ? r.json() : null).catch(() => null) : null;
+  b.net.catch(() => {});
+  return b;
+})();
 </script>
 <style>
 :root {
@@ -182,6 +296,7 @@ aside { position: sticky; top: calc(var(--hdr) + 16px); align-self: start; max-h
 .hubbar button.on { background: var(--talabat); border-color: var(--talabat); color: #fff; font-weight: 650; }
 .hubbar button .c { opacity: .7; font-size: 12px; margin-inline-start: 6px; }
 html:not(.has-hubs) .hubbar:empty { display: none; }
+html:not(.has-hubs) #hubGroup, html:not(.home) #brief { display: none; }
 .bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; min-height: var(--tap); }
 .count { font-weight: 750; font-size: 17px; white-space: nowrap; }
 .count small { color: var(--muted); font-weight: 500; font-size: 14px; }
@@ -432,118 +547,6 @@ table.cmp .best { color: var(--good); font-weight: 700; }
   .ring.run .fg { stroke-dashoffset: 0; }
 }
 </style>
-<script>
-// ---------- state and data (here so the first request leaves before anything else loads) ----------
-const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const fmt = n => n == null ? "" : Number(n).toLocaleString("en-EG", { maximumFractionDigits: 2 });
-const int = n => Number(n || 0).toLocaleString("en-EG");
-const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
-                set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
-const LABELS = { talabat: "talabat mart", amazon_eg: "Amazon.eg", breadfast: "Breadfast", jumia: "Jumia", dream2000: "Dream 2000", kenzz: "Kenzz", raya: "Raya Shop" };
-const DATA_CACHE = "deals-data-v1";   // the service worker keeps the last home-view answer here
-const PAGE = 48;
-const DEFAULTS = { deals: "1", stores: [], hubs: [], kind: "", min: 0, max: 90, stock: "in", status: [], best: false, watch: false, recent: false,
-                   category: "", q: "", pmin: "", pmax: "", sort: "score" };
-let F = { ...DEFAULTS };
-let watch = store.get("watch", {});  // id -> {target, last, name, store}
-
-function readURL() {
-  const p = new URLSearchParams(location.search);
-  F = { ...DEFAULTS, stores: [], hubs: [], status: [] };
-  for (const k of ["deals", "kind", "stock", "category", "q", "pmin", "pmax", "sort"]) if (p.has(k)) F[k] = p.get(k);
-  for (const k of ["min", "max"]) if (p.has(k)) F[k] = +p.get(k);
-  for (const k of ["stores", "status", "hubs"]) if (p.get(k)) F[k] = p.get(k).split(",");
-  if (!p.get("hubs")) F.hubs = store.get("myHubs", []).map(String);  // the hubs this browser chose last time
-  F.best = p.get("best") === "1"; F.watch = p.get("watch") === "1"; F.recent = p.get("recent") === "1";
-}
-function writeURL() {
-  const p = new URLSearchParams();
-  for (const [k, v] of Object.entries(F)) {
-    if (Array.isArray(v) ? v.length : v !== DEFAULTS[k] && v !== "" && v !== false)
-      p.set(k, Array.isArray(v) ? v.join(",") : v === true ? "1" : v);
-  }
-  const prod = new URLSearchParams(location.search).get("p");
-  if (prod) p.set("p", prod);
-  history.replaceState(null, "", p.toString() ? "?" + p : location.pathname);
-}
-const isHome = () => { const p = new URLSearchParams(location.search); p.delete("hubs"); p.delete("p"); return !p.toString(); };
-
-// ---------- plain-language searches (English and Arabic) ----------
-const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
-function understand(text) {
-  let t = " " + (text || "").replace(/[٠-٩]/g, c => AR_DIGITS.indexOf(c)) + " ";
-  const set = {}, said = [];
-  const take = (re, fn) => { t = t.replace(re, (...m) => { fn(m); return " "; }); };
-  take(/\b(?:at least|over|above|min(?:imum)?)\s*(\d{1,2})\s*%(?:\s*off)?|(\d{1,2})\s*%\s*(?:off|\+|or more)|(?:خصم|تخفيض)\s*(\d{1,2})\s*%?/gi,
-       m => { const v = m[1] || m[2] || m[3]; set.min = v; said.push(`${v}%+ off`); });
-  take(/\b(?:under|below|less than|cheaper than|max(?:imum)?|up to)\s*(\d+(?:\.\d+)?)\s*(?:egp|le|pounds?|جنيه)?|(?:أقل من|اقل من|تحت|بحد أقصى)\s*(\d+(?:\.\d+)?)\s*(?:جنيه)?|<\s*(\d+)/gi,
-       m => { const v = m[1] || m[2] || m[3]; set.pmax = v; said.push(`under ${v} EGP`); });
-  take(/\b(?:over|above|more than)\s*(\d+(?:\.\d+)?)\s*(?:egp|le|pounds?)\b|(?:أكثر من|اكثر من|فوق)\s*(\d+(?:\.\d+)?)\s*(?:جنيه)?/gi,
-       m => { const v = m[1] || m[2]; set.pmin = v; said.push(`over ${v} EGP`); });
-  const stores = [];
-  take(/(?:^|\s)(?:at |on |from |in |من |في )?(talabat|tmart|طلبات)(?=[\s,.]|$)/gi, () => stores.push("talabat"));
-  take(/(?:^|\s)(?:at |on |from |in |من |في )?(amazon|أمازون|امازون)(?=[\s,.]|$)/gi, () => stores.push("amazon_eg"));
-  take(/(?:^|\s)(?:at |on |from |in |من |في )?(breadfast|بريدفاست)(?=[\s,.]|$)/gi, () => stores.push("breadfast"));
-  if (stores.length) { set.stores = [...new Set(stores)].join(","); said.push([...new Set(stores)].map(x => LABELS[x]).join(" or ")); }
-  take(/\b(?:per|a|each|by the)\s*(?:kg|kilo|liter|litre|l|piece)\b|(?:للكيلو|للتر|بالكيلو|للقطعة)/gi, () => { set.sort = "unit"; said.push("cheapest per kg / L"); });
-  take(/\b(cheapest|lowest price|cheap)\b|(?:أرخص|ارخص)/gi, () => { if (!set.sort) { set.sort = "price"; said.push("cheapest first"); } });
-  take(/\b(biggest (?:discount|deal)s?|best deals?)\b|(?:أكبر خصم|اكبر خصم|أفضل عرض)/gi, () => { set.sort = "discount"; said.push("biggest discount"); });
-  take(/\b(lowest ever|all[- ]time low|record low)\b|(?:أقل سعر)/gi, () => { set.status = "lowest"; said.push("lowest in 90 days"); });
-  take(/\b(new deals|new today|just dropped|today)\b|(?:جديد النهارده|النهارده|اليوم)/gi, () => { set.status = (set.status ? set.status + "," : "") + "new"; said.push("changed in 24 h"); });
-  take(/\b(in stock|available)\b|(?:متاح|متوفر)/gi, () => { set.stock = "in"; said.push("in stock"); });
-  take(/\b(deals?|offers?|discounts?|sale)\b|(?:عروض|عرض|خصومات|تخفيضات)/gi, () => { set.deals = "1"; });
-  const q = t.replace(/\b(?:show me|find|i want|search for|the|for)\b|(?:عايز|عاوز|ابحث عن|هات)/gi, " ").replace(/\s+/g, " ").trim();
-  if (Object.keys(set).length && !("deals" in set)) set.deals = "0";  // "milk under 50" means every milk, not only deals
-  return { q, set, said };
-}
-function params(offset, limit) {
-  const p = new URLSearchParams({ deals: F.deals, stock: F.stock, sort: F.sort, limit, offset, fields: "card" });
-  if (F.stores.length) p.set("stores", F.stores.join(","));
-  if (F.hubs.length) p.set("hubs", F.hubs.join(","));
-  if (F.kind) p.set("kind", F.kind);
-  if (F.min) p.set("min", F.min);
-  if (F.max < 90) p.set("max", F.max);
-  if (F.status.length) p.set("status", F.status.join(","));
-  if (F.best) p.set("best", "1");
-  if (F.category) p.set("category", F.category);
-  const nl = understand(F.q);
-  if (nl.q) p.set("q", nl.q);
-  for (const [k, v] of Object.entries(nl.set)) p.set(k, v);
-  if (F.pmin !== "") p.set("pmin", F.pmin);
-  if (F.pmax !== "") p.set("pmax", F.pmax);
-  if (F.watch) { p.set("ids", Object.keys(watch).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); }
-  else if (F.recent) { p.set("ids", store.get("recent", []).join(",") || "0"); p.set("deals", "0"); p.set("stock", "all"); p.set("sort", "newest"); }
-  return p;
-}
-
-// one answer per view, kept with its ETag: asking again sends If-None-Match and a 304 costs nothing
-const VIEWS = new Map();
-async function getView(qs, signal, home) {
-  const key = qs.toString(), hit = VIEWS.get(key), headers = {};
-  if (hit && hit.etag) headers["If-None-Match"] = hit.etag;
-  if (home) headers["X-Home-View"] = "1";   // tells the service worker to keep this answer for the next visit
-  const r = await fetch("/api/deals?" + key, { headers, signal, cache: hit && hit.etag ? "no-store" : "default" });
-  if (r.status === 304 && hit) { VIEWS.delete(key); VIEWS.set(key, hit); return { data: hit.data, same: true }; }
-  if (!r.ok) throw new Error("HTTP " + r.status);
-  const data = await r.json();
-  VIEWS.delete(key); VIEWS.set(key, { etag: r.headers.get("ETag"), data });
-  while (VIEWS.size > 8) VIEWS.delete(VIEWS.keys().next().value);
-  return { data, same: false };
-}
-function savedHome(key) {
-  if (!("caches" in window)) return Promise.resolve(null);
-  return caches.open(DATA_CACHE).then(c => c.match("/api/deals?" + key, { ignoreVary: true })).then(r => r ? r.json() : null).catch(() => null);
-}
-readURL();
-const BOOT = (() => {
-  const qs = params(0, PAGE), ctrl = new AbortController(), home = isHome();
-  const b = { key: qs.toString(), ctrl, net: getView(qs, ctrl.signal, home), saved: home ? savedHome(qs.toString()) : Promise.resolve(null) };
-  b.brief = home ? fetch("/api/brief").then(r => r.ok ? r.json() : null).catch(() => null) : null;
-  b.net.catch(() => {});
-  return b;
-})();
-</script>
 <script src="/i18n.js"></script>
 </head>
 <body>
@@ -594,11 +597,11 @@ const BOOT = (() => {
     <div class="sheet-h"><b>Filters</b><button class="x" id="sheetX" aria-label="Close"><svg width="20" height="20"><use href="#i-x"/></svg></button></div>
     <div class="fgroup"><h3>Show</h3>
       <div class="seg" data-key="deals"><button data-v="1">Deals</button><button data-v="0">All products</button></div></div>
-    <div class="fgroup"><h3>Store</h3><div class="opts" id="fStores"></div></div>
-    <div class="fgroup" id="hubGroup" hidden><h3>talabat hub</h3><div class="opts" id="fHubs"></div></div>
+    <div class="fgroup"><h3>Store</h3><div class="opts" id="fStores"><label class="opt"><input type="checkbox" value="talabat"> <span class="dot" style="background:var(--talabat)"></span>talabat mart<span class="c"></span></label><label class="opt"><input type="checkbox" value="amazon_eg"> <span class="dot" style="background:var(--amazon_eg)"></span>Amazon.eg<span class="c"></span></label><label class="opt"><input type="checkbox" value="breadfast"> <span class="dot" style="background:var(--breadfast)"></span>Breadfast<span class="c"></span></label><label class="opt"><input type="checkbox" value="jumia"> <span class="dot" style="background:var(--jumia)"></span>Jumia<span class="c"></span></label><label class="opt"><input type="checkbox" value="dream2000"> <span class="dot" style="background:var(--dream2000)"></span>Dream 2000<span class="c"></span></label><label class="opt"><input type="checkbox" value="kenzz"> <span class="dot" style="background:var(--kenzz)"></span>Kenzz<span class="c"></span></label><label class="opt"><input type="checkbox" value="raya"> <span class="dot" style="background:var(--raya)"></span>Raya Shop<span class="c"></span></label></div></div>
+    <div class="fgroup" id="hubGroup"><h3>talabat hub</h3><div class="opts" id="fHubs"></div></div>
     <div class="fgroup"><h3>Discount type</h3>
       <div class="seg" data-key="kind"><button data-v="">Any</button><button data-v="platform">Platform</button><button data-v="drop">Price drop</button></div>
-      <div class="meta" style="margin-top:8px" id="kindCounts"></div></div>
+      <div class="meta" style="margin-top:8px;min-height:18px" id="kindCounts"></div></div>
     <div class="fgroup"><h3>Discount <span class="pctlabel" id="pctLabel"></span></h3>
       <div class="slider"><div class="rail"></div><div class="fill" id="pctFill"></div>
         <input type="range" id="pmin" min="0" max="90" step="5" aria-label="Minimum discount">
@@ -626,7 +629,7 @@ const BOOT = (() => {
   </aside>
 
   <main id="main">
-    <section class="brief" id="brief" hidden aria-labelledby="briefH"></section>
+    <section class="brief" id="brief" aria-labelledby="briefH"><div class="brief-h"><h2 id="briefH">⚡ Today in 30 seconds</h2></div><div class="stats"><div class="st sk"></div><div class="st sk"></div><div class="st sk"></div><div class="st sk"></div><div class="st sk"></div><div class="st sk"></div></div><div class="best"></div></section>
     <div class="hubbar" id="hubBar"></div>
     <div class="bar" id="bar">
       <button class="tbtn filterbtn" id="filterBtn" aria-label="Filters"><svg width="18" height="18"><use href="#i-sliders"/></svg><span>Filters</span><span class="n" id="filterN" hidden>0</span></button>
@@ -646,7 +649,7 @@ const BOOT = (() => {
       </select></label>
     </div>
     <div class="chips" id="activeChips"></div>
-    <div class="grid" id="grid" aria-busy="true"></div>
+    <div class="grid" id="grid" aria-busy="true"><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div><div class="card sk" aria-hidden="true"><div class="pic"></div><div class="body"><div class="ln p"></div><div class="ln"></div><div class="ln s"></div><div class="ln b"></div></div></div></div>
     <div id="more"></div>
   </main>
 </div>
@@ -755,12 +758,11 @@ function renderFacets(r) {
     facetSig = sig;
     $("fStores").innerHTML = all.map(s => `<label class="opt"><input type="checkbox" value="${esc(s)}" ${F.stores.includes(s) ? "checked" : ""}>
       <span class="dot" style="background:var(--${esc(s)},#888)"></span>${esc(r.labels?.[s] || LABELS[s] || s)}<span class="c">${int(fs[s] ?? 0)}</span></label>`).join("");
-    $("hubGroup").hidden = fh.length < 2 && !F.hubs.length;
     $("fHubs").innerHTML = fh.map(([id, name, n]) =>
       `<label class="opt"><input type="checkbox" value="${esc(id)}" ${F.hubs.includes(id) ? "checked" : ""}> <span${/^Hub \d+$/.test(name) ? "" : ' dir="auto"'}>${esc(name)}</span><span class="c">${int(n)}</span></label>`).join("");
     // the same choice as a bar above the deals: which talabat hubs' stock and prices to show (remembered)
     const showBar = fh.length >= 2 || F.hubs.length > 0;
-    store.set("hubBarShown", showBar); document.documentElement.classList.toggle("has-hubs", showBar);
+    if (r.facets?.hub) { store.set("hubBarShown", showBar); document.documentElement.classList.toggle("has-hubs", showBar); }  // not before the answer
     $("hubBar").innerHTML = !showBar ? "" : `<span class="lbl">📍 talabat hubs:</span><button data-h="" class="${F.hubs.length ? "" : "on"}">All hubs</button>` +
       fh.map(([id, name, n]) => `<button data-h="${esc(id)}" class="${F.hubs.includes(id) ? "on" : ""}"><span${/^Hub \d+$/.test(name) ? "" : ' dir="auto"'}>${esc(name)}</span><span class="c">${int(n)}</span></button>`).join("");
     $("fCat").innerHTML = `<option value="">All categories</option>` + cats.map(c =>
@@ -877,7 +879,7 @@ document.addEventListener("error", e => { const img = e.target;
 
 // ---------- the list on screen ----------
 let items = [], total = 0, gen = 1, ctrl = BOOT.ctrl, moreCtrl = null, loadingMore = false, pending = null, viewV = null;
-let lastStatus = [], lastChanges = 0, shownFrom = null, lastData = null;
+let lastStatus = [], lastChanges = 0, shownFrom = null, lastData = null, netLoaded = false;
 const cards = new Map();   // id -> {el, sig}
 function emptyState() {
   const anyFilter = !isHome() && !F.watch && !F.recent;
@@ -986,7 +988,7 @@ async function loadView() {
     const { data, same } = await getView(qs, signal, isHome());
     if (my !== gen) return;
     if (!hit) renderList(data); else if (!same) { lastData = data; renderMeta(data); reconcile(data.items, false); }
-    viewV = data.v ?? viewV; setError(false);
+    viewV = data.v ?? viewV; netLoaded = true; setError(false);
   } catch (e) {
     if (e.name === "AbortError" || my !== gen) return;
     if (!hit) { $("grid").innerHTML = errorState(!navigator.onLine); $("grid").setAttribute("aria-busy", "false"); }
@@ -1018,7 +1020,7 @@ async function refreshView() {
     const n = items.length <= PAGE ? PAGE : Math.min(items.length, 240);
     const { data, same } = await getView(params(0, n), ctrl.signal, isHome() && n === PAGE);
     if (my !== gen || same) return false;
-    viewV = data.v ?? viewV; lastData = data; renderMeta(data);
+    viewV = data.v ?? viewV; netLoaded = true; lastData = data; renderMeta(data);
     if (!items.length) { if (data.items.length) renderList(data); return data.items.length > 0; }
     const before = items.slice(0, data.items.length).map(d => d.id + (cards.get(d.id)?.sig || "")).join();
     if (data.items.map(d => d.id + sigOf(d)).join() === before) return false;   // an old server without ETags: same list
@@ -1083,7 +1085,7 @@ async function pulse(manual) {
       if (p.brief) briefNumbers(p.brief);
       const changed = V == null ? (viewV != null && p.v !== viewV) : p.v !== V;
       V = p.v;
-      if (changed) await onNewVersion();
+      if (changed || !netLoaded) await onNewVersion();   // or the list never came from the network yet
     } else {
       ticks++;
       const changed = await refreshView();
@@ -1127,6 +1129,7 @@ const BRIEF_KEYS = [["dropped_24h", "price drops in 24 h", "new"], ["record_lows
 let briefData = null;
 function showBrief() {
   const on = isHome();
+  document.documentElement.classList.toggle("home", on);
   if (!on) { $("brief").hidden = true; return; }
   if (!briefData) { $("brief").hidden = false; $("brief").innerHTML = `<div class="brief-h"><h2 id="briefH">⚡ Today in 30 seconds</h2></div><div class="stats">${'<div class="st sk"></div>'.repeat(6)}</div><div class="best"></div>`; return; }
   renderBrief(briefData);
@@ -1526,7 +1529,6 @@ let shellToast = null;
 
 // ---------- start: cards first, everything else after ----------
 syncControls(); saveWatch(); saveBasket(); activeChips(); showUnderstood(); renderFacets({ facets: {} }); showBrief(); renderStatus(); tickFresh();
-$("grid").innerHTML = skeleton(8);
 let started = false;
 function afterFirst() {
   if (started) return; started = true;
@@ -1534,13 +1536,16 @@ function afterFirst() {
   if (BOOT.brief) BOOT.brief.then(b => { if (b) renderBrief(b); else if (!briefData) $("brief").hidden = true; });
   later(() => { loadTicker(); checkWatch(); }, { timeout: 2000 });
   if ("serviceWorker" in navigator) later(() => navigator.serviceWorker.register("/sw.js").catch(() => {}), { timeout: 4000 });
+  // the very first visit isn't served by the worker yet: keep this answer for the next one ourselves
+  if (isHome() && lastData && "caches" in window && !navigator.serviceWorker?.controller)
+    later(() => caches.open(DATA_CACHE).then(c => c.put("/api/deals?" + BOOT.key, new Response(JSON.stringify(lastData), { headers: { "Content-Type": "application/json" } }))).catch(() => {}), { timeout: 5000 });
   markFresh(); schedule();
 }
 BOOT.saved.then(d => { if (d && d.items && d.items.length && !shownFrom && gen === 1) { shownFrom = "cache"; renderList(d); tickFresh(); } });
 BOOT.net.then(({ data }) => {
   if (gen !== 1) return;
   if (shownFrom === "cache") { lastData = data; renderMeta(data); reconcile(data.items, true); } else renderList(data);
-  shownFrom = "net"; viewV = data.v ?? null; V = data.v ?? null; afterFirst();
+  shownFrom = "net"; netLoaded = true; viewV = data.v ?? null; V = data.v ?? null; afterFirst();
 }).catch(e => {
   if (gen !== 1 || e.name === "AbortError") return;
   if (!shownFrom) { $("grid").innerHTML = errorState(!navigator.onLine); $("grid").setAttribute("aria-busy", "false"); }
