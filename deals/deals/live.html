@@ -9,9 +9,10 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon.svg">
-<!-- styles and scripts are plain files under /static/<build>/: web.py writes the build (a hash of all of them) into
-     these addresses, so this page only ever runs with the modules it was served with. /tokens.css's tokens are shared
-     with the server-written pages; /i18n.js sets the language and direction before anything is drawn. -->
+<!-- the styles and scripts are plain files (static/, /tokens.css, /i18n.js). web.py sends this page with all of them
+     written in: the stylesheets as style elements, /i18n.js where it is (it sets the language and direction before anything
+     is drawn), and the modules joined into one module script at the end of the body (web.bundle). With DEALS_PAGE=split
+     it is sent as it is, each file at /static/<build>/ (the build: a hash of all of them, filled in for {{BUILD}}). -->
 <link rel="stylesheet" href="/static/{{BUILD}}/tokens.css">
 <link rel="stylesheet" href="/static/{{BUILD}}/app.css">
 <script src="/static/{{BUILD}}/i18n.js"></script>

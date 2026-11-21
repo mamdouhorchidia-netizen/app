@@ -2,11 +2,11 @@
 const VIBRATE = [90, 60, 90, 60, 260];  // the deals "da-da-daaa" buzz (Android); the sound is the phone's own
 
 // The page shell is kept as a last good copy, so the site still opens with no connection and says so, instead of the
-// browser's error page: the page and every stylesheet and module it loads (its /static/<build>/ addresses: the
-// build is a hash of all of them, so a kept page and its files always belong together). Network first, always: the
-// server sends these with an ETag and no-cache, so a deploy shows at once; the copy is used only when the network
-// fails. A new page replaces the kept one only once all its files are kept too, and the old build's files are then
-// dropped. Prices (/api/*) are never cached.
+// browser's error page. The server normally sends the page as one document, with its styles and modules written in;
+// when it links them instead (/static/<build>/ addresses: the build is a hash of all of them, so a kept page and its
+// files always belong together) they are kept with it. Network first, always: the page is sent with an ETag and
+// no-cache, so a deploy shows at once; the copy is used only when the network fails. A new page replaces the kept one
+// only once all its files are kept too, and files no longer linked are then dropped. Prices (/api/*) are never cached.
 const SHELL = "deals-shell-v4";
 const isShell = path => path === "/" || path === "/live";  // "/?deals=1…" is the same page
 const isAsset = path => path.startsWith("/static/");
@@ -14,8 +14,8 @@ const assetsOf = html => [...new Set([...html.matchAll(/(?:href|src)="(\/static\
 const cacheKey = url => isShell(url.pathname) ? "/" : url.pathname;
 
 async function keep(res) {  // a fresh page: keep it with all its files, or keep nothing new
+  if (!(res.headers.get("Content-Type") || "").startsWith("text/html")) return;
   const want = assetsOf(await res.clone().text()), c = await caches.open(SHELL);
-  if (!want.length) return;
   const have = new Set((await c.keys()).map(r => new URL(r.url).pathname));
   await c.addAll(want.filter(u => !have.has(u)));  // throws when one fails: the page kept before stays, with its files
   await c.put("/", res);

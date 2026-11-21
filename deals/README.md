@@ -137,8 +137,10 @@ Notes:
 
 ## The page
 - **Arabic first, right to left** (Egyptian wording: "نزل دلوقتي", "🔥 أقل سعر", "من 4 د"), with English one tap
-  away (the ع / EN button, remembered per browser). `deals/i18n.js` translates what the pages show as it
-  appears; product names are left as the store wrote them.
+  away (the ع / EN button, remembered per browser). The live page writes its own text translated as it draws
+  it (`t()` in `static/t.js`, over the dictionary in `deals/i18n.js`), so nothing is drawn in English first and
+  swapped; `i18n.js` translates the page's fixed markup once, before the first paint, and the server-written
+  pages as they appear. Product names are left as the store wrote them.
 - **3rrood-style pages:** `/p/ID` is each product's own page (price history chart, lowest/highest in 90 days,
   the verdict and why, the same product in other stores, more deals like it, and a store button); shared on
   WhatsApp or Telegram it shows a preview card with the picture, price and discount in Arabic. `/stores`
@@ -177,6 +179,23 @@ Notes:
   (the phone's share sheet, or copies the link).
 - **Installs like an app** (manifest and icon), works on phones (filters become a bottom sheet), has a
   dark mode, and `/` jumps to search.
+- **How the page is built and sent:** the source is plain files with no build step: `live.html` (the
+  markup), `static/app.css` on top of `tokens.css` (the design tokens the server-written pages share),
+  `i18n.js`, and the page's code as ES modules in `static/` (`main.js` wires them together; see Layout).
+  `web.py` sends it as **one document**: the stylesheets and `i18n.js` written into the head, and the modules
+  joined into one module script at the end of the body (`web.bundle`: each module keeps its own scope and
+  runs in the order the browser would run them; comment-only lines are left out). A first visit is one
+  request of about 44 KB gzipped, a repeat visit one 304 (a few hundred bytes), and a page always runs with
+  the code it was sent with. The modules are written in one narrow form (`import { … } from "./x.js";`,
+  `export` before a const or function); anything the joiner doesn't follow makes it send live.html with one
+  file per module instead, which is also what `DEALS_PAGE=split` does, for working on them in the
+  browser's tools.
+- **Caching:** every file is also served at `/static/<build>/<name>`, where the build is a hash of all of
+  them, so the address changes whenever anything does: those answers are `Cache-Control: public,
+  max-age=31536000, immutable`, and an address from another build is a 404 (a split page then reloads once).
+  The page itself, `sw.js`, `/tokens.css`, `/i18n.js` and the icons keep their addresses across a deploy, so
+  they are `no-cache` with an ETag: a deploy shows on the next load. The service worker keeps the last page
+  (with its files, when it links any) for opening with no connection; prices are never cached.
 
 ## talabat hubs
 talabat mart is many small stores ("hubs"), each serving nearby areas, and **each stocks different products**:
@@ -257,11 +276,20 @@ deals/
   units.py      pack sizes from names, for price per kg / L / piece
   matching.py   the same product in different stores
   web.py        /, /api/deals (filters, sorts, counts), /api/pulse, /api/changes, /api/seen, /api/product/ID,
-                /api/status, /healthz, /admin (hubs, Breadfast), /api/push/* (alerts), /sw.js, icons
+                /api/status, /healthz, /admin (hubs, Breadfast), /api/push/* (alerts), /sw.js, icons; the live
+                page as one document (bundle, inline_page) and /static/<build>/<name> (cached for good)
   livedata.py   the data version and the catalog rebuilt in the background, shared by the page and the bots
   push.py       Web Push: VAPID keys, RFC 8291 encryption, the alert sender (wakes when a price moves)
   settings.py   the owner's settings (talabat hubs), kept next to the database
-  live.html     the page
+  live.html     the live page's markup; web.py writes its styles and modules into it (DEALS_PAGE=split: links them)
+  static/       the live page's code, plain ES modules with no build step, in layers (each imports only from
+                those before it): util · t (writes text in the page's language) · state (filters, watchlist,
+                basket) · sheets (menu, sheet, dialogs, toasts, keyboard) · search · api · card · status (offline
+                banner, freshness pill) · filters · alerts · basket · grid (cards, in-place patching) · product
+                · brief · ticker · live (the refresh engine: pulse, backoff, hidden tab) · main; and app.css
+  tokens.css    the design tokens, shared by the live page and the server-written pages
+  i18n.js       the language: the dictionary, the page's direction, and the markup's first translation
+  sw.js         the service worker: the last page kept for offline, and the push notifications
 tests/          saved real talabat and amazon pages (best sellers and Today's Deals), breadfast captures,
                 deal rules, filters, matching, app links, scheduler, signing
 Dockerfile      the server image (port 8800, volume /data)

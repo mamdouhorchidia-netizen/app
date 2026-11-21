@@ -1,6 +1,6 @@
 """The live deals page and its JSON API, on Python's built-in HTTP server.
 
-  /                      the live page (refreshes itself every 10 seconds)
+  /                      the live page (refreshes itself every 10 seconds): one document, its styles and modules written in
   /api/deals             filters: deals=1|0 stores=a,b kind=platform|drop min= max= stock=in|out|all
                          status=new,lowest,real,label,back,compare category= q= pmin= pmax= ids=1,2 best=1
                          sort=score|discount|saving|newest|drop|price|price_desc|unit|popular|name limit= offset=
@@ -13,7 +13,7 @@
   /manifest.webmanifest, /icon.svg   so the page installs as an app
   /tokens.css            the design tokens the live page and the server-written pages share
   /static/BUILD/NAME     the live page's stylesheets and modules (static/*.css, *.js, plus tokens.css and i18n.js),
-                         addressed by a hash of all of them: live.html is sent with the current one filled in
+                         addressed by a hash of all of them, so cached for good (immutable)
   /healthz               200 when the database answers (Coolify's health check)
   /admin                 the owner's page: talabat hubs to follow, and adding Breadfast
   /api/talabat/hubs      every known talabat mart hub (name, number, areas) and the ones followed
@@ -176,13 +176,18 @@ def static_file(path: Path) -> tuple[bytes, bytes, str]:
 
 
 # The live page's styles and modules: plain files in static/ (no build step), plus the two it shares with the
-# server-written pages. They are served at /static/<build>/<name>, where the build is a hash of all of them, and
-# live.html is sent with its {{BUILD}} filled in: a page only ever loads the modules it was written with (an
-# address from another build answers 404, and the page reloads once), and the service worker keeps each build's
-# files under their own addresses. Every one is still kept in memory, gzipped, with an ETag and no-cache.
+# server-written pages. The build is a short hash of all of them. The page is sent as one document: live.html with
+# its stylesheets, /i18n.js and its modules written into it (the modules joined into one, below), so a first visit
+# is one request instead of twenty, the page arrives with exactly the code it was written with, and a repeat visit is
+# one 304. Each file is also served at /static/<build>/<name>: that address changes whenever any file does, so it is
+# cached for good (immutable); an address from another build answers 404. DEALS_PAGE=split sends live.html with
+# those addresses instead (each module its own file, for working on them in the browser's tools).
 STATIC_DIR = Path(__file__).with_name("static")
 SHARED_ASSETS = {"tokens.css": Path(__file__).with_name("tokens.css"), "i18n.js": Path(__file__).with_name("i18n.js")}
 ASSET_TYPES = {".js": "text/javascript", ".css": "text/css; charset=utf-8"}
+IMMUTABLE = "public, max-age=31536000, immutable"
+PAGE_MODE = os.environ.get("DEALS_PAGE", "inline")  # "inline" | "split"
+ENTRY = "main.js"
 _build: dict = {}  # "key": the files' (name, mtime, size), "id": their hash; "page": key -> (body, gzipped, etag)
 
 
@@ -204,13 +209,267 @@ def build_id() -> str:
     return _build["id"]
 
 
-def live_page() -> tuple[bytes, bytes, str]:
-    """live.html with the current build's asset addresses, kept in memory (and gzipped) per build."""
+class NotBundled(ValueError):
+    """The modules use something the joiner doesn't handle: the page is sent with one file per module instead."""
+
+
+# The modules are written in one narrow form, which is what lets them be joined without a parser: every import is
+# `import { a, b as c } from "./x.js";` on a line of its own, and every export is `export` at the start of a line
+# in front of a const, function or async function declaration (no `export let`: an imported binding never changes).
+# Anything else at the start of a line that says import or export makes the joiner give up (NotBundled).
+IMPORT_LINE = re.compile(r'^import\s*\{([^}]*)\}\s*from\s*"\./([\w-]+\.js)";[ \t]*(?://[^\n]*)?$', re.M)
+EXPORT_DECL = re.compile(r'^export\s+(?=(?:async\s+function|function|const)\b)', re.M)
+LEFTOVER = re.compile(r'^\s*(?:import\b(?!\s*\()|export\b)', re.M)
+IDENT = re.compile(r"^[A-Za-z_$][\w$]*$")
+
+
+def bundle(sources: dict[str, str], entry: str = ENTRY) -> str:
+    """The modules as one module that does what loading them separately does. Each runs in its own function scope
+    (so their top-level names never meet), in the order the browser evaluates them: depth first from the entry,
+    each module's imports in the order written, a module after everything it imports. Its imports become a
+    destructuring of the modules before it, and it returns what the others import from it. With no cycles (refused
+    here) and no `export let`, a module's exports are final once it has run, so these copies are the same values
+    the live bindings would give."""
+    imports, bodies = {}, {}
+    for name, src in sources.items():
+        found = []
+        for m in IMPORT_LINE.finditer(src):
+            names = []
+            for part in m.group(1).split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                bits = part.split()
+                if len(bits) == 1 and IDENT.match(bits[0]):
+                    names.append((bits[0], bits[0]))
+                elif len(bits) == 3 and bits[1] == "as" and IDENT.match(bits[0]) and IDENT.match(bits[2]):
+                    names.append((bits[0], bits[2]))
+                else:
+                    raise NotBundled(f"{name}: import {{{m.group(1)}}}")
+            found.append((m.group(2), names))
+        body = EXPORT_DECL.sub("", IMPORT_LINE.sub("", src))
+        left = LEFTOVER.search(body)
+        if left:
+            raise NotBundled(f"{name}: {body[left.start():].splitlines()[0][:60]}")
+        if re.search(r"\$mod_", body):
+            raise NotBundled(f"{name}: uses the joiner's own names ($mod_)")
+        imports[name], bodies[name] = found, body
+    order, state = [], {}
+
+    def visit(n, path):
+        if n not in sources:
+            raise NotBundled(f"{' -> '.join(path)} imports {n}, which isn't one of the modules")
+        if state.get(n) == "done":
+            return
+        if state.get(n) == "open":
+            raise NotBundled("cycle: " + " -> ".join(path + [n]))
+        state[n] = "open"
+        for dep, _ in imports[n]:
+            visit(dep, path + [n])
+        state[n] = "done"
+        order.append(n)
+    visit(entry, [])
+    wanted = {n: [] for n in order}  # what each module has to hand on
+    for n in order:
+        for dep, names in imports[n]:
+            for orig, _ in names:
+                if orig not in wanted[dep]:
+                    wanted[dep].append(orig)
+    var = lambda n: "$mod_" + re.sub(r"\W", "_", n[:-3])
+    out = [f"// the live page's modules ({len(order)}) joined into one by web.bundle(); each is static/<name>"]
+    for n in order:
+        for orig in wanted[n]:  # a name another module imports must be one this module exports
+            if not re.search(rf"^export\s+(?:async\s+)?(?:function\s+{re.escape(orig)}\b|const\b[^\n]*[\s,]{re.escape(orig)}\s*=)",
+                             sources[n], re.M):
+                raise NotBundled(f"{n} doesn't export {orig}")
+        lines = [f"// ---- {n} ----", f"const {var(n)} = (() => {{"]
+        for dep, names in imports[n]:
+            spec = ", ".join(o if o == a else f"{o}: {a}" for o, a in names)
+            lines.append(f"const {{ {spec} }} = {var(dep)};")
+        lines.append(bodies[n].strip("\n"))
+        lines.append(f"return {{ {', '.join(wanted[n])} }};" if wanted[n] else "return {};")
+        lines.append("})();")
+        out.append("\n".join(lines))
+    return "\n".join(out) + "\n"
+
+
+# What is written into the page is sent without its comments (about a tenth of it, gzipped). Only what can be
+# found without a parser goes: in a script, lines that are nothing but a // comment, found by following strings,
+# template literals (and their ${…}), regular expressions and comments from the start; in a stylesheet, every
+# /* … */ outside a string. When something can't be followed for certain the file is sent with its comments.
+REGEX_AFTER = set("(,=:[!&|?{};+-*%<>~^") | {""}
+REGEX_WORDS = {"return", "typeof", "case", "do", "else", "in", "of", "new", "delete", "void", "throw", "yield", "await"}
+
+
+def strip_js_comments(src: str) -> str:
+    """src without its whole-line // comments, or src itself when its strings and regexes can't be followed."""
+    try:
+        drop, i, n = set(), 0, len(src)
+        frames = [["code", 0]]  # template literals and the ${…} inside them
+        prev, word = "", ""  # the last significant character in code, and the word it ended
+        line_start = 0
+        while i < n:
+            c = src[i]
+            top = frames[-1]
+            if top[0] == "tpl":
+                if c == "\\":
+                    i += 2
+                    continue
+                if c == "`":
+                    frames.pop()
+                    prev, word = "`", ""
+                elif c == "$" and src.startswith("${", i):
+                    frames.append(["code", 1])
+                    prev, word = "{", ""
+                    i += 1
+                i += 1
+                continue
+            if c == "\n":
+                line_start = i + 1
+                i += 1
+                continue
+            if c in " \t\r":
+                i += 1
+                continue
+            if c == "/" and src.startswith("//", i):
+                end = src.find("\n", i)
+                end = n if end < 0 else end
+                if not src[line_start:i].strip():
+                    drop.add((line_start, end + 1))  # the line and its newline
+                i = end
+                continue
+            if c == "/" and src.startswith("/*", i):
+                end = src.find("*/", i + 2)
+                if end < 0:
+                    return src
+                i = end + 2
+                continue
+            if c in "'\"":
+                j = i + 1
+                while src[j] != c:
+                    if src[j] == "\n":
+                        return src
+                    j += 2 if src[j] == "\\" else 1
+                i, prev, word = j + 1, c, ""
+                continue
+            if c == "`":
+                frames.append(["tpl"])
+                i += 1
+                continue
+            if c == "/" and (prev in REGEX_AFTER and not word or word in REGEX_WORDS):
+                j, cls = i + 1, False
+                while cls or src[j] != "/":
+                    if src[j] == "\n":
+                        return src
+                    if src[j] == "\\":
+                        j += 1
+                    elif src[j] == "[":
+                        cls = True
+                    elif src[j] == "]":
+                        cls = False
+                    j += 1
+                j += 1
+                while j < n and (src[j].isalpha()):
+                    j += 1  # flags
+                i, prev, word = j, "/", ""
+                continue
+            if c == "{":
+                top[1] += 1
+            elif c == "}":
+                top[1] -= 1
+                if top[1] == 0 and len(frames) > 1:
+                    frames.pop()  # the end of a ${…}: back in the template
+                    i += 1
+                    continue
+            if c.isalnum() or c in "_$":
+                j = i
+                while j < n and (src[j].isalnum() or src[j] in "_$"):
+                    j += 1
+                prev, word, i = src[j - 1], src[i:j], j
+                continue
+            prev, word = c, ""
+            i += 1
+        if len(frames) != 1 or frames[0][1] != 0:
+            return src
+    except IndexError:  # a string or regex that never ends
+        return src
+    out, at = [], 0
+    for a, b in sorted(drop):
+        out.append(src[at:a])
+        at = b
+    return "".join(out) + src[at:]
+
+
+def strip_css_comments(src: str) -> str:
+    out, i, n = [], 0, len(src)
+    while i < n:
+        c = src[i]
+        if c in "'\"":
+            j = i + 1
+            while j < n and src[j] != c:
+                j += 2 if src[j] == "\\" else 1
+            out.append(src[i:j + 1])
+            i = j + 1
+        elif src.startswith("/*", i):
+            end = src.find("*/", i + 2)
+            if end < 0:
+                return src
+            i = end + 2
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def _text(name: str) -> str:
+    return static_file(assets()[name])[0].decode("utf-8")
+
+
+def inline_page(html: str) -> str:
+    """live.html as one document: each stylesheet as a <style>, /i18n.js as a classic <script> where it was (so the
+    language and direction are set before anything is drawn), and the modules joined into one module script at the
+    end of the body (a module runs once the page is parsed wherever it sits; at the end the markup paints first)."""
+    files = assets()
+    sources = {n: _text(n) for n in files if n.endswith(".js") and files[n].parent == STATIC_DIR}
+
+    def safe(text, tag):  # what would end the element early, or change how the parser reads it
+        if re.search(rf"</{tag}|<!--", text, re.I):
+            raise NotBundled(f"a file contains </{tag} or <!--")
+        return text
+    tag_css = re.compile(r'<link rel="stylesheet" href="/static/\{\{BUILD\}\}/([\w-]+\.css)">')
+    tag_js = re.compile(r'<script src="/static/\{\{BUILD\}\}/([\w-]+\.js)"></script>')
+    tag_pre = re.compile(r'[ \t]*<link rel="modulepreload" href="/static/\{\{BUILD\}\}/[\w-]+\.js"[^>]*>\n?')
+    tag_mod = re.compile(rf'[ \t]*<script type="module" src="/static/\{{\{{BUILD\}}\}}/{re.escape(ENTRY)}"[^>]*></script>\n?')
+    if not tag_mod.search(html) or "</body>" not in html:
+        raise NotBundled("live.html: no module script or no </body>")
+    html = re.sub(r"<!--.*?-->\n?", "", html, flags=re.S)  # the template's notes (there are no scripts in it yet)
+    html = tag_css.sub(lambda m: f"<style>\n{safe(strip_css_comments(_text(m.group(1))), 'style')}</style>", html)
+    html = tag_js.sub(lambda m: f"<script>\n{safe(strip_js_comments(_text(m.group(1))), 'script')}</script>", html)
+    html = tag_mod.sub("", tag_pre.sub("", html))
+    js = safe(bundle({n: strip_js_comments(src) for n, src in sources.items()}), "script")
+    i = html.rindex("</body>")
+    html = html[:i] + f'<script type="module">\n{js}</script>\n' + html[i:]
+    if "{{BUILD}}" in html or re.search(r'(?:href|src)="/static/', html):
+        raise NotBundled("live.html links a file that isn't written in")
+    return html
+
+
+def live_page(mode: str = None) -> tuple[bytes, bytes, str]:
+    """The live page for the current build, kept in memory (and gzipped) per build: one document with everything
+    written in (mode "inline", the default), or live.html with the build's asset addresses ("split")."""
+    mode = mode or PAGE_MODE
     build, st = build_id(), PAGE.stat()
-    key = (st.st_mtime_ns, st.st_size, build)
+    key = (st.st_mtime_ns, st.st_size, build, mode)
     hit = _build["page"].get(key)
     if not hit:
-        hit = _build["page"][key] = _entry(PAGE.read_bytes().replace(b"{{BUILD}}", build.encode()))
+        html = PAGE.read_text(encoding="utf-8")
+        body = html.replace("{{BUILD}}", build)
+        if mode == "inline":
+            try:
+                body = inline_page(html)
+            except NotBundled as e:  # still a working page: one file per module
+                print(f"live page: sent with one file per module ({e})")
+        hit = _build["page"][key] = _entry(body.encode("utf-8"))
     return hit
 
 
@@ -454,11 +713,11 @@ def make_handler(db_path: str, requests_file: str = None, keeper: livedata.Catal
         def json(self, obj, code: int = 200, etag: str = None):
             self.send(code, json.dumps(obj, ensure_ascii=False).encode(), "application/json; charset=utf-8", etag=etag)
 
-        def static(self, path: Path, ctype: str):
-            """A file from the package: kept in memory, may be cached but is revalidated every time (no-cache),
-            since its address doesn't change when a deploy changes it."""
+        def static(self, path: Path, ctype: str, cache: str = "no-cache"):
+            """A file from the package, kept in memory. no-cache (may be kept, but revalidated every time) when its
+            address stays the same across a deploy; a build's /static/<build>/ address is cached for good."""
             body, gz, etag = static_file(path)
-            self.send(200, body, ctype, cache="no-cache", etag=etag, gzipped=gz)
+            self.send(200, body, ctype, cache=cache, etag=etag, gzipped=gz)
 
         def unchanged(self, etag: str) -> bool:
             """Answers 304 (and returns True) when the client already has this version of a JSON answer."""
@@ -480,8 +739,8 @@ def make_handler(db_path: str, requests_file: str = None, keeper: livedata.Catal
                 elif u.path.startswith("/static/"):
                     m = re.fullmatch(r"/static/([0-9a-f]{1,32})/([\w-]+\.(?:js|css))", u.path)
                     found = m and asset(m.group(1), m.group(2))
-                    if found:
-                        self.static(*found)
+                    if found:  # its address changes with any change to any file: never asked again
+                        self.static(*found, cache=IMMUTABLE)
                     else:  # another build's (or no such file): the page that asked reloads once
                         self.send(404, b"not in this build", "text/plain; charset=utf-8")
                 elif u.path in ("/admin", "/admin/"):

@@ -139,10 +139,15 @@ aside { position: sticky; top: 168px; align-self: start; max-height: calc(100vh 
   border: 1px solid color-mix(in srgb, var(--good) 35%, var(--line)); background: var(--good-bg); color: var(--good); font-size: var(--fs-1); font-weight: 650;
   cursor: pointer; font-variant-numeric: tabular-nums; white-space: nowrap; margin-inline-start: auto; }
 .fresh::after { content: ""; position: absolute; inset: -7px 0; }  /* 44px to tap */
-.fresh .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; animation: pulse 2s infinite; }
+.fresh .dot { width: 8px; height: 8px; flex: none; position: relative; }
+/* the pulse is a layer of its own that only fades (opacity): the compositor runs it, never a style pass per frame.
+   It starts once the page has settled (main.js sets html.settled a second after load): Chrome can leave an
+   animation begun while the page is still loading on the main thread, a style pass every frame for many seconds */
+.fresh .dot::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: currentColor;
+  will-change: opacity; animation: pulse 2s infinite; }
 .fresh.stale { background: var(--warn-bg); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, var(--line)); }
 .fresh.off { background: var(--danger-bg); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
-.fresh.stale .dot, .fresh.off .dot { animation: none; }
+.fresh.stale .dot::before, .fresh.off .dot::before, :root:not(.settled) .fresh .dot::before { animation: none; }
 /* the status sheet: what each store is doing */
 .srows { display: grid; gap: 0; margin-top: var(--sp-2); }
 .srow { display: grid; grid-template-columns: 12px auto 1fr; align-items: baseline; gap: var(--sp-2); padding: var(--sp-3) 0; border-top: 1px solid var(--line); font-size: var(--fs-2); }
@@ -413,7 +418,7 @@ h4 { margin: var(--sp-5) 0 4px; font-size: var(--fs-1); text-transform: uppercas
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
     transition-duration: .01ms !important; scroll-behavior: auto !important; }
-  .pulse, .fresh .dot, .mic.on, .card.fresh::before, .skel, .toast, .newpill, .menu { animation: none !important; }
+  .pulse, .fresh .dot::before, .mic.on, .card.fresh::before, .skel, .toast, .newpill, .menu { animation: none !important; }
   .card.fresh::before { opacity: 0; }
   /* a changed price keeps a still tint while it is marked, instead of a fade */
   .card.moved { animation: none !important; background-color: color-mix(in srgb, var(--good) 12%, var(--surface)); }

@@ -36,6 +36,10 @@ document.querySelectorAll("#nav a, #moreMenu a.mi, #tabHome").forEach(a => { con
 initGrid(); initLive(); initStatus(); initProduct(); initFilters(); initSheets(); initGridInput(); initKeyboard();
 initVoice();
 
+// the freshness pill's pulse starts once the page has settled (see .fresh .dot in app.css)
+const settle = () => setTimeout(() => document.documentElement.classList.add("settled"), 1000);
+if (document.readyState === "complete") settle(); else addEventListener("load", settle, { once: true });
+
 // installable app
 let installEvent = null;
 const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;

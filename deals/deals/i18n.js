@@ -251,10 +251,13 @@
   // before anything is painted), and the observer let go as soon as the parser is done. The strings the page
   // draws later are written in the page's language. shell() finishes the job (and walks the page if this script
   // came too late to see it parsed).
-  let shellDone = false, seenParsed = false, dirSet = false;
+  let shellDone = false, seenParsed = false, dirSeen = 0;
   function parsed(list) {
     for (const m of list) { if (m.type === "characterData") textNode(m.target); else m.addedNodes.forEach(walk); }
-    if (!dirSet && document.getElementById("langBtn") && document.getElementById("q")) { dirSet = true; setDir(); }
+    // the search box's placeholder and the language item, each as soon as it is parsed: the page can be painted
+    // between the two when it arrives in pieces
+    const have = !!document.getElementById("q") + !!document.getElementById("langBtn");
+    if (have > dirSeen) { dirSeen = have; setDir(); }
   }
   const parsing = new MutationObserver(parsed);
   function shell() {
